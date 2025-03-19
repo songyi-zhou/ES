@@ -1,0 +1,165 @@
+-- 创建数据库
+DROP DATABASE IF EXISTS system;
+CREATE DATABASE IF NOT EXISTS system DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+USE system;
+
+-- 删除表（注意删除顺序，先删除有外键约束的表）
+DROP TABLE IF EXISTS user_roles;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS evaluation_materials;
+DROP TABLE IF EXISTS evaluation_attachments;
+DROP TABLE IF EXISTS evaluation_rules;
+DROP TABLE IF EXISTS rule_attachments;
+
+-- 创建角色表
+CREATE TABLE roles (
+    id INT PRIMARY KEY AUTO_INCREMENT COMMENT '角色ID',
+    role_name VARCHAR(50) NOT NULL UNIQUE COMMENT '角色名称',
+    role_level INT NOT NULL COMMENT '角色等级：0-普通学生，1-综测小组成员，2-综测负责人，3-导员，4-管理员',
+    description VARCHAR(200) COMMENT '角色描述',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 创建用户表
+CREATE TABLE users (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID',
+    user_id VARCHAR(20) NOT NULL UNIQUE COMMENT '学号/工号',
+    password VARCHAR(255) NOT NULL COMMENT '密码',
+    name VARCHAR(50) NOT NULL COMMENT '姓名',
+    gender ENUM('男', '女', '其他') NOT NULL COMMENT '性别',
+    avatar_url VARCHAR(255) DEFAULT NULL COMMENT '头像URL',
+    department VARCHAR(100) NOT NULL COMMENT '学院',
+    major VARCHAR(100) COMMENT '专业',
+    class_name VARCHAR(50) COMMENT '班级',
+    phone VARCHAR(20) COMMENT '电话',
+    email VARCHAR(100) COMMENT '邮箱',
+    status TINYINT(1) DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    last_login TIMESTAMP NULL COMMENT '最后登录时间',
+    role_level INT DEFAULT 0 COMMENT '角色等级',
+    INDEX idx_user_id (user_id),
+    INDEX idx_department (department)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 修改用户-角色关联表
+CREATE TABLE user_roles (
+    user_id BIGINT,
+    role VARCHAR(50) NOT NULL,
+    PRIMARY KEY (user_id, role),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 插入基础角色数据
+INSERT INTO roles (role_name, role_level, description) VALUES
+('ROLE_STUDENT', 0, '普通学生'),
+('ROLE_GROUP_MEMBER', 1, '综测小组成员'),
+('ROLE_GROUP_LEADER', 2, '综测负责人'),
+('ROLE_COUNSELOR', 3, '导员'),
+('ROLE_ADMIN', 4, '系统管理员');
+
+-- 创建示例用户数据（密码需要使用BCrypt加密后的值替换）
+INSERT INTO users (user_id, password, name, gender, department, major, class_name, phone, email) VALUES
+('admin001', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTql21ZyG2', '管理员', '男', '信息工程学院', NULL, NULL, '13800138000', 'admin@example.com'),
+('2024001', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTql21ZyG2', '张三', '男', '信息工程学院', '计算机科学与技术', '计科2401', '13900139000', 'zhangsan@example.com'),
+('2024002', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTql21ZyG2', '李四', '男', '信息工程学院', '计算机科学与技术', '计科2401', '13900139001', 'lisi@example.com'),
+('2024003', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTql21ZyG2', '王五', '女', '信息工程学院', '计算机科学与技术', '计科2401', '13900139002', 'wangwu@example.com'),
+('T2024001', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTql21ZyG2', '李导员', '女', '信息工程学院', '计算机科学与技术', NULL, '13700137000', 'licounselor@example.com');
+
+-- 修改插入语句
+INSERT INTO user_roles (user_id, role) 
+SELECT u.id, r.role_name
+FROM users u, roles r 
+WHERE u.user_id = 'admin001' AND r.role_name = 'ROLE_ADMIN';
+
+INSERT INTO user_roles (user_id, role)
+SELECT u.id, r.role_name
+FROM users u, roles r
+WHERE u.user_id = '2024001' AND r.role_name = 'ROLE_STUDENT';
+
+INSERT INTO user_roles (user_id, role)
+SELECT u.id, r.role_name
+FROM users u, roles r
+WHERE u.user_id = '2024002' AND r.role_name = 'ROLE_GROUP_MEMBER';
+
+INSERT INTO user_roles (user_id, role)
+SELECT u.id, r.role_name
+FROM users u, roles r
+WHERE u.user_id = '2024003' AND r.role_name = 'ROLE_GROUP_LEADER';
+
+INSERT INTO user_roles (user_id, role)
+SELECT u.id, r.role_name
+FROM users u, roles r
+WHERE u.user_id = 'T2024001' AND r.role_name = 'ROLE_COUNSELOR';
+
+ALTER TABLE users ADD COLUMN role_level INT DEFAULT 0;
+
+-- 更新用户的角色等级（添加 WHERE 条件）
+UPDATE users u 
+JOIN user_roles ur ON u.id = ur.user_id 
+JOIN roles r ON ur.role = r.role_name 
+SET u.role_level = r.role_level
+WHERE u.id IN (
+    SELECT DISTINCT user_id 
+    FROM user_roles
+);
+
+DROP TABLE IF EXISTS evaluation_attachments;
+DROP TABLE IF EXISTS evaluation_materials;
+
+-- 综测材料表
+CREATE TABLE evaluation_materials (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,                    -- 提交用户ID（改为BIGINT以匹配users表的id字段）
+    evaluation_type VARCHAR(20) NOT NULL,        -- 测评类型
+    title VARCHAR(100) NOT NULL,                -- 测评标题
+    description TEXT,                           -- 测评描述
+    status VARCHAR(20) DEFAULT 'PENDING',       -- 状态：PENDING/APPROVED/REJECTED
+    reviewer_id BIGINT,                        -- 审核人ID（改为BIGINT以匹配users表的id字段）
+    review_comment TEXT,                        -- 审核意见
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (reviewer_id) REFERENCES users(id)
+);
+
+-- 材料附件表
+CREATE TABLE evaluation_attachments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    material_id BIGINT NOT NULL,                -- 关联的材料ID
+    file_name VARCHAR(255) NOT NULL,            -- 文件名
+    file_path VARCHAR(255) NOT NULL,            -- 文件路径
+    file_size BIGINT NOT NULL,                  -- 文件大小
+    file_type VARCHAR(50) NOT NULL,             -- 文件类型
+    upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (material_id) REFERENCES evaluation_materials(id) ON DELETE CASCADE
+);
+
+-- 规章制度表
+CREATE TABLE evaluation_rules (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL COMMENT '规章标题',
+    description TEXT COMMENT '规章描述',
+    created_by BIGINT NOT NULL COMMENT '创建人ID',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE-生效 INACTIVE-失效',
+    version INT NOT NULL DEFAULT 1 COMMENT '版本号'
+);
+
+-- 规章附件表
+CREATE TABLE rule_attachments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    rule_id BIGINT NOT NULL COMMENT '关联的规章ID',
+    file_name VARCHAR(255) NOT NULL COMMENT '文件名',
+    file_path VARCHAR(500) NOT NULL COMMENT '文件路径',
+    file_size BIGINT NOT NULL COMMENT '文件大小(字节)',
+    file_type VARCHAR(50) NOT NULL COMMENT '文件类型',
+    upload_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间',
+    FOREIGN KEY (rule_id) REFERENCES evaluation_rules(id)
+);
+
+
