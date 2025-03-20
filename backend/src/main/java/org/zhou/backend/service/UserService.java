@@ -6,6 +6,7 @@ import java.util.Set;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.zhou.backend.entity.User;
+import org.zhou.backend.exception.ResourceNotFoundException;
 import org.zhou.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,11 @@ public class UserService {
         
         user.setRoles(roles);
         return userRepository.save(user);
+    }
+    
+    public User getUserById(Long id) {
+        return userRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
     
     // 用户相关的业务逻辑方法将在这里实现

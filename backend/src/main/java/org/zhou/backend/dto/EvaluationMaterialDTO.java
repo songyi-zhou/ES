@@ -15,4 +15,5 @@ public class EvaluationMaterialDTO {
     private String title;
     private String description;
     private List<MultipartFile> files;
+    private Long classId;
 } 

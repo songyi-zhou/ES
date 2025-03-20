@@ -4,12 +4,16 @@ CREATE DATABASE IF NOT EXISTS system DEFAULT CHARACTER SET utf8mb4 COLLATE utf8m
 
 USE system;
 
+-- 删除表（注意顺序，先删除有外键引用的表）
+DROP TABLE IF EXISTS evaluation_attachments;
+DROP TABLE IF EXISTS evaluation_materials;
+DROP TABLE IF EXISTS class_group_members;
+DROP TABLE IF EXISTS classes;
+
 -- 删除表（注意删除顺序，先删除有外键约束的表）
 DROP TABLE IF EXISTS user_roles;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS roles;
-DROP TABLE IF EXISTS evaluation_materials;
-DROP TABLE IF EXISTS evaluation_attachments;
 DROP TABLE IF EXISTS evaluation_rules;
 DROP TABLE IF EXISTS rule_attachments;
 
@@ -41,6 +45,7 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     last_login TIMESTAMP NULL COMMENT '最后登录时间',
     role_level INT DEFAULT 0 COMMENT '角色等级',
+    class_id BIGINT COMMENT '班级ID',
     INDEX idx_user_id (user_id),
     INDEX idx_department (department)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -107,47 +112,90 @@ WHERE u.id IN (
     FROM user_roles
 );
 
-DROP TABLE IF EXISTS evaluation_attachments;
-DROP TABLE IF EXISTS evaluation_materials;
-
--- 综测材料表
-CREATE TABLE evaluation_materials (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL,                    -- 提交用户ID（改为BIGINT以匹配users表的id字段）
-    evaluation_type VARCHAR(20) NOT NULL,        -- 测评类型
-    title VARCHAR(100) NOT NULL,                -- 测评标题
-    description TEXT,                           -- 测评描述
-    status VARCHAR(20) DEFAULT 'PENDING',       -- 状态：PENDING/APPROVED/REJECTED
-    reviewer_id BIGINT,                        -- 审核人ID（改为BIGINT以匹配users表的id字段）
-    review_comment TEXT,                        -- 审核意见
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (reviewer_id) REFERENCES users(id)
+-- 创建班级表
+CREATE TABLE IF NOT EXISTS classes (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    department VARCHAR(100),
+    major VARCHAR(100),
+    grade VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 材料附件表
-CREATE TABLE evaluation_attachments (
+-- 创建综测小组成员与班级关联表
+CREATE TABLE IF NOT EXISTS class_group_members (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    material_id BIGINT NOT NULL,                -- 关联的材料ID
-    file_name VARCHAR(255) NOT NULL,            -- 文件名
-    file_path VARCHAR(255) NOT NULL,            -- 文件路径
-    file_size BIGINT NOT NULL,                  -- 文件大小
-    file_type VARCHAR(50) NOT NULL,             -- 文件类型
+    user_id BIGINT NOT NULL,
+    class_id VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (class_id) REFERENCES classes(id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_class_id (class_id)
+);
+
+-- 创建综测材料表
+CREATE TABLE IF NOT EXISTS evaluation_materials (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    evaluation_type VARCHAR(20) NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    description TEXT,
+    status VARCHAR(20) DEFAULT 'PENDING',
+    reviewer_id BIGINT,
+    review_comment TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    class_id VARCHAR(50) NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (reviewer_id) REFERENCES users(id),
+    FOREIGN KEY (class_id) REFERENCES classes(id),
+    INDEX idx_class_id (class_id)
+);
+
+-- 创建材料附件表
+CREATE TABLE IF NOT EXISTS evaluation_attachments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    material_id BIGINT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(255) NOT NULL,
+    file_size BIGINT NOT NULL,
+    file_type VARCHAR(50) NOT NULL,
     upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (material_id) REFERENCES evaluation_materials(id) ON DELETE CASCADE
 );
+
+-- 插入测试数据
+INSERT INTO classes (id, name, department, major, grade) 
+VALUES 
+('CS2101', '计算机科学与技术1班', '计算机学院', '计算机科学与技术', '2021'),
+('CS2102', '计算机科学与技术2班', '计算机学院', '计算机科学与技术', '2021');
+
+-- 注意：需要替换实际的用户ID
+INSERT INTO class_group_members (user_id, class_id) 
+VALUES 
+(1, 'CS2101'),  -- 替换1为实际的综测小组成员ID
+(1, 'CS2102');  -- 替换1为实际的综测小组成员ID
+
+-- 注意：需要替换实际的学生ID
+INSERT INTO evaluation_materials 
+(user_id, evaluation_type, title, description, status, class_id) 
+VALUES 
+(2, 'academic', '测试材料1', '描述1', 'PENDING', 'CS2101'),  -- 替换2为实际的学生ID
+(2, 'academic', '测试材料2', '描述2', 'PENDING', 'CS2102');  -- 替换2为实际的学生ID
 
 -- 规章制度表
 CREATE TABLE evaluation_rules (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(255) NOT NULL COMMENT '规章标题',
     description TEXT COMMENT '规章描述',
-    created_by BIGINT NOT NULL COMMENT '创建人ID',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    uploaded_by BIGINT NOT NULL COMMENT '上传人ID',
+    uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE-生效 INACTIVE-失效',
-    version INT NOT NULL DEFAULT 1 COMMENT '版本号'
+    version INT NOT NULL DEFAULT 1 COMMENT '版本号',
+    department VARCHAR(50),
+    uploaded_by_department VARCHAR(50)
 );
 
 -- 规章附件表
@@ -162,4 +210,8 @@ CREATE TABLE rule_attachments (
     FOREIGN KEY (rule_id) REFERENCES evaluation_rules(id)
 );
 
+ALTER TABLE evaluation_rules 
+MODIFY COLUMN title VARCHAR(255) NOT NULL COMMENT '规章标题',
+CHANGE COLUMN created_by uploaded_by BIGINT NOT NULL COMMENT '上传人ID',
+CHANGE COLUMN created_at uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间';
 

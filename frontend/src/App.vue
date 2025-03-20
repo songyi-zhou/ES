@@ -1,18 +1,19 @@
 <template>
-  <router-view/>
+  <div id="app">
+    <router-view />
+  </div>
 </template>
 
 <style>
-body {
+html, body {
   margin: 0;
   padding: 0;
-  font-family: 'Segoe UI', sans-serif;
-  min-height: 100vh;
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
 }
 
 #app {
-  width: 100%;
-  min-height: 100vh;
+  height: 100%;
 }
 
 /* 登录页面样式 */
@@ -38,6 +39,15 @@ body {
   #app {
     padding: 0;
   }
+}
+
+/* 修复下拉框样式问题 */
+.el-select-dropdown {
+  z-index: 3000 !important;
+}
+
+.el-popper {
+  z-index: 3000 !important;
 }
 </style>
 

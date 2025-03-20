@@ -119,4 +119,22 @@ public class EvaluationController {
             return ResponseEntity.internalServerError().body(createErrorResponse("获取材料列表失败"));
         }
     }
+
+    @GetMapping("/review-materials")
+    public ResponseEntity<?> getReviewMaterials(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        try {
+            // 获取该综测小组成员负责的班级的所有材料
+            List<EvaluationMaterial> materials = evaluationService.getMaterialsByReviewer(userPrincipal.getId());
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", materials
+            ));
+        } catch (Exception e) {
+            log.error("Failed to get review materials", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "获取审核材料失败"
+            ));
+        }
+    }
 } 

@@ -6,69 +6,34 @@
       <main class="main-content">
         <div class="rules-card">
           <h2>相关细则</h2>
-
-          <div class="filter-section">
-            <div class="filter-item">
-              <label>请选择学院：</label>
-              <select v-model="selectedCollege">
-                <option value="">请选择</option>
-                <option value="信息科学技术学院">信息科学技术学院</option>
-                <option value="机械工程学院">机械工程学院</option>
-                <option value="电气工程学院">电气工程学院</option>
-                <option value="材料科学与工程学院">材料科学与工程学院</option>
-              </select>
-            </div>
-
-            <div class="filter-item">
-              <label>请选择中队：</label>
-              <select v-model="selectedClass">
-                <option value="">请选择</option>
-                <option value="2020级">2020级</option>
-                <option value="2021级">2021级</option>
-                <option value="2022级">2022级</option>
-                <option value="2023级">2023级</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="materials-section">
-            <h3>相关材料</h3>
-            <div class="materials-list">
-              <div class="material-item" @click="downloadFile('rules')">
-                <div class="file-icon word">
-                  <i class="fas fa-file-word"></i>
-                </div>
-                <div class="file-info">
-                  <span class="file-name">中队综合测评细则</span>
-                  <span class="file-type">Word文档</span>
-                </div>
-              </div>
-
-              <div class="material-item" @click="downloadFile('list')">
-                <div class="file-icon pdf">
-                  <i class="fas fa-file-pdf"></i>
-                </div>
-                <div class="file-info">
-                  <span class="file-name">中队综合测评小组名单</span>
-                  <span class="file-type">PDF文档</span>
-                </div>
-              </div>
-
-              <div class="material-item" @click="downloadFile('scores')">
-                <div class="file-icon excel">
-                  <i class="fas fa-file-excel"></i>
-                </div>
-                <div class="file-info">
-                  <span class="file-name">中队综合测评社团加分表</span>
-                  <span class="file-type">Excel表格</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
+          
+          <!-- 学生手册下载按钮 -->
           <div class="handbook-section">
-            <h3>学校学生手册：</h3>
-            <a href="#" class="handbook-link" @click.prevent="viewHandbook">请单击此处查看</a>
+            <h3>学生手册</h3>
+            <a href="http://xg.dlmu.edu.cn/Home" target="_blank" class="download-btn">
+              下载学生手册
+            </a>
+          </div>
+          
+          <!-- 规章列表 -->
+          <div class="materials-list">
+            <div v-for="rule in rules" :key="rule.id" class="material-item">
+              <div class="material-info">
+                <div class="material-name">{{ rule.title }}</div>
+                <div class="material-meta">
+                  <span>上传时间：{{ formatDate(rule.createdAt) }}</span>
+                  <span>文件大小：{{ formatFileSize(rule.attachments[0].fileSize) }}</span>
+                  <span>文件类型：{{ getFileType(rule.attachments[0].fileName) }}</span>
+                  <span v-if="rule.department">所属学院：{{ rule.department }}</span>
+                  <span v-else>全校通用</span>
+                </div>
+              </div>
+              <div class="material-actions">
+                <button @click="downloadFile(rule.id, rule.attachments[0].fileName)" class="download-btn">
+                  下载
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -77,252 +42,191 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import TopBar from "@/components/TopBar.vue";
-import Sidebar from "@/components/Sidebar.vue";
-import axios from 'axios';
+import { ref, onMounted } from 'vue'
+import TopBar from '../../components/TopBar.vue'
+import Sidebar from '../../components/Sidebar.vue'
+import { ElMessage } from 'element-plus'
+import axiosInstance from '../../utils/axios.js'
 
-const selectedCollege = ref('');
-const selectedClass = ref('');
+const rules = ref([])
+const loading = ref(false)
 
-const downloadFile = async (fileType) => {
-  try {
-    const response = await axios.get(`/api/evaluation/download/${fileType}`, {
-      params: {
-        college: selectedCollege.value,
-        class: selectedClass.value
-      },
-      responseType: 'blob'
-    });
+// 下载学生手册
+const downloadHandbook = () => {
+  window.open('/static/handbook.pdf', '_blank')
+}
 
-    // 创建下载链接
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    
-    // 设置文件名
-    const fileName = {
-      'rules': '中队综合测评细则.docx',
-      'list': '中队综合测评小组名单.pdf',
-      'scores': '中队综合测评社团加分表.xlsx'
-    }[fileType];
-    
-    link.setAttribute('download', fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  } catch (error) {
-    console.error('文件下载失败:', error);
-    alert('文件下载失败，请稍后重试');
+// 格式化日期
+const formatDate = (dateStr) => {
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+// 格式化文件大小
+const formatFileSize = (size) => {
+  if (size < 1024) {
+    return size + ' B'
+  } else if (size < 1024 * 1024) {
+    return (size / 1024).toFixed(2) + ' KB'
+  } else {
+    return (size / (1024 * 1024)).toFixed(2) + ' MB'
   }
-};
+}
 
-const viewHandbook = () => {
-  window.open('/handbook', '_blank');
-};
+// 获取文件类型
+const getFileType = (fileName) => {
+  const extension = fileName.split('.').pop().toLowerCase()
+  switch (extension) {
+    case 'pdf':
+      return 'PDF文件'
+    case 'doc':
+      return 'Word文档'
+    case 'docx':
+      return 'Word文档'
+    case 'jpg':
+    case 'jpeg':
+      return 'JPG图片'
+    case 'png':
+      return 'PNG图片'
+    default:
+      return extension.toUpperCase() + '文件'
+  }
+}
+
+// 下载文件
+const downloadFile = async (id, fileName) => {
+  try {
+    const response = await axiosInstance.get(`/rules/download/${id}`, {
+      responseType: 'blob'
+    })
+    
+    // 从响应头获取文件类型
+    const contentType = response.headers['content-type']
+    const blob = new Blob([response.data], { type: contentType })
+    
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', fileName) // 使用原始文件名
+    document.body.appendChild(link)
+    link.click()
+    
+    // 清理
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('下载失败:', error)
+    ElMessage.error('下载失败')
+  }
+}
+
+// 获取规章列表
+const fetchRules = async () => {
+  loading.value = true
+  try {
+    const response = await axiosInstance.get('/rules')
+    rules.value = response.data
+  } catch (error) {
+    console.error('获取规章列表失败:', error)
+    ElMessage.error('获取规章列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchRules()
+})
 </script>
 
 <style scoped>
 .rules-container {
-  width: 100vw;
-  height: 100vh;
   display: flex;
   flex-direction: column;
+  height: 100vh;
 }
 
 .content {
   display: flex;
   flex: 1;
-  overflow: hidden;
-  background: #f0f2f5;
 }
 
 .main-content {
   flex: 1;
-  padding: 24px;
-  overflow-y: auto;
+  padding: 20px;
 }
 
 .rules-card {
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  padding: 24px;
-}
-
-h2 {
-  color: #2c3e50;
-  font-size: 24px;
-  margin-bottom: 24px;
-  position: relative;
-  padding-left: 16px;
-}
-
-h2::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 20px;
-  background: #409EFF;
-  border-radius: 2px;
-}
-
-.filter-section {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
-  background: #fff;
-  padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  padding: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
 }
 
-.filter-item {
-  min-width: unset;
-}
-
-.filter-item label {
-  display: block;
-  margin-bottom: 8px;
-  color: #606266;
-  font-weight: 500;
-}
-
-.filter-item select {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #dcdfe6;
+.handbook-section {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background-color: #f5f7fa;
   border-radius: 4px;
-  font-size: 14px;
-  color: #606266;
-  transition: all 0.3s;
-  background: #fff;
 }
 
-.filter-item select:hover {
-  border-color: #c0c4cc;
-}
-
-.filter-item select:focus {
-  border-color: #409EFF;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
-}
-
-.materials-section {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  margin-top: 24px;
-}
-
-h3 {
-  color: #2c3e50;
-  font-size: 20px;
-  margin: 30px 0 20px;
-  padding-left: 12px;
-  border-left: 4px solid #409EFF;
+.handbook-section h3 {
+  margin-bottom: 1rem;
+  color: #303133;
 }
 
 .materials-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-  margin-top: 16px;
+  margin-top: 2rem;
 }
 
 .material-item {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  transition: all 0.3s;
-  cursor: pointer;
+  padding: 1rem;
+  border-bottom: 1px solid #ebeef5;
 }
 
-.material-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.file-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 12px;
-}
-
-.file-icon.word {
-  background: #e3f2fd;
-  color: #1976d2;
-}
-
-.file-icon.pdf {
-  background: #ffebee;
-  color: #d32f2f;
-}
-
-.file-icon.excel {
-  background: #e8f5e9;
-  color: #388e3c;
-}
-
-.file-icon i {
-  font-size: 24px;
-}
-
-.file-info {
+.material-info {
   flex: 1;
 }
 
-.file-name {
-  color: #303133;
-  font-weight: 500;
-  margin-bottom: 4px;
+.material-name {
+  font-weight: bold;
+  margin-bottom: 0.5rem;
 }
 
-.file-type {
+.material-meta {
   color: #909399;
-  font-size: 12px;
+  font-size: 0.9rem;
 }
 
-.handbook-section {
-  margin-top: 30px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.material-meta span {
+  margin-right: 1rem;
+  display: inline-block;
 }
 
-.handbook-link {
-  color: #007bff;
+.download-btn {
+  padding: 8px 16px;
+  background-color: #409eff;
+  color: white !important;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
   text-decoration: none;
-  font-weight: 500;
+  display: inline-block;
 }
 
-.handbook-link:hover {
-  text-decoration: underline;
-}
-
-@media (max-width: 768px) {
-  .filter-section {
-    grid-template-columns: 1fr;
-  }
-  
-  .materials-list {
-    grid-template-columns: 1fr;
-  }
-}
-
-:deep(.sidebar) {
-  height: 100%;
-  overflow-y: auto;
+.download-btn:hover {
+  background-color: #66b1ff;
+  text-decoration: none;
 }
 </style> 

@@ -327,28 +327,25 @@ const deleteFile = async () => {
 
 // 提交上传
 const submitUpload = async () => {
-  if (!uploadForm.value.file) {
-    ElMessage.warning('请选择文件')
-    return
-  }
-
-  const formData = new FormData()
-  formData.append('file', uploadForm.value.file)
-  formData.append('name', uploadForm.value.name)
-  if (uploadForm.value.description) {
-    formData.append('description', uploadForm.value.description)
-  }
-
   try {
-    await axiosInstance.post('/rules', formData, {
+    const formData = new FormData()
+    formData.append('file', uploadForm.value.file)
+    formData.append('title', uploadForm.value.name)
+    if (uploadForm.value.description) {
+      formData.append('description', uploadForm.value.description)
+    }
+
+    const response = await axiosInstance.post('/rules', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     })
-    ElMessage.success('上传成功')
-    showUploadModal.value = false
-    uploadForm.value = { name: '', file: null, description: '' }
-    await fetchRules()
+
+    if (response.data) {
+      ElMessage.success('上传成功')
+      closeUploadModal()
+      fetchRules()
+    }
   } catch (error) {
     console.error('上传失败:', error)
     ElMessage.error(error.response?.data?.message || '上传失败')

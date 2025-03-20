@@ -8,15 +8,23 @@
           <div class="section-title">上传综合测评材料</div>
           <el-form :model="formData" label-position="left" label-width="100px" class="upload-form">
             <el-form-item label="材料类型" required>
-              <el-select 
-                v-model="formData.evaluationType" 
-                placeholder="请选择材料类型"
-              >
-                <el-option value="A" label="A类-思想政治" />
-                <el-option value="C" label="C类-科研竞赛" />
-                <el-option value="D" label="D类-文体活动" />
-                <el-option value="E" label="其他" />
-              </el-select>
+              <div class="custom-select">
+                <div class="select-trigger" @click="toggleDropdown">
+                  <span class="select-label">{{ getSelectedLabel || '请选择材料类型' }}</span>
+                  <span class="select-arrow" :class="{ 'is-reverse': isDropdownVisible }">▼</span>
+                </div>
+                <div class="select-dropdown" v-if="isDropdownVisible">
+                  <div 
+                    v-for="option in evaluationOptions" 
+                    :key="option.value"
+                    class="select-option"
+                    :class="{ 'is-selected': formData.evaluationType === option.value }"
+                    @click="selectOption(option)"
+                  >
+                    {{ option.label }}
+                  </div>
+                </div>
+              </div>
             </el-form-item>
 
             <el-form-item label="材料标题" required>
@@ -92,7 +100,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, onUnmounted } from "vue";
+import { ref, onMounted, watch, onUnmounted, computed } from "vue";
 import TopBar from "@/components/TopBar.vue";
 import Sidebar from "@/components/Sidebar.vue";
 import router from "@/router";
@@ -110,6 +118,35 @@ const uploadHistory = ref([]);
 const isSubmitting = ref(false);
 const errorMessage = ref('');
 const fileInput = ref(null);
+const isDropdownVisible = ref(false);
+
+const evaluationOptions = [
+  { value: 'A', label: 'A类-思想政治' },
+  { value: 'C', label: 'C类-科研竞赛' },
+  { value: 'D', label: 'D类-文体活动' },
+  { value: 'E', label: '其他' }
+];
+
+const getSelectedLabel = computed(() => {
+  const selected = evaluationOptions.find(option => option.value === formData.value.evaluationType);
+  return selected ? selected.label : '';
+});
+
+const toggleDropdown = () => {
+  isDropdownVisible.value = !isDropdownVisible.value;
+};
+
+const selectOption = (option) => {
+  formData.value.evaluationType = option.value;
+  isDropdownVisible.value = false;
+};
+
+const handleClickOutside = (event) => {
+  const select = document.querySelector('.custom-select');
+  if (select && !select.contains(event.target)) {
+    isDropdownVisible.value = false;
+  }
+};
 
 const triggerFileInput = () => {
   fileInput.value.click();
@@ -367,6 +404,7 @@ onMounted(() => {
   autoRefresh.value = setInterval(() => {
     fetchUploadHistory();
   }, 30000);
+  document.addEventListener('click', handleClickOutside);
 });
 
 onUnmounted(() => {
@@ -374,6 +412,7 @@ onUnmounted(() => {
   if (autoRefresh.value) {
     clearInterval(autoRefresh.value);
   }
+  document.removeEventListener('click', handleClickOutside);
 });
 
 // 监听uploadHistory的变化
@@ -586,5 +625,89 @@ watch(uploadHistory, (newVal) => {
 .admin-view :deep(.el-select) {
   display: block !important;
   width: 100% !important;
+}
+
+.custom-select {
+  position: relative;
+  width: 100%;
+}
+
+.select-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  background-color: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.select-trigger:hover {
+  border-color: #c0c4cc;
+}
+
+.select-label {
+  color: #606266;
+  font-size: 14px;
+}
+
+.select-arrow {
+  color: #c0c4cc;
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+
+.select-arrow.is-reverse {
+  transform: rotate(180deg);
+}
+
+.select-dropdown {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 100%;
+  max-height: 200px;
+  background-color: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  overflow-y: auto;
+}
+
+.select-option {
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #606266;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.select-option:hover {
+  background-color: #f5f7fa;
+}
+
+.select-option.is-selected {
+  color: #409eff;
+  font-weight: 500;
+  background-color: #ecf5ff;
+}
+
+/* 添加滚动条样式 */
+.select-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.select-dropdown::-webkit-scrollbar-thumb {
+  background-color: #c0c4cc;
+  border-radius: 3px;
+}
+
+.select-dropdown::-webkit-scrollbar-track {
+  background-color: #f5f7fa;
 }
 </style> 

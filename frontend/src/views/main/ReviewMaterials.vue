@@ -1,426 +1,405 @@
 <template>
-  <div class="review-container">
+  <div class="review-materials-container">
     <TopBar />
     <div class="content">
       <Sidebar />
-      <main class="main-content">
+      <div class="main-content">
         <div class="page-header">
           <h2>综合测评材料审核</h2>
-          <div class="filter-section">
-            <select v-model="selectedStatus" class="filter-select">
-              <option value="">材料状态</option>
-              <option value="pending">待审核</option>
-              <option value="approved">已通过</option>
-              <option value="rejected">已退回</option>
-              <option value="reported">已上报</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- 材料列表表格 -->
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>提交时间</th>
-                <th>学号</th>
-                <th>姓名</th>
-                <th>材料名称</th>
-                <th>材料状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="material in filteredMaterials" :key="material.id">
-                <td>{{ formatDate(material.submitTime) }}</td>
-                <td>{{ material.studentId }}</td>
-                <td>{{ material.studentName }}</td>
-                <td>
-                  <span class="material-name" @click="viewMaterial(material)">
-                    {{ material.name }}
-                  </span>
-                </td>
-                <td>
-                  <span :class="['status-badge', material.status]">
-                    {{ getStatusText(material.status) }}
-                  </span>
-                </td>
-                <td class="actions">
-                  <button @click="approve(material)" class="btn approve">
-                    审核通过
-                  </button>
-                  <button @click="reject(material)" class="btn reject">
-                    退回修改
-                  </button>
-                  <button @click="report(material)" class="btn report">
-                    上报疑问
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 统计信息 -->
-        <div class="statistics">
-          <div class="stat-item">
-            <span class="stat-label">待审核材料：</span>
-            <span class="stat-value">{{ stats.pending }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">疑问材料：</span>
-            <span class="stat-value warning">{{ stats.reported }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">已处理材料：</span>
-            <span class="stat-value">{{ stats.processed }}</span>
-          </div>
-        </div>
-
-        <div class="notice" v-if="stats.reported > 0">
-          <i class="warning-icon">⚠️</i>
-          还有 {{ stats.reported }} 个疑问材料未解决，解决后才能生成统计表
-        </div>
-
-        <!-- 生成统计表按钮 -->
-        <button 
-          class="generate-btn" 
-          :disabled="stats.reported > 0"
-          @click="generateReport"
-        >
-          生成统计表
-        </button>
-
-        <!-- 统计表描述弹窗 -->
-        <div v-if="showReportDescModal" class="modal">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h3>统计表描述</h3>
-              <button class="close-btn" @click="closeReportDescModal">×</button>
+          <div class="header-actions">
+            <div class="search-box">
+              <input
+                v-model="searchKeyword"
+                placeholder="搜索材料名称"
+                class="custom-input"
+              />
+              <i class="search-icon">🔍</i>
             </div>
-            <div class="modal-body">
-              <div class="form-group">
-                <label>统计表说明：</label>
-                <textarea 
-                  v-model="reportDescription"
-                  rows="4"
-                  placeholder="请输入对本次统计表的说明"
-                ></textarea>
+            
+            <div class="custom-dropdown">
+              <div class="dropdown-header" @click="toggleStatusDropdown">
+                <span>{{ filterStatus ? getStatusText(filterStatus) : '状态筛选' }}</span>
+                <i class="dropdown-icon">▼</i>
+              </div>
+              <div class="dropdown-menu" v-if="showStatusDropdown">
+                <div class="dropdown-item" @click="selectStatus('')">全部</div>
+                <div class="dropdown-item" @click="selectStatus('PENDING')">待审核</div>
+                <div class="dropdown-item" @click="selectStatus('APPROVED')">已通过</div>
+                <div class="dropdown-item" @click="selectStatus('REJECTED')">已驳回</div>
               </div>
             </div>
-            <div class="modal-footer">
-              <button 
-                class="submit-btn" 
-                @click="submitReportDesc"
-                :disabled="!reportDescription.trim()"
-              >
-                确认提交
-              </button>
-              <button class="cancel-btn" @click="closeReportDescModal">取消</button>
-            </div>
+            
+            <button class="custom-button primary" @click="fetchMaterials">刷新</button>
           </div>
         </div>
-      </main>
-    </div>
-
-    <!-- 材料预览弹窗 -->
-    <div v-if="showPreviewModal" class="modal">
-      <div class="modal-content preview-modal">
-        <div class="preview-header">
-          <h3>材料预览</h3>
-          <button class="close-btn" @click="showPreviewModal = false">×</button>
-        </div>
-        <div class="preview-body">
-          <div class="preview-info">
-            <div class="info-item">
-              <span class="info-label">提交学生：</span>
-              <span>{{ currentMaterial?.studentName }} ({{ currentMaterial?.studentId }})</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">提交时间：</span>
-              <span>{{ formatDate(currentMaterial?.submitTime) }}</span>
-            </div>
+        
+        <div class="table-card">
+          <div v-if="loading" class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>加载中...</p>
+          </div>
           
+          <div v-else-if="filteredMaterials.length === 0" class="empty-data">
+            <div class="empty-icon">📄</div>
+            <p>暂无审核材料</p>
           </div>
-          <div class="preview-content">
-            <div v-if="isImageFile" class="image-preview">
-              <img :src="previewUrl" alt="材料预览">
-            </div>
-            <div v-else-if="isPdfFile" class="pdf-preview">
-              <iframe :src="previewUrl" type="application/pdf" width="100%" height="100%"></iframe>
-            </div>
-            <div v-else class="file-info">
-              <i class="file-icon">📄</i>
-              <p>{{ currentMaterial?.name }}</p>
-              <a :href="previewUrl" target="_blank" class="download-btn">下载查看</a>
+          
+          <el-table 
+            v-else 
+            :data="filteredMaterials" 
+            border 
+            style="width: 100%"
+            :header-cell-style="{ background: '#f5f7fa', color: '#606266' }"
+            @row-click="handleRowClick"
+            highlight-current-row
+          >
+            <el-table-column prop="createdAt" label="提交时间" width="180">
+              <template #default="scope">
+                {{ formatDate(scope.row.createdAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="userId" label="学号" width="120" />
+            <el-table-column prop="title" label="材料名称" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="evaluationType" label="材料类型" width="120">
+              <template #default="scope">
+                {{ getEvaluationTypeText(scope.row.evaluationType) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="材料状态" width="100">
+              <template #default="scope">
+                <span class="status-tag" :class="getStatusClass(scope.row.status)">
+                  {{ getStatusText(scope.row.status) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="220" fixed="right">
+              <template #default="scope">
+                <div class="action-buttons">
+                  <button 
+                    class="custom-button success" 
+                    v-if="scope.row.status === 'PENDING'"
+                    @click.stop="handleReview(scope.row)"
+                  >
+                    通过
+                  </button>
+                  <button 
+                    class="custom-button danger" 
+                    v-if="scope.row.status === 'PENDING'"
+                    @click.stop="openRejectDialog(scope.row)"
+                  >
+                    驳回
+                  </button>
+                  <button 
+                    class="custom-button info" 
+                    @click.stop="handleViewDetails(scope.row)"
+                  >
+                    详情
+                  </button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 详情对话框 -->
+    <el-dialog
+      v-model="detailsDialogVisible"
+      title="材料详情"
+      width="60%"
+      destroy-on-close
+    >
+      <div v-if="selectedMaterial" class="material-details">
+        <div class="detail-item">
+          <span class="label">提交时间:</span>
+          <span>{{ formatDate(selectedMaterial.createdAt) }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">学号:</span>
+          <span>{{ selectedMaterial.userId }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">材料名称:</span>
+          <span>{{ selectedMaterial.title }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">材料类型:</span>
+          <span>{{ getEvaluationTypeText(selectedMaterial.evaluationType) }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">材料状态:</span>
+          <span class="status-tag" :class="getStatusClass(selectedMaterial.status)">
+            {{ getStatusText(selectedMaterial.status) }}
+          </span>
+        </div>
+        <div class="detail-item">
+          <span class="label">材料描述:</span>
+          <p class="description">{{ selectedMaterial.description || '无' }}</p>
+        </div>
+        
+        <div class="attachment-section" v-if="selectedMaterial.attachments && selectedMaterial.attachments.length > 0">
+          <h3>附件列表</h3>
+          <div class="attachment-list">
+            <div v-for="attachment in selectedMaterial.attachments" :key="attachment.id" class="attachment-item">
+              <div class="attachment-info">
+                <span class="attachment-name">{{ attachment.fileName }}</span>
+                <span class="attachment-size">{{ formatFileSize(attachment.fileSize) }}</span>
+              </div>
+              <div class="attachment-actions">
+                <button class="custom-button info small" @click="previewAttachment(attachment)">
+                  预览
+                </button>
+                <button class="custom-button primary small" @click="downloadAttachment(attachment)">
+                  下载
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 审核弹窗 -->
-    <div v-if="showApproveModal" class="modal">
-      <div class="modal-content">
-        <h3>审核通过</h3>
-        <div class="form-group">
-          <label>加分类别：</label>
-          <select v-model="approvalForm.category">
-            <option value="">请选择加分类别</option>
-            <option value="A">A类 - 思想品德</option>
-            <option value="B">B类 - 学习成绩</option>
-            <option value="C">C类 - 科技创新</option>
-            <option value="D">D类 - 社会实践</option>
-            <option value="E">E类 - 文体特长</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>加分分值：</label>
-          <input type="number" v-model="approvalForm.points" step="0.1" min="0" max="10">
-        </div>
-        <div class="form-group">
-          <label>审核意见：</label>
-          <textarea v-model="approvalForm.comment" rows="3"></textarea>
-        </div>
-        <div class="modal-actions">
-          <button @click="confirmApproval" class="btn-primary">确认</button>
-          <button @click="showApproveModal = false" class="btn-secondary">取消</button>
+        <div v-else class="no-attachments">
+          <p>无附件</p>
         </div>
       </div>
-    </div>
-
-    <!-- 退回弹窗 -->
-    <div v-if="showRejectModal" class="modal">
-      <div class="modal-content">
-        <h3>退回修改</h3>
-        <div class="form-group">
-          <label>退回原因：</label>
-          <textarea v-model="rejectForm.reason" rows="4" placeholder="请详细说明退回原因..."></textarea>
-        </div>
-        <div class="modal-actions">
-          <button @click="confirmReject" class="btn-primary">确认退回</button>
-          <button @click="showRejectModal = false" class="btn-secondary">取消</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 上报疑问弹窗 -->
-    <div v-if="showReportModal" class="modal">
-      <div class="modal-content">
-        <h3>上报疑问材料</h3>
-        <div class="form-group">
-          <label>疑问说明：</label>
-          <textarea v-model="reportForm.description" rows="4" placeholder="请详细说明疑问内容..."></textarea>
-        </div>
-        <div class="form-group">
-          <label>上报给：</label>
-          <select v-model="reportForm.supervisor">
-            <option value="">请选择上级审核人</option>
-            <option value="1">综测组长</option>
-            <option value="2">班主任</option>
-            <option value="3">辅导员</option>
-          </select>
-        </div>
-        <div class="modal-actions">
-          <button @click="confirmReport" class="btn-primary">确认上报</button>
-          <button @click="showReportModal = false" class="btn-secondary">取消</button>
+    </el-dialog>
+    
+    <!-- 驳回对话框 -->
+    <el-dialog
+      v-model="rejectDialogVisible"
+      title="驳回材料"
+      width="40%"
+      destroy-on-close
+    >
+      <div class="custom-form">
+        <div class="form-item">
+          <label class="form-label">驳回原因</label>
+          <textarea
+            v-model="rejectForm.comment"
+            class="custom-textarea"
+            placeholder="请输入驳回原因"
+            rows="4"
+          ></textarea>
         </div>
       </div>
-    </div>
+      <div class="dialog-footer">
+        <button class="custom-button" @click="rejectDialogVisible = false">取消</button>
+        <button 
+          class="custom-button danger" 
+          :disabled="!rejectForm.comment.trim()" 
+          @click="submitReject"
+        >
+          确认驳回
+        </button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
-<script setup>
-import { ref, computed } from 'vue'
-import TopBar from "@/components/TopBar.vue"
-import Sidebar from "@/components/Sidebar.vue"
+<script lang="ts" setup>
+import { ref, computed, onMounted } from 'vue';
+import { ElMessage } from 'element-plus';
+import { getReviewMaterials } from '@/api/evaluation';
+import TopBar from "@/components/TopBar.vue";
+import Sidebar from "@/components/Sidebar.vue";
 
-// 班级数据
-const classes = ref([
-  { id: '1', name: '计算机2101' },
-  { id: '2', name: '计算机2102' },
-  { id: '3', name: '计算机2103' }
-])
+interface EvaluationAttachment {
+  id: number;
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  fileType: string;
+  uploadTime: string;
+}
 
-// 筛选条件
-const selectedClass = ref('')
-const selectedStatus = ref('')
+interface EvaluationMaterial {
+  id: number;
+  userId: number;
+  evaluationType: string;
+  title: string;
+  description: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  classId: string;
+  attachments?: EvaluationAttachment[];
+}
 
-// 材料数据
-const materials = ref([
-  {
-    id: 1,
-    submitTime: '2024-03-15 14:30',
-    studentId: '2021001',
-    studentName: '张三',
-    name: '2023年数学建模竞赛国家二等奖证书.pdf',
-    category: 'C类',
-    requestedPoints: 5,
-    status: 'pending'
-  },
-  // 更多材料数据...
-])
-
-// 统计数据
-const stats = ref({
-  pending: 5,
-  reported: 2,
-  processed: 8
-})
-
-// 弹窗控制
-const showApproveModal = ref(false)
-const showRejectModal = ref(false)
-const showReportModal = ref(false)
-
-// 表单数据
-const approvalForm = ref({
-  category: '',
-  points: 0,
-  comment: ''
-})
-
+const materials = ref<EvaluationMaterial[]>([]);
+const loading = ref(true);
+const searchKeyword = ref('');
+const filterStatus = ref('');
+const showStatusDropdown = ref(false);
+const detailsDialogVisible = ref(false);
+const rejectDialogVisible = ref(false);
+const selectedMaterial = ref<EvaluationMaterial | null>(null);
 const rejectForm = ref({
-  reason: ''
-})
+  comment: ''
+});
+const submitting = ref(false);
 
-const reportForm = ref({
-  description: '',
-  supervisor: ''
-})
+const toggleStatusDropdown = () => {
+  showStatusDropdown.value = !showStatusDropdown.value;
+};
 
-// 当前选中的材料
-const currentMaterial = ref(null)
+const selectStatus = (status: string) => {
+  filterStatus.value = status;
+  showStatusDropdown.value = false;
+};
 
-// 材料预览相关
-const showPreviewModal = ref(false)
-const previewUrl = ref('')
+document.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement;
+  if (!target.closest('.custom-dropdown')) {
+    showStatusDropdown.value = false;
+  }
+});
 
-// 判断文件类型
-const isImageFile = computed(() => {
-  const filename = currentMaterial.value?.name.toLowerCase() || ''
-  return /\.(jpg|jpeg|png|gif|webp)$/.test(filename)
-})
-
-const isPdfFile = computed(() => {
-  const filename = currentMaterial.value?.name.toLowerCase() || ''
-  return /\.pdf$/.test(filename)
-})
-
-// 过滤材料列表
 const filteredMaterials = computed(() => {
-  return materials.value.filter(material => {
-    if (selectedStatus.value && material.status !== selectedStatus.value) return false
-    return true
-  })
-})
-
-// 格式化日期
-const formatDate = (date) => {
-  return new Date(date).toLocaleString()
-}
-
-// 获取状态文本
-const getStatusText = (status) => {
-  const statusMap = {
-    pending: '待审核',
-    approved: '已通过',
-    rejected: '已退回',
-    reported: '已上报'
-  }
-  return statusMap[status] || status
-}
-
-// 查看材料
-const viewMaterial = (material) => {
-  currentMaterial.value = material
-  // 这里应该从后端获取文件的URL
-  previewUrl.value = `/api/materials/${material.id}/file`
-  showPreviewModal.value = true
-}
-
-// 审核通过
-const approve = (material) => {
-  currentMaterial.value = material
-  showApproveModal.value = true
-}
-
-// 确认审核通过
-const confirmApproval = () => {
-  // 实现确认审核的逻辑
-  console.log('审核通过:', approvalForm.value)
-  showApproveModal.value = false
-}
-
-// 退回材料
-const reject = (material) => {
-  currentMaterial.value = material
-  showRejectModal.value = true
-}
-
-// 确认退回
-const confirmReject = () => {
-  // 实现确认退回的逻辑
-  console.log('退回材料:', rejectForm.value)
-  showRejectModal.value = false
-}
-
-// 上报疑问
-const report = (material) => {
-  currentMaterial.value = material
-  showReportModal.value = true
-}
-
-// 确认上报
-const confirmReport = () => {
-  // 实现确认上报的逻辑
-  console.log('上报疑问:', reportForm.value)
-  showReportModal.value = false
-}
-
-// 生成统计表
-const showReportDescModal = ref(false)
-const reportDescription = ref('')
-
-const generateReport = () => {
-  if (stats.value.reported > 0) return
-  showReportDescModal.value = true
-}
-
-// 关闭描述弹窗
-const closeReportDescModal = () => {
-  showReportDescModal.value = false
-  reportDescription.value = ''
-}
-
-// 提交统计表描述
-const submitReportDesc = async () => {
-  try {
-    // 这里应该调用后端API提交统计表和描述
-    // await fetch('/api/materials/report', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json'
-    //   },
-    //   body: JSON.stringify({
-    //     description: reportDescription.value
-    //   })
-    // })
-
-    // 关闭弹窗
-    closeReportDescModal()
+  return materials.value.filter(item => {
+    const matchesKeyword = searchKeyword.value 
+      ? item.title.toLowerCase().includes(searchKeyword.value.toLowerCase())
+      : true;
     
-    // 提示成功
-    alert('统计表生成成功！')
-  } catch (error) {
-    console.error('生成统计表失败:', error)
+    const matchesStatus = filterStatus.value 
+      ? item.status === filterStatus.value
+      : true;
+    
+    return matchesKeyword && matchesStatus;
+  });
+});
+
+const getStatusClass = (status: string) => {
+  const classMap: Record<string, string> = {
+    'PENDING': 'status-warning',
+    'APPROVED': 'status-success',
+    'REJECTED': 'status-danger'
+  };
+  return classMap[status] || 'status-default';
+};
+
+const formatDate = (dateString: string) => {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Shanghai'
+  });
+};
+
+const getStatusType = (status: string) => {
+  const typeMap: Record<string, string> = {
+    'PENDING': 'warning',
+    'APPROVED': 'success',
+    'REJECTED': 'danger'
+  };
+  return typeMap[status] || 'info';
+};
+
+const getStatusText = (status: string) => {
+  const textMap: Record<string, string> = {
+    'PENDING': '待审核',
+    'APPROVED': '已通过',
+    'REJECTED': '已驳回'
+  };
+  return textMap[status] || status;
+};
+
+const getEvaluationTypeText = (type: string) => {
+  const typeMap: Record<string, string> = {
+    'academic': '学术成果',
+    'practice': '社会实践',
+    'volunteer': '志愿服务',
+    'work': '学生工作',
+    'other': '其他'
+  };
+  return typeMap[type] || type;
+};
+
+const formatFileSize = (size: number) => {
+  if (size < 1024) {
+    return size + ' B';
+  } else if (size < 1024 * 1024) {
+    return (size / 1024).toFixed(2) + ' KB';
+  } else {
+    return (size / (1024 * 1024)).toFixed(2) + ' MB';
   }
-}
+};
+
+const handleViewDetails = (record: EvaluationMaterial) => {
+  selectedMaterial.value = record;
+  detailsDialogVisible.value = true;
+};
+
+const handleRowClick = (row: EvaluationMaterial) => {
+  handleViewDetails(row);
+};
+
+const openRejectDialog = (record: EvaluationMaterial) => {
+  selectedMaterial.value = record;
+  rejectForm.value.comment = '';
+  rejectDialogVisible.value = true;
+};
+
+const handleReview = async (record: EvaluationMaterial) => {
+  try {
+    ElMessage.success('审核通过成功');
+    await fetchMaterials();
+  } catch (error) {
+    ElMessage.error('操作失败');
+  }
+};
+
+const submitReject = async () => {
+  if (!rejectForm.value.comment.trim()) {
+    ElMessage.warning('请输入驳回原因');
+    return;
+  }
+
+  try {
+    submitting.value = true;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    ElMessage.success('驳回成功');
+    rejectDialogVisible.value = false;
+    await fetchMaterials();
+  } catch (error) {
+    ElMessage.error('操作失败');
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const previewAttachment = (attachment: EvaluationAttachment) => {
+  console.log('预览附件:', attachment);
+};
+
+const downloadAttachment = (attachment: EvaluationAttachment) => {
+  console.log('下载附件:', attachment);
+};
+
+const fetchMaterials = async () => {
+  try {
+    loading.value = true;
+    const response = await getReviewMaterials();
+    materials.value = response.data.data;
+  } catch (error) {
+    ElMessage.error('获取材料列表失败');
+    console.error('获取材料列表失败:', error);
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchMaterials();
+});
 </script>
 
 <style scoped>
-.review-container {
-  width: 100%;
+.review-materials-container {
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -428,384 +407,389 @@ const submitReportDesc = async () => {
 }
 
 .content {
-  display: flex;
   flex: 1;
+  display: flex;
+  background-color: #f0f2f5;
   overflow: hidden;
 }
 
 .main-content {
   flex: 1;
-  padding: 20px;
-  background: #f5f7fa;
+  padding: 24px;
   overflow-y: auto;
+  height: 100%;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
-.filter-section {
-  display: flex;
-  gap: 15px;
-}
-
-.filter-select {
-  padding: 8px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  min-width: 150px;
-}
-
-.table-container {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  overflow: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th, td {
-  padding: 12px 15px;
-  text-align: center;
-  border-bottom: 1px solid #ebeef5;
-}
-
-th {
-  background: #f5f7fa;
-  color: #606266;
-  font-weight: 500;
-  text-align: center !important;
-}
-
-.material-name {
-  color: #409eff;
-  cursor: pointer;
-  text-align: center;
-}
-
-.material-name:hover {
-  text-decoration: underline;
-}
-
-.status-badge {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.status-badge.pending {
-  background: #e6a23c1a;
-  color: #e6a23c;
-}
-
-.status-badge.approved {
-  background: #67c23a1a;
-  color: #67c23a;
-}
-
-.status-badge.rejected {
-  background: #f56c6c1a;
-  color: #f56c6c;
-}
-
-.status-badge.reported {
-  background: #9093991a;
-  color: #909399;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-}
-
-.btn {
-  padding: 4px 8px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.3s;
-}
-
-.btn.approve {
-  background: #67c23a1a;
-  color: #67c23a;
-}
-
-.btn.reject {
-  background: #f56c6c1a;
-  color: #f56c6c;
-}
-
-.btn.report {
-  background: #9093991a;
-  color: #909399;
-}
-
-.btn:hover {
-  opacity: 0.8;
-}
-
-.statistics {
-  display: flex;
-  gap: 30px;
-  margin: 20px 0;
-  padding: 15px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.stat-label {
-  color: #606266;
-}
-
-.stat-value {
-  font-weight: 500;
-  color: #409eff;
-}
-
-.stat-value.warning {
-  color: #e6a23c;
-}
-
-.notice {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  background: #fdf6ec;
-  color: #e6a23c;
-  border-radius: 4px;
-  margin: 20px 0;
-}
-
-.warning-icon {
-  font-size: 18px;
-}
-
-.generate-btn {
-  display: block;
-  width: 200px;
-  margin: 20px auto;
-  padding: 12px 20px;
-  background: #409eff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.generate-btn:disabled {
-  background: #a0cfff;
-  cursor: not-allowed;
-}
-
-.generate-btn:not(:disabled):hover {
-  background: #66b1ff;
-}
-
-/* 弹窗样式 */
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-}
-
-.modal-content h3 {
-  margin-bottom: 20px;
+h2 {
+  font-weight: bold;
+  margin: 0;
   color: #303133;
 }
 
-.form-group {
-  margin-bottom: 15px;
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  color: #606266;
+.search-box {
+  position: relative;
+  width: 220px;
 }
 
-.form-group input,
-.form-group select,
-.form-group textarea {
+.custom-input {
   width: 100%;
-  padding: 8px;
+  height: 36px;
+  padding: 0 30px 0 12px;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
   font-size: 14px;
+  transition: border-color 0.2s;
+  outline: none;
 }
 
-.form-group textarea {
-  resize: vertical;
+.custom-input:focus {
+  border-color: #409eff;
 }
 
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.btn-primary {
-  padding: 8px 15px;
-  background: #409eff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.btn-secondary {
-  padding: 8px 15px;
-  background: #f4f4f5;
+.search-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   color: #909399;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  cursor: pointer;
+  font-size: 14px;
 }
 
-.btn-primary:hover {
-  background: #66b1ff;
+.custom-dropdown {
+  position: relative;
+  width: 120px;
 }
 
-.btn-secondary:hover {
-  background: #f9f9fa;
-}
-
-/* 材料预览弹窗样式 */
-.preview-modal {
-  max-width: 900px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.preview-header {
+.dropdown-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #ebeef5;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #909399;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background-color: #fff;
   cursor: pointer;
+  transition: border-color 0.2s;
 }
 
-.close-btn:hover {
+.dropdown-header:hover {
+  border-color: #c0c4cc;
+}
+
+.dropdown-icon {
+  font-size: 12px;
+  color: #909399;
+  transition: transform 0.3s;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  margin-top: 5px;
+  background-color: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  z-index: 2000;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.dropdown-item {
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #606266;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.dropdown-item:hover {
+  background-color: #f5f7fa;
+  color: #409eff;
+}
+
+.custom-button {
+  height: 36px;
+  padding: 0 15px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background-color: #fff;
   color: #606266;
 }
 
-.preview-body {
-  flex: 1;
-  overflow: hidden;
+.custom-button:hover {
+  color: #409eff;
+  border-color: #c6e2ff;
+  background-color: #ecf5ff;
+}
+
+.custom-button.primary {
+  background-color: #409eff;
+  border-color: #409eff;
+  color: #fff;
+}
+
+.custom-button.primary:hover {
+  background-color: #66b1ff;
+  border-color: #66b1ff;
+  color: #fff;
+}
+
+.custom-button.success {
+  background-color: #67c23a;
+  border-color: #67c23a;
+  color: #fff;
+}
+
+.custom-button.success:hover {
+  background-color: #85ce61;
+  border-color: #85ce61;
+}
+
+.custom-button.danger {
+  background-color: #f56c6c;
+  border-color: #f56c6c;
+  color: #fff;
+}
+
+.custom-button.danger:hover {
+  background-color: #f78989;
+  border-color: #f78989;
+}
+
+.custom-button.info {
+  background-color: #909399;
+  border-color: #909399;
+  color: #fff;
+}
+
+.custom-button.info:hover {
+  background-color: #a6a9ad;
+  border-color: #a6a9ad;
+}
+
+.custom-button.small {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.custom-button:disabled {
+  background-color: #f5f7fa;
+  border-color: #e4e7ed;
+  color: #c0c4cc;
+  cursor: not-allowed;
+}
+
+.table-card {
+  background-color: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.loading-container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  margin-top: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
 }
 
-.preview-info {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #409eff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
 }
 
-.info-item {
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.empty-data {
   display: flex;
-  gap: 10px;
-}
-
-.info-label {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
   color: #909399;
-  white-space: nowrap;
 }
 
-.preview-content {
-  flex: 1;
-  min-height: 400px;
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.status-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.status-warning {
+  background-color: #fdf6ec;
+  color: #e6a23c;
+}
+
+.status-success {
+  background-color: #f0f9eb;
+  color: #67c23a;
+}
+
+.status-danger {
+  background-color: #fef0f0;
+  color: #f56c6c;
+}
+
+.status-default {
+  background-color: #f4f4f5;
+  color: #909399;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.material-details {
+  padding: 10px;
+}
+
+.detail-item {
+  margin-bottom: 16px;
+}
+
+.detail-item .label {
+  font-weight: bold;
+  margin-right: 8px;
+  color: #606266;
+}
+
+.description {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  margin-top: 8px;
+  padding: 10px;
+  background-color: #f8f8f8;
+  border-radius: 4px;
+}
+
+.attachment-section {
+  margin-top: 24px;
+}
+
+.attachment-section h3 {
+  margin-bottom: 16px;
+  font-weight: bold;
+  color: #303133;
+}
+
+.attachment-list {
   border: 1px solid #ebeef5;
   border-radius: 4px;
-  overflow: hidden;
+}
+
+.attachment-item {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #ebeef5;
 }
 
-.image-preview {
-  width: 100%;
-  height: 100%;
+.attachment-item:last-child {
+  border-bottom: none;
+}
+
+.attachment-info {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
 }
 
-.image-preview img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+.attachment-name {
+  font-weight: 500;
+  margin-bottom: 4px;
 }
 
-.pdf-preview {
-  width: 100%;
-  height: 100%;
+.attachment-size {
+  font-size: 12px;
+  color: #909399;
 }
 
-.file-info {
+.attachment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.no-attachments {
   text-align: center;
+  color: #909399;
   padding: 20px;
-}
-
-.file-icon {
-  font-size: 48px;
-}
-
-.download-btn {
-  display: inline-block;
-  margin-top: 15px;
-  padding: 8px 15px;
-  background: #409eff;
-  color: white;
+  background-color: #f8f8f8;
   border-radius: 4px;
-  text-decoration: none;
 }
 
-.download-btn:hover {
-  background: #66b1ff;
+.custom-form {
+  margin-bottom: 20px;
 }
-</style> 
+
+.form-item {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: bold;
+  color: #606266;
+}
+
+.custom-textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: border-color 0.2s;
+  resize: vertical;
+  outline: none;
+}
+
+.custom-textarea:focus {
+  border-color: #409eff;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+</style>

@@ -15,6 +15,11 @@ import org.zhou.backend.entity.EvaluationAttachment;
 import org.zhou.backend.entity.EvaluationMaterial;
 import org.zhou.backend.repository.EvaluationAttachmentRepository;
 import org.zhou.backend.repository.EvaluationMaterialRepository;
+import org.zhou.backend.repository.ClassGroupMemberRepository;
+import org.zhou.backend.repository.UserRepository;
+import org.zhou.backend.repository.EvaluationRepository;
+import org.zhou.backend.entity.User;
+import org.zhou.backend.repository.ClassRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,12 +30,25 @@ import lombok.extern.slf4j.Slf4j;
 public class EvaluationService {
     private final EvaluationMaterialRepository materialRepository;
     private final EvaluationAttachmentRepository attachmentRepository;
+    private final EvaluationRepository evaluationRepository;
+    private final ClassGroupMemberRepository classGroupMemberRepository;
+    private final UserRepository userRepository;
+    private final ClassRepository classRepository;
     
     @Value("${file.upload.path:${user.home}/evaluation-files}")
     private String uploadPath;
     
     @Transactional
     public EvaluationMaterial submitMaterial(Long userId, EvaluationMaterialDTO dto) {
+        // 获取用户信息以设置班级ID
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+            
+        // 验证班级是否存在
+        if (!classRepository.existsById(user.getClassId())) {
+            throw new RuntimeException("班级不存在: " + user.getClassId());
+        }
+
         // 创建材料记录
         EvaluationMaterial material = new EvaluationMaterial();
         material.setUserId(userId);
@@ -38,6 +56,7 @@ public class EvaluationService {
         material.setTitle(dto.getTitle());
         material.setDescription(dto.getDescription());
         material.setStatus("PENDING");
+        material.setClassId(user.getClassId());
         
         // 保存材料记录
         material = materialRepository.save(material);
@@ -89,5 +108,13 @@ public class EvaluationService {
         List<EvaluationMaterial> materials = materialRepository.findByUserId(userId);
         log.info("Found {} materials", materials.size());
         return materials;
+    }
+
+    public List<EvaluationMaterial> getMaterialsByReviewer(Long reviewerId) {
+        // 获取该综测小组成员负责的所有班级ID
+        List<String> classIds = classGroupMemberRepository.findClassIdsByUserId(reviewerId);
+        
+        // 获取这些班级的所有学生提交的材料
+        return evaluationRepository.findBySubmitterClassIdIn(classIds);
     }
 } 

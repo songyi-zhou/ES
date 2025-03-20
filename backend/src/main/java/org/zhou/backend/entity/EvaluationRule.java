@@ -5,13 +5,16 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.Builder;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.ArrayList;
 
 @Entity
 @Table(name = "evaluation_rules")
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class EvaluationRule {
@@ -19,19 +22,32 @@ public class EvaluationRule {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
+    @Column(nullable = false)
     private String title;
-    private String description;
-    private Long createdBy;
     
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @Column(columnDefinition = "TEXT")
+    private String description;
+    
+    @Column(name = "uploaded_by", nullable = false)
+    private Long uploadedBy;
+    
+    @Column(name = "uploaded_at", nullable = false)
     private LocalDateTime createdAt;
     
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
-    private LocalDateTime updatedAt;
+    @Column(nullable = false)
+    private boolean active;
     
-    private String status;
-    private Integer version;
+    @Column
+    private String department;
     
-    @OneToMany(mappedBy = "rule", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<RuleAttachment> attachments;
+    @Column(name = "uploaded_by_department")
+    private String uploadedByDepartment;
+    
+    @OneToMany(mappedBy = "rule", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RuleAttachment> attachments = new ArrayList<>();
+    
+    public void addAttachment(RuleAttachment attachment) {
+        attachments.add(attachment);
+        attachment.setRule(this);
+    }
 } 

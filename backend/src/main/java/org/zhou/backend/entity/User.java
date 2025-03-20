@@ -35,6 +35,9 @@ public class User {
     private String major;
     private String className;
     
+    @Column(name = "class_id")
+    private String classId;
+    
     @Column(name = "role_level")
     private Integer roleLevel;
     

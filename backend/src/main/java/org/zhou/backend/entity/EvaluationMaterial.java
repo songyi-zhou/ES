@@ -13,6 +13,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Column;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -39,13 +40,18 @@ public class EvaluationMaterial {
     private Long reviewerId;
     private String reviewComment;
     
+    @CreationTimestamp
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime createdAt;
     
+    @UpdateTimestamp
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime updatedAt;
     
     @JsonIgnore
     @OneToMany(mappedBy = "material", cascade = CascadeType.ALL)
     private List<EvaluationAttachment> attachments;
+    
+    @Column(name = "class_id")
+    private String classId;
 } 
