@@ -22,9 +22,9 @@ public class JacksonConfig {
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
         
-        // 设置递归深度
+        // 设置递归深度为10，与application.properties保持一致
         mapper.getFactory().setStreamWriteConstraints(
-            StreamWriteConstraints.builder().maxNestingDepth(3).build()
+            StreamWriteConstraints.builder().maxNestingDepth(10).build()
         );
         
         return mapper;

@@ -93,17 +93,24 @@
         </div>
 
         <!-- 预览弹窗 -->
-        <div v-if="showPreviewModal" class="modal">
-          <div class="modal-content preview-modal">
-            <div class="modal-header">
-              <h3>文件预览</h3>
-              <button class="close-btn" @click="showPreviewModal = false">×</button>
-            </div>
-            <div class="preview-container">
-              <iframe :src="previewUrl" type="application/pdf" width="100%" height="100%"></iframe>
+        <el-dialog v-model="showPreviewModal" title="文件预览" width="80%" destroy-on-close>
+          <div class="preview-container">
+            <!-- 根据文件类型显示不同的预览组件 -->
+            <iframe v-if="previewUrl && selectedFile?.name.endsWith('.pdf')" 
+                    :src="previewUrl" 
+                    width="100%" 
+                    height="600px" 
+                    frameborder="0">
+            </iframe>
+            <img v-else-if="previewUrl" 
+                 :src="previewUrl" 
+                 class="preview-image" 
+                 alt="文件预览">
+            <div v-else class="preview-error">
+              无法预览此类型的文件
             </div>
           </div>
-        </div>
+        </el-dialog>
 
         <!-- 删除确认弹窗 -->
         <div v-if="showDeleteModal" class="modal">
@@ -134,13 +141,35 @@ import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 import axios from 'axios'
 
+// 创建带有认证令牌的 axios 实例
+const axiosInstance = axios.create({
+  baseURL: '/api',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// 添加请求拦截器，自动添加 token
+axiosInstance.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  error => {
+    return Promise.reject(error);
+  }
+);
+
 // 文件列表数据
 const files = ref([])
 
 // 获取规章列表
 const fetchRules = async () => {
   try {
-    const response = await axios.get('/api/rules')
+    const response = await axiosInstance.get('/rules')
     files.value = response.data.map(rule => ({
       id: rule.id,
       name: rule.attachments[0].fileName,
@@ -209,65 +238,116 @@ const formatFileSize = (bytes) => {
 }
 
 // 预览文件
-const previewFile = (file) => {
-  selectedFile.value = file
-  previewUrl.value = file.url
-  showPreviewModal.value = true
+const previewFile = async (file) => {
+  try {
+    selectedFile.value = file;
+    
+    // 获取文件扩展名
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    
+    // 检查文件类型是否可以预览
+    const previewableTypes = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'];
+    const nonPreviewableTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+    
+    if (nonPreviewableTypes.includes(fileExtension)) {
+      // Office文档无法直接预览，提示用户下载
+      ElMessage.info(`${fileExtension.toUpperCase()} 文件无法直接预览，正在下载...`);
+      showPreviewModal.value = false;
+      downloadFile(file);
+      return;
+    }
+    
+    // 对于可预览的文件类型
+    const response = await axiosInstance.get(`/rules/download/${file.id}`, {
+      responseType: 'blob'
+    });
+    
+    // 创建Blob URL
+    const blob = new Blob([response.data], {type: response.headers['content-type']});
+    previewUrl.value = URL.createObjectURL(blob);
+    
+    // 显示预览模态框
+    showPreviewModal.value = true;
+  } catch (error) {
+    console.error('预览失败:', error);
+    ElMessage.error('预览失败');
+  }
 }
 
 // 下载文件
 const downloadFile = async (file) => {
   try {
-    window.open(file.url, '_blank')
+    // 使用 axios 实例下载文件，而不是直接打开链接
+    const response = await axiosInstance.get(`/rules/download/${file.id}`, {
+      responseType: 'blob'
+    });
+    
+    // 创建 Blob 对象
+    const blob = new Blob([response.data]);
+    
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', file.name);
+    document.body.appendChild(link);
+    link.click();
+    
+    // 清理
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(link);
   } catch (error) {
-    console.error('下载失败:', error)
-    ElMessage.error('下载失败')
+    console.error('下载失败:', error);
+    ElMessage.error('下载失败');
   }
 }
 
-// 确认删除
+// 删除文件
 const confirmDelete = (file) => {
-  selectedFile.value = file
-  showDeleteModal.value = true
+  selectedFile.value = file;
+  showDeleteModal.value = true;
 }
 
-// 删除文件
 const deleteFile = async () => {
-  if (!selectedFile.value) return
+  if (!selectedFile.value) return;
   
   try {
-    await axios.delete(`/api/rules/${selectedFile.value.id}`)
-    ElMessage.success('删除成功')
-    showDeleteModal.value = false
-    selectedFile.value = null
-    await fetchRules()
+    // 使用axios实例发送删除请求
+    await axiosInstance.delete(`/rules/${selectedFile.value.id}`);
+    
+    ElMessage.success('删除成功');
+    showDeleteModal.value = false;
+    selectedFile.value = null;
+    await fetchRules();
   } catch (error) {
-    console.error('删除失败:', error)
-    ElMessage.error(error.response?.data?.message || '删除失败')
+    console.error('删除失败:', error);
+    ElMessage.error(error.response?.data?.message || '删除失败');
   }
 }
 
 // 提交上传
 const submitUpload = async () => {
   if (!uploadForm.value.file) {
-    ElMessage.error('请选择文件')
+    ElMessage.warning('请选择文件')
     return
   }
 
-  try {
-    const formData = new FormData()
-    formData.append('file', uploadForm.value.file)
-    formData.append('name', uploadForm.value.name)
+  const formData = new FormData()
+  formData.append('file', uploadForm.value.file)
+  formData.append('name', uploadForm.value.name)
+  if (uploadForm.value.description) {
     formData.append('description', uploadForm.value.description)
+  }
 
-    await axios.post('/api/rules', formData, {
+  try {
+    await axiosInstance.post('/rules', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     })
-
     ElMessage.success('上传成功')
-    closeUploadModal()
+    showUploadModal.value = false
+    uploadForm.value = { name: '', file: null, description: '' }
     await fetchRules()
   } catch (error) {
     console.error('上传失败:', error)
@@ -480,14 +560,23 @@ td {
   max-width: 500px;
 }
 
-.preview-modal {
-  max-width: 800px;
-  height: 80vh;
+.preview-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
 }
 
-.preview-container {
-  height: calc(100% - 60px);
-  margin-top: 20px;
+.preview-image {
+  max-width: 100%;
+  max-height: 600px;
+  object-fit: contain;
+}
+
+.preview-error {
+  color: #f56c6c;
+  font-size: 16px;
+  text-align: center;
 }
 
 .modal-header {

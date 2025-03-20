@@ -1,19 +1,19 @@
 package org.zhou.backend.service;
 
-import lombok.RequiredArgsConstructor;
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 import org.zhou.backend.entity.EvaluationRule;
 import org.zhou.backend.entity.RuleAttachment;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 import org.zhou.backend.exception.ResourceNotFoundException;
 import org.zhou.backend.repository.RuleRepository;
 
-import java.util.Collections;
-import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @Transactional
@@ -31,6 +31,9 @@ public class RuleService {
         rule.setDescription(description);
         rule.setCreatedBy(userId);
         rule.setStatus("ACTIVE");
+        rule.setCreatedAt(LocalDateTime.now());
+        rule.setUpdatedAt(LocalDateTime.now());
+        rule.setVersion(1);
         
         RuleAttachment attachment = new RuleAttachment();
         attachment.setRule(rule);

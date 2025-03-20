@@ -1,13 +1,21 @@
 package org.zhou.backend.controller;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.zhou.backend.entity.EvaluationRule;
 import org.zhou.backend.entity.RuleAttachment;
@@ -15,8 +23,7 @@ import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.FileStorageService;
 import org.zhou.backend.service.RuleService;
 
-import java.util.List;
-import java.util.Map;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/rules")
@@ -26,7 +33,7 @@ public class RuleController {
     private final FileStorageService fileStorageService;
     
     @PostMapping
-    @PreAuthorize("hasAnyRole('leader', 'member')")
+    @PreAuthorize("hasAnyRole('GROUP_LEADER', 'GROUP_MEMBER')")
     public ResponseEntity<?> uploadRule(@RequestParam("file") MultipartFile file,
                                       @RequestParam("name") String name,
                                       @RequestParam(value = "description", required = false) String description,
@@ -61,7 +68,7 @@ public class RuleController {
     }
     
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('leader', 'member')")
+    @PreAuthorize("hasAnyRole('GROUP_LEADER', 'GROUP_MEMBER')")
     public ResponseEntity<?> deleteRule(@PathVariable Long id) {
         try {
             ruleService.deleteRule(id);
