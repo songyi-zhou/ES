@@ -23,9 +23,9 @@
             </div>
             <div class="filter-section">
               <el-select v-model="filterStatus" placeholder="审核状态" clearable>
-                <el-option label="待审核" value="pending" />
-                <el-option label="已通过" value="approved" />
-                <el-option label="已驳回" value="rejected" />
+                <el-option label="待审核" value="QUESTIONED" />
+                <el-option label="已通过" value="APPROVED" />
+                <el-option label="已驳回" value="REJECTED" />
               </el-select>
               <el-input
                 v-model="searchKeyword"
@@ -37,24 +37,25 @@
           </div>
 
           <div class="table-container">
+            <div v-if="loading">加载中...</div>
+            <div v-if="!loading && (!filteredQuestionMaterials || filteredQuestionMaterials.length === 0)">
+              暂无数据
+            </div>
             <el-table 
-              :data="filteredQuestionMaterials" 
+              v-else
+              :data="filteredQuestionMaterials"
               style="width: 100%"
               @selection-change="handleSelectionChange"
             >
-              <!-- 添加复选框列 -->
               <el-table-column type="selection" width="55" />
               
-              <el-table-column prop="submitTime" label="提交时间" width="180" />
-              <el-table-column prop="studentId" label="学号" width="120" />
-              <el-table-column prop="studentName" label="姓名" width="100" />
-              <el-table-column prop="materialName" label="材料名称" width="150" />
-              <el-table-column prop="requestedCategory" label="申请类别" width="120" />
-              <el-table-column prop="requestedPoints" label="申请分数" width="100" />
-              <el-table-column prop="questionRaiser" label="提出人" width="120" />
-              <el-table-column prop="questionDescription" label="疑问描述" min-width="200">
+              <el-table-column prop="updatedAt" label="提交时间" width="180" />
+              <el-table-column prop="userId" label="学号" width="120" />
+              <el-table-column prop="title" label="材料名称" width="150" />
+              <el-table-column prop="evaluationType" label="申请类别" width="120" />
+              <el-table-column prop="reviewComment" label="疑问描述" min-width="200">
                 <template #default="{ row }">
-                  <div class="description-cell">{{ row.questionDescription }}</div>
+                  <div class="description-cell">{{ row.reviewComment }}</div>
                 </template>
               </el-table-column>
               <el-table-column label="操作" width="250" fixed="right">
@@ -64,7 +65,7 @@
                       type="primary" 
                       size="small" 
                       @click="openReviewDialog(row)"
-                      :disabled="row.status !== 'pending'"
+                      :disabled="row.status !== 'QUESTIONED'"
                     >
                       审核
                     </el-button>
@@ -75,12 +76,11 @@
                     >
                       查看材料
                     </el-button>
-                    <!-- 添加上报按钮 -->
                     <el-button 
                       type="warning" 
                       size="small" 
                       @click="reportMaterial(row)"
-                      :disabled="row.status !== 'pending'"
+                      :disabled="row.status !== 'QUESTIONED'"
                     >
                       上报
                     </el-button>
@@ -150,9 +150,8 @@
           >
             <div class="preview-content">
               <div class="material-preview">
-                <!-- 这里可以根据材料类型显示不同的预览内容 -->
-                <img v-if="currentMaterial?.materialType === 'image'" :src="currentMaterial?.materialUrl" />
-                <iframe v-else-if="currentMaterial?.materialType === 'pdf'" :src="currentMaterial?.materialUrl" />
+                <img v-if="currentMaterial?.materialType === 'image'" :src="currentMaterial.materialUrl" style="max-width: 100%; max-height: 100%;" />
+                <iframe v-else-if="currentMaterial?.materialType === 'pdf'" :src="currentMaterial.materialUrl" style="width: 100%; height: 100%;" />
                 <div v-else>暂不支持预览该类型的材料</div>
               </div>
             </div>
@@ -198,41 +197,94 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+<script setup lang="ts">
+import { ref, computed, watch, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
+import axios from '@/utils/axios'
+import debounce from 'lodash/debounce'
+import { useRouter } from 'vue-router'
 
-// 表格数据
-const questionMaterials = ref([
-  {
-    id: 1,
-    submitTime: '2024-03-20 10:30:00',
-    studentId: '2021001001',
-    studentName: '张三',
-    materialName: '志愿者证书.pdf',
-    requestedCategory: 'A类',
-    requestedPoints: 2.5,
-    questionRaiser: '李四',
-    questionDescription: '该证书的志愿时长计算方式存在疑问，建议重新核实',
-    status: 'pending',
-    materialType: 'pdf',
-    materialUrl: '/path/to/material.pdf'
-  },
-  // 更多数据...
-])
+const router = useRouter()
 
-// 筛选和搜索
-const filterStatus = ref('')
-const searchKeyword = ref('')
+// 定义响应式变量
+const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(10)
-const total = ref(100)
+const total = ref(0)
+const filterStatus = ref('')
+const searchKeyword = ref('')
+const pendingCount = ref(0)
 
-// 计算筛选后的数据
+// 修改数据结构定义
+type QuestionMaterial = {
+  id: number;
+  userId: string;
+  title: string;
+  evaluationType: string;
+  status: string;
+  reviewComment: string;
+  updatedAt: string;
+  attachments: Array<{
+    id: number;
+    fileName: string;
+    filePath: string;
+  }>;
+}
+
+const questionMaterials = ref<QuestionMaterial[]>([])
+
+// 获取表格数据
+const fetchQuestionMaterials = async () => {
+  try {
+    console.log('开始获取疑问材料...')
+    loading.value = true
+    
+    const token = localStorage.getItem('token')
+    console.log('当前 token:', token)  // 添加 token 调试日志
+    
+    const response = await axios.get('/question-materials', {  // 移除 /api 前缀
+      params: {
+        status: filterStatus.value,
+        page: currentPage.value,
+        size: pageSize.value,
+        keyword: searchKeyword.value,
+        type: 'questioned'
+      },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    
+    console.log('API响应:', response)
+    
+    if (response.status === 200) {
+      console.log('获取数据成功，处理数据...')
+      console.log('原始数据结构:', response.data.data)
+      questionMaterials.value = response.data.data
+      total.value = response.data.total
+      
+      // 修改状态判断条件，打印调试信息
+      console.log('材料状态值:', questionMaterials.value.map(item => item.status))
+      pendingCount.value = questionMaterials.value.filter(
+        item => item.status === 'QUESTIONED'  // 改为 'QUESTIONED'
+      ).length
+      console.log('待审核数量:', pendingCount.value)
+    }
+  } catch (error) {
+    console.error('获取疑问材料失败:', error)
+    console.error('请求配置:', error.config)  // 添加请求配置调试日志
+    ElMessage.error('获取疑问材料失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 筛选数据的计算属性
 const filteredQuestionMaterials = computed(() => {
-  let result = questionMaterials.value
+  let result = [...questionMaterials.value]
 
   if (filterStatus.value) {
     result = result.filter(item => item.status === filterStatus.value)
@@ -241,8 +293,8 @@ const filteredQuestionMaterials = computed(() => {
   if (searchKeyword.value) {
     const keyword = searchKeyword.value.toLowerCase()
     result = result.filter(item => 
-      item.studentName.toLowerCase().includes(keyword) ||
-      item.studentId.toLowerCase().includes(keyword)
+      item.userId.toLowerCase().includes(keyword) ||
+      item.title.toLowerCase().includes(keyword)
     )
   }
 
@@ -301,14 +353,103 @@ const submitReview = async () => {
 // 材料预览相关
 const previewDialogVisible = ref(false)
 
-const viewMaterial = (row) => {
-  currentMaterial.value = row
-  previewDialogVisible.value = true
+const viewMaterial = async (row) => {
+  if (!row.attachments || row.attachments.length === 0) {
+    ElMessage.warning('没有可查看的材料')
+    return
+  }
+
+  // 多个附件时显示选择列表
+  if (row.attachments.length > 1) {
+    ElMessageBox.alert(
+      `<div class="attachment-list">
+        ${row.attachments.map((att, index) => `
+          <div class="attachment-item" style="margin: 10px 0;">
+            <span>${att.fileName}</span>
+            <div>
+              <el-button type="primary" size="small" @click="handlePreview(${index}, row.attachments)">
+                预览
+              </el-button>
+              <el-button type="info" size="small" @click="handleDownload(${index}, row.attachments)">
+                下载
+              </el-button>
+            </div>
+          </div>
+        `).join('')}
+      </div>`,
+      '选择要查看的附件',
+      {
+        dangerouslyUseHTMLString: true,
+        confirmButtonText: '关闭'
+      }
+    )
+    return
+  }
+
+  // 单个附件直接处理
+  handlePreview(0, row.attachments)
+}
+
+const handlePreview = async (index, attachments) => {
+  const attachment = attachments[index]
+  const fileType = attachment.fileName.split('.').pop()?.toLowerCase()
+  
+  if (['jpg', 'jpeg', 'png', 'gif'].includes(fileType)) {
+    try {
+      const response = await axios.get(`/evaluation/preview/${attachment.id}`, {
+        responseType: 'blob'
+      })
+      
+      const url = URL.createObjectURL(response.data)
+      currentMaterial.value = {
+        materialType: 'image',
+        materialUrl: url
+      }
+      previewDialogVisible.value = true
+    } catch (error) {
+      ElMessage.error('预览失败')
+    }
+  } else if (fileType === 'pdf') {
+    try {
+      const response = await axios.get(`/evaluation/preview/${attachment.id}`, {
+        responseType: 'blob'
+      })
+      const url = URL.createObjectURL(response.data)
+      currentMaterial.value = {
+        materialType: 'pdf',
+        materialUrl: url
+      }
+      previewDialogVisible.value = true
+    } catch (error) {
+      ElMessage.error('预览失败')
+    }
+  } else {
+    ElMessage.info('该文件类型不支持预览，请下载后查看')
+  }
+}
+
+const handleDownload = async (index, attachments) => {
+  const attachment = attachments[index]
+  try {
+    const response = await axios.get(`/evaluation/download/${attachment.id}`, {
+      responseType: 'blob'
+    })
+    
+    const url = URL.createObjectURL(response.data)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = attachment.fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    ElMessage.error('下载失败')
+  }
 }
 
 // 状态数据
 const selectedMaterials = ref([])
-const pendingCount = ref(0)
 const showRejectModal = ref(false)
 const showReportModal = ref(false)
 const rejectReason = ref('')
@@ -418,17 +559,17 @@ const batchReport = () => {
   reportDialogVisible.value = true
 }
 
-// 提交上报
+// 在组件挂载时获取数据
+onMounted(() => {
+  fetchQuestionMaterials()
+})
+
+// 在提交上报后刷新列表
 const submitReport = async () => {
   try {
     submitting.value = true
     // TODO: 调用上报API
-    // const response = await reportMaterials({
-    //   materials: selectedMaterials.value.map(m => m.id),
-    //   note: reportForm.value.note
-    // })
-    
-    await new Promise(resolve => setTimeout(resolve, 1000)) // 模拟API调用
+    await new Promise(resolve => setTimeout(resolve, 1000))
     
     ElMessage.success('上报成功')
     reportDialogVisible.value = false
@@ -436,13 +577,43 @@ const submitReport = async () => {
     selectedMaterials.value = []
     
     // 刷新列表数据
-    // await fetchData()
+    await fetchQuestionMaterials()
   } catch (error) {
     ElMessage.error('上报失败')
   } finally {
     submitting.value = false
   }
 }
+
+// 添加请求拦截器
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// 添加响应拦截器
+axios.interceptors.response.use(
+  (response) => {
+    return response
+  },
+  (error) => {
+    if (error.response) {
+      console.error('API错误响应:', error.response)
+      if (error.response.status === 401) {
+        localStorage.removeItem('token')
+        router.push('/login')
+      }
+    }
+    return Promise.reject(error)
+  }
+)
 </script>
 
 <style scoped>

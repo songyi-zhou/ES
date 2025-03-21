@@ -48,7 +48,6 @@ public class EvaluationMaterial {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime updatedAt;
     
-    @JsonIgnore
     @OneToMany(mappedBy = "material", cascade = CascadeType.ALL)
     private List<EvaluationAttachment> attachments;
     

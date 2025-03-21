@@ -13,13 +13,13 @@ import org.springframework.web.multipart.MultipartFile;
 import org.zhou.backend.dto.EvaluationMaterialDTO;
 import org.zhou.backend.entity.EvaluationAttachment;
 import org.zhou.backend.entity.EvaluationMaterial;
+import org.zhou.backend.entity.User;
+import org.zhou.backend.repository.ClassGroupMemberRepository;
+import org.zhou.backend.repository.ClassRepository;
 import org.zhou.backend.repository.EvaluationAttachmentRepository;
 import org.zhou.backend.repository.EvaluationMaterialRepository;
-import org.zhou.backend.repository.ClassGroupMemberRepository;
-import org.zhou.backend.repository.UserRepository;
 import org.zhou.backend.repository.EvaluationRepository;
-import org.zhou.backend.entity.User;
-import org.zhou.backend.repository.ClassRepository;
+import org.zhou.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -116,5 +116,31 @@ public class EvaluationService {
         
         // 获取这些班级的所有学生提交的材料
         return evaluationRepository.findBySubmitterClassIdIn(classIds);
+    }
+
+    public EvaluationAttachment getAttachment(Long attachmentId) {
+        return attachmentRepository.findById(attachmentId)
+            .orElseThrow(() -> new RuntimeException("附件不存在"));
+    }
+
+    public EvaluationMaterial getMaterialById(Long materialId) {
+        return materialRepository.findById(materialId)
+            .orElseThrow(() -> new RuntimeException("材料不存在"));
+    }
+
+    public void raiseQuestion(Long materialId, String description) {
+        EvaluationMaterial material = materialRepository.findById(materialId)
+            .orElseThrow(() -> new RuntimeException("材料不存在"));
+        material.setStatus("QUESTIONED");
+        material.setReviewComment(description);
+        materialRepository.save(material);
+    }
+
+    public void rejectMaterial(Long materialId, String reason) {
+        EvaluationMaterial material = materialRepository.findById(materialId)
+            .orElseThrow(() -> new RuntimeException("材料不存在"));
+        material.setStatus("REJECTED");
+        material.setReviewComment(reason);
+        materialRepository.save(material);
     }
 } 

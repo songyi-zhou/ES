@@ -49,52 +49,64 @@
             :data="filteredMaterials" 
             border 
             style="width: 100%"
-            :header-cell-style="{ background: '#f5f7fa', color: '#606266' }"
-            @row-click="handleRowClick"
-            highlight-current-row
+            :header-cell-style="{ background: '#f5f7fa', color: '#606266', textAlign: 'center' }"
+            :cell-style="{ textAlign: 'center', cursor: 'default' }"
+            :row-style="{ cursor: 'default' }"
+            :resizable="false"
           >
-            <el-table-column prop="createdAt" label="提交时间" width="180">
+            <el-table-column prop="createdAt" label="提交时间" min-width="200" align="center">
               <template #default="scope">
                 {{ formatDate(scope.row.createdAt) }}
               </template>
             </el-table-column>
-            <el-table-column prop="userId" label="学号" width="120" />
-            <el-table-column prop="title" label="材料名称" min-width="200" show-overflow-tooltip />
-            <el-table-column prop="evaluationType" label="材料类型" width="120">
+            <el-table-column prop="userId" label="学号" min-width="100" align="center" />
+            <el-table-column prop="title" label="材料名称" min-width="200" show-overflow-tooltip align="center" />
+            <el-table-column prop="evaluationType" label="材料类型" min-width="100" align="center">
               <template #default="scope">
                 {{ getEvaluationTypeText(scope.row.evaluationType) }}
               </template>
             </el-table-column>
-            <el-table-column prop="status" label="材料状态" width="100">
+            <el-table-column prop="status" label="材料状态" width="90" align="center">
               <template #default="scope">
                 <span class="status-tag" :class="getStatusClass(scope.row.status)">
                   {{ getStatusText(scope.row.status) }}
                 </span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="220" fixed="right">
-              <template #default="scope">
+            <el-table-column label="操作" min-width="330" align="center">
+              <template #default="{ row }">
                 <div class="action-buttons">
-                  <button 
-                    class="custom-button success" 
-                    v-if="scope.row.status === 'PENDING'"
-                    @click.stop="handleReview(scope.row)"
+                  <el-button 
+                    type="success" 
+                    size="small" 
+                    @click.stop="handleReview(row)"
+                    :disabled="row.status !== 'PENDING'"
                   >
                     通过
-                  </button>
-                  <button 
-                    class="custom-button danger" 
-                    v-if="scope.row.status === 'PENDING'"
-                    @click.stop="openRejectDialog(scope.row)"
+                  </el-button>
+                  <el-button 
+                    type="warning" 
+                    size="small" 
+                    @click.stop="openQuestionDialog(row)"
+                    :disabled="row.status !== 'PENDING'"
+                  > 
+                    提出疑问
+                  </el-button>
+                  <el-button 
+                    type="danger" 
+                    size="small" 
+                    @click.stop="openRejectDialog(row)"
+                    :disabled="row.status !== 'PENDING'"
                   >
                     驳回
-                  </button>
-                  <button 
-                    class="custom-button info" 
-                    @click.stop="handleViewDetails(scope.row)"
+                  </el-button>
+                  <el-button 
+                    type="info" 
+                    size="small" 
+                    @click.stop="handleViewDetails(row)"
                   >
                     详情
-                  </button>
+                  </el-button>
                 </div>
               </template>
             </el-table-column>
@@ -167,30 +179,56 @@
     <el-dialog
       v-model="rejectDialogVisible"
       title="驳回材料"
-      width="40%"
-      destroy-on-close
+      width="500px"
     >
-      <div class="custom-form">
-        <div class="form-item">
-          <label class="form-label">驳回原因</label>
-          <textarea
-            v-model="rejectForm.comment"
-            class="custom-textarea"
-            placeholder="请输入驳回原因"
-            rows="4"
-          ></textarea>
+      <div class="reject-form">
+        <el-form :model="rejectForm" label-width="100px">
+          <el-form-item label="驳回原因" required>
+            <el-input
+              v-model="rejectForm.reason"
+              type="textarea"
+              :rows="4"
+              placeholder="请输入驳回原因"
+            />
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="rejectDialogVisible = false">取消</el-button>
+          <el-button type="danger" @click="submitReject" :loading="submitting">
+            确认驳回
+          </el-button>
         </div>
+      </template>
+    </el-dialog>
+
+    <!-- 添加提出疑问的对话框 -->
+    <el-dialog
+      v-model="questionDialogVisible"
+      title="提出疑问"
+      width="500px"
+    >
+      <div class="question-form">
+        <el-form :model="questionForm" label-width="100px">
+          <el-form-item label="疑问描述" required>
+            <el-input
+              v-model="questionForm.description"
+              type="textarea"
+              :rows="4"
+              placeholder="请详细描述您的疑问"
+            />
+          </el-form-item>
+        </el-form>
       </div>
-      <div class="dialog-footer">
-        <button class="custom-button" @click="rejectDialogVisible = false">取消</button>
-        <button 
-          class="custom-button danger" 
-          :disabled="!rejectForm.comment.trim()" 
-          @click="submitReject"
-        >
-          确认驳回
-        </button>
-      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="questionDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitQuestion" :loading="submitting">
+            提交
+          </el-button>
+        </div>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -201,6 +239,7 @@ import { ElMessage } from 'element-plus';
 import { getReviewMaterials } from '@/api/evaluation';
 import TopBar from "@/components/TopBar.vue";
 import Sidebar from "@/components/Sidebar.vue";
+import axios from '@/utils/axios';
 
 interface EvaluationAttachment {
   id: number;
@@ -233,9 +272,14 @@ const detailsDialogVisible = ref(false);
 const rejectDialogVisible = ref(false);
 const selectedMaterial = ref<EvaluationMaterial | null>(null);
 const rejectForm = ref({
-  comment: ''
+  reason: ''
 });
 const submitting = ref(false);
+const questionDialogVisible = ref(false);
+const questionForm = ref({
+  description: '',
+  materialId: null
+});
 
 const toggleStatusDropdown = () => {
   showStatusDropdown.value = !showStatusDropdown.value;
@@ -340,7 +384,7 @@ const handleRowClick = (row: EvaluationMaterial) => {
 
 const openRejectDialog = (record: EvaluationMaterial) => {
   selectedMaterial.value = record;
-  rejectForm.value.comment = '';
+  rejectForm.value.reason = '';
   rejectDialogVisible.value = true;
 };
 
@@ -354,7 +398,7 @@ const handleReview = async (record: EvaluationMaterial) => {
 };
 
 const submitReject = async () => {
-  if (!rejectForm.value.comment.trim()) {
+  if (!rejectForm.value.reason.trim()) {
     ElMessage.warning('请输入驳回原因');
     return;
   }
@@ -372,13 +416,74 @@ const submitReject = async () => {
   }
 };
 
-const previewAttachment = (attachment: EvaluationAttachment) => {
-  console.log('预览附件:', attachment);
+const previewAttachment = async (attachment) => {
+  const fileType = attachment.fileType.toLowerCase();
+  
+  // 判断是否可预览
+  if (['jpg', 'jpeg', 'png', 'pdf'].includes(fileType)) {
+    try {
+      const response = await axios.get(`/evaluation/preview/${attachment.id}`, {
+        responseType: 'blob'
+      });
+      
+      const url = URL.createObjectURL(response.data);
+      window.open(url, '_blank');
+    } catch (error) {
+      ElMessage.error('预览失败');
+    }
+  } else {
+    ElMessage.info('该文件类型不支持预览，请下载后查看');
+  }
 };
 
-const downloadAttachment = (attachment: EvaluationAttachment) => {
-  console.log('下载附件:', attachment);
+const downloadAttachment = async (attachment) => {
+  try {
+    const response = await axios.get(`/evaluation/download/${attachment.id}`, {
+      responseType: 'blob'
+    });
+    
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = attachment.fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    ElMessage.error('下载失败');
+  }
 };
+
+const openQuestionDialog = (row) => {
+  questionForm.value = {
+    description: '',
+    materialId: row.id
+  }
+  questionDialogVisible.value = true
+}
+
+const submitQuestion = async () => {
+  if (!questionForm.value.description.trim()) {
+    ElMessage.warning('请输入疑问描述')
+    return
+  }
+
+  try {
+    submitting.value = true
+    const response = await axios.post('/evaluation/raise-question', questionForm.value)
+    
+    if (response.status === 200) {
+      ElMessage.success('疑问提交成功')
+      questionDialogVisible.value = false
+      await fetchMaterials()
+    }
+  } catch (error) {
+    ElMessage.error('提交失败')
+  } finally {
+    submitting.value = false
+  }
+}
 
 const fetchMaterials = async () => {
   try {
@@ -674,7 +779,15 @@ h2 {
 
 .action-buttons {
   display: flex;
+  justify-content: center;
   gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 330px;
+}
+
+.action-buttons .el-button {
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 .material-details {
@@ -791,5 +904,9 @@ h2 {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 20px;
+}
+
+.question-form {
+  padding: 20px;
 }
 </style>

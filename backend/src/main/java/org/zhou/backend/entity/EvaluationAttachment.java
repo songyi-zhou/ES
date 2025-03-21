@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
 
@@ -20,6 +21,7 @@ public class EvaluationAttachment {
     
     @ManyToOne
     @JoinColumn(name = "material_id")
+    @JsonIgnore
     private EvaluationMaterial material;
     
     private String fileName;
