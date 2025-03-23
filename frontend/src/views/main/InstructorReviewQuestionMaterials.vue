@@ -9,9 +9,9 @@
             <h2>导员疑问材料审核</h2>
             <div class="filter-section">
               <el-select v-model="filterStatus" placeholder="审核状态" clearable>
-                <el-option label="待审核" value="pending" />
-                <el-option label="已通过" value="approved" />
-                <el-option label="已驳回" value="rejected" />
+                <el-option label="待审核" value="REPORTED" />
+                <el-option label="已通过" value="APPROVED" />
+                <el-option label="已驳回" value="REJECTED" />
               </el-select>
               <el-input
                 v-model="searchKeyword"
@@ -23,46 +23,48 @@
           </div>
 
           <div class="table-container">
-            <el-table :data="filteredQuestionMaterials" style="width: 100%">
-              <el-table-column prop="submitTime" label="提交时间" width="180" />
-              <el-table-column prop="studentId" label="学号" width="120" />
-              <el-table-column prop="studentName" label="姓名" width="100" />
-              <el-table-column prop="materialName" label="材料名称" width="150" />
-              <el-table-column prop="requestedCategory" label="申请类别" width="120" />
-              <el-table-column prop="requestedPoints" label="申请分数" width="100" />
-              <el-table-column prop="questionRaiser" label="提出人" width="120" />
-              <el-table-column prop="questionDescription" label="疑问描述" min-width="200">
+            <el-table
+              v-loading="loading"
+              :data="filteredQuestionMaterials"
+              style="width: 100%">
+              <el-table-column prop="reportedAt" label="提交时间" width="180" />
+              <el-table-column prop="userId" label="学号" width="120" />
+              <el-table-column prop="title" label="材料名称" />
+              <el-table-column prop="evaluationType" label="申请类别" width="120">
                 <template #default="{ row }">
-                  <div class="description-cell">{{ row.questionDescription }}</div>
+                  {{ getEvaluationType(row.evaluationType) }}
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="280" fixed="right">
+              <el-table-column prop="status" label="状态" width="100">
                 <template #default="{ row }">
-                  <div class="action-buttons">
+                  <el-tag :type="getStatusType(row.status)">
+                    {{ getStatusText(row.status) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="reviewComment" label="疑问描述" />
+              <el-table-column label="操作" width="200" fixed="right">
+                <template #default="{ row }">
+                  <el-button-group v-if="row.status === 'REPORTED'">
                     <el-button 
                       type="success" 
                       size="small" 
-                      @click="handleApprove(row)"
-                      :disabled="row.status !== 'pending'"
-                    >
-                      同意加分
+                      @click="handleReview(row, 'APPROVED')">
+                      通过
                     </el-button>
                     <el-button 
                       type="danger" 
                       size="small" 
-                      @click="handleReject(row)"
-                      :disabled="row.status !== 'pending'"
-                    >
-                      驳回加分
+                      @click="handleReview(row, 'REJECTED')">
+                      驳回
                     </el-button>
-                    <el-button 
-                      type="info" 
-                      size="small" 
-                      @click="viewMaterial(row)"
-                    >
-                      查看材料
-                    </el-button>
-                  </div>
+                  </el-button-group>
+                  <el-button
+                    type="info"
+                    size="small"
+                    @click="handleViewAttachments(row)">
+                    查看附件
+                  </el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -72,8 +74,10 @@
                 v-model:current-page="currentPage"
                 v-model:page-size="pageSize"
                 :total="total"
-                :page-sizes="[10, 20, 30, 50]"
+                :page-sizes="[10, 20, 50]"
                 layout="total, sizes, prev, pager, next"
+                @size-change="handleSizeChange"
+                @current-change="handleCurrentChange"
               />
             </div>
           </div>
@@ -81,54 +85,28 @@
           <!-- 审核对话框 -->
           <el-dialog
             v-model="reviewDialogVisible"
-            :title="reviewType === 'approve' ? '同意加分' : '驳回加分'"
-            width="500px"
-            :close-on-click-modal="false"
-          >
-            <div class="review-form">
-              <div class="material-info">
-                <p><strong>学生信息：</strong>{{ currentMaterial?.studentName }} ({{ currentMaterial?.studentId }})</p>
-                <p><strong>材料名称：</strong>{{ currentMaterial?.materialName }}</p>
-                <p><strong>申请类别：</strong>{{ currentMaterial?.requestedCategory }}</p>
-                <p><strong>申请分数：</strong>{{ currentMaterial?.requestedPoints }}</p>
-                <p><strong>疑问描述：</strong>{{ currentMaterial?.questionDescription }}</p>
-              </div>
-              <el-form :model="reviewForm" label-width="100px">
-                <el-form-item v-if="reviewType === 'approve'" label="加分类别">
-                  <el-select v-model="reviewForm.category" placeholder="请选择加分类别">
-                    <el-option
-                      v-for="item in categories"
-                      :key="item.value"
-                      :label="item.label"
-                      :value="item.value"
-                    />
-                  </el-select>
-                </el-form-item>
-                <el-form-item v-if="reviewType === 'approve'" label="加分分值">
-                  <el-input-number 
-                    v-model="reviewForm.points" 
-                    :min="0" 
-                    :max="100" 
-                    :step="0.5"
-                  />
-                </el-form-item>
-                <el-form-item label="审核意见">
-                  <el-input
-                    v-model="reviewForm.comment"
-                    type="textarea"
-                    :rows="4"
-                    :placeholder="reviewType === 'approve' ? '请输入同意加分的理由' : '请输入驳回的理由'"
-                  />
-                </el-form-item>
-              </el-form>
-            </div>
+            :title="reviewType === 'APPROVED' ? '通过审核' : '驳回材料'"
+            width="500px">
+            <el-form ref="reviewFormRef" :model="reviewForm" label-width="100px">
+              <el-form-item label="审核意见" prop="comment" :rules="[{ required: true, message: '请输入审核意见' }]">
+                <el-input
+                  v-model="reviewForm.comment"
+                  type="textarea"
+                  rows="4"
+                  placeholder="请输入审核意见"
+                />
+              </el-form-item>
+            </el-form>
             <template #footer>
-              <div class="dialog-footer">
+              <span class="dialog-footer">
                 <el-button @click="reviewDialogVisible = false">取消</el-button>
-                <el-button :type="reviewType === 'approve' ? 'success' : 'danger'" @click="submitReview" :loading="submitting">
-                  {{ reviewType === 'approve' ? '确认同意' : '确认驳回' }}
+                <el-button 
+                  :type="reviewType === 'APPROVED' ? 'success' : 'danger'"
+                  :loading="submitting"
+                  @click="submitReview">
+                  确认
                 </el-button>
-              </div>
+              </span>
             </template>
           </el-dialog>
 
@@ -147,6 +125,35 @@
               </div>
             </div>
           </el-dialog>
+
+          <!-- 附件预览对话框 -->
+          <el-dialog
+            v-model="attachmentDialogVisible"
+            title="附件列表"
+            width="600px"
+          >
+            <div class="attachment-section" v-if="selectedAttachments.length > 0">
+              <div class="attachment-list">
+                <div v-for="attachment in selectedAttachments" :key="attachment.id" class="attachment-item">
+                  <div class="attachment-info">
+                    <span class="attachment-name">{{ attachment.fileName }}</span>
+                    <span class="attachment-size">{{ formatFileSize(attachment.fileSize) }}</span>
+                  </div>
+                  <div class="attachment-actions">
+                    <el-button type="primary" size="small" @click="previewAttachment(attachment)">
+                      预览
+                    </el-button>
+                    <el-button type="success" size="small" @click="downloadAttachment(attachment)">
+                      下载
+                    </el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-else class="no-attachments">
+              <p>无附件</p>
+            </div>
+          </el-dialog>
         </div>
       </div>
     </div>
@@ -154,8 +161,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import axios from '@/utils/request'  // 使用配置好的axios实例
 import TopBar from '@/components/TopBar.vue'
 import Sidebar from '@/components/Sidebar.vue'
 
@@ -168,30 +176,15 @@ const categories = [
 ]
 
 // 表格数据
-const questionMaterials = ref([
-  {
-    id: 1,
-    submitTime: '2024-03-20 10:30:00',
-    studentId: '2021001001',
-    studentName: '张三',
-    materialName: '志愿者证书.pdf',
-    requestedCategory: 'A类',
-    requestedPoints: 2.5,
-    questionRaiser: '李四',
-    questionDescription: '该证书的志愿时长计算方式存在疑问，建议重新核实',
-    status: 'pending',
-    materialType: 'pdf',
-    materialUrl: '/path/to/material.pdf'
-  },
-  // 更多数据...
-])
-
-// 筛选和搜索
-const filterStatus = ref('')
-const searchKeyword = ref('')
+const questionMaterials = ref([])
+const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
-const total = ref(100)
+const loading = ref(false)
+const filterStatus = ref('REPORTED')  // 默认显示待审核的
+
+// 筛选和搜索
+const searchKeyword = ref('')
 
 // 计算筛选后的数据
 const filteredQuestionMaterials = computed(() => {
@@ -215,42 +208,22 @@ const filteredQuestionMaterials = computed(() => {
 // 审核相关
 const reviewDialogVisible = ref(false)
 const currentMaterial = ref(null)
-const reviewType = ref('approve') // 'approve' 或 'reject'
+const reviewType = ref('')
+const submitting = ref(false)
 const reviewForm = ref({
-  category: '',
-  points: 0,
   comment: ''
 })
-const submitting = ref(false)
 
-const handleApprove = (row) => {
+// 处理审核按钮点击
+const handleReview = (row, type) => {
   currentMaterial.value = row
-  reviewType.value = 'approve'
-  reviewForm.value = {
-    category: row.requestedCategory,
-    points: row.requestedPoints,
-    comment: ''
-  }
+  reviewType.value = type
+  reviewForm.value.comment = ''
   reviewDialogVisible.value = true
 }
 
-const handleReject = (row) => {
-  currentMaterial.value = row
-  reviewType.value = 'reject'
-  reviewForm.value = {
-    category: '',
-    points: 0,
-    comment: ''
-  }
-  reviewDialogVisible.value = true
-}
-
+// 提交审核
 const submitReview = async () => {
-  if (reviewType.value === 'approve' && (!reviewForm.value.category || !reviewForm.value.points)) {
-    ElMessage.warning('请选择加分类别和分值')
-    return
-  }
-
   if (!reviewForm.value.comment.trim()) {
     ElMessage.warning('请输入审核意见')
     return
@@ -258,23 +231,67 @@ const submitReview = async () => {
 
   try {
     submitting.value = true
-    // TODO: 调用审核API
-    await new Promise(resolve => setTimeout(resolve, 1000)) // 模拟API调用
+    await axios.post('/api/instructor/review', {
+      materialId: currentMaterial.value.id,
+      status: reviewType.value,
+      comment: reviewForm.value.comment
+    })
     
-    ElMessage.success(reviewType.value === 'approve' ? '已同意加分' : '已驳回加分')
+    ElMessage.success(reviewType.value === 'APPROVED' ? '已通过审核' : '已驳回材料')
     reviewDialogVisible.value = false
-    
-    // 更新列表数据
-    const index = questionMaterials.value.findIndex(item => item.id === currentMaterial.value.id)
-    if (index !== -1) {
-      questionMaterials.value[index].status = reviewType.value === 'approve' ? 'approved' : 'rejected'
-    }
+    fetchQuestionMaterials() // 刷新列表
   } catch (error) {
-    ElMessage.error('操作失败')
+    console.error('审核失败:', error)
+    ElMessage.error('审核失败：' + error.message)
   } finally {
     submitting.value = false
   }
 }
+
+// API调用函数
+const fetchQuestionMaterials = async () => {
+  try {
+    loading.value = true
+    console.log('开始请求数据...')
+    
+    const response = await axios({
+      method: 'get',
+      url: '/api/instructor/reported-materials',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`  // 确保携带token
+      },
+      params: {
+        status: filterStatus.value,
+        page: currentPage.value,
+        size: pageSize.value
+      }
+    })
+    
+    console.log('请求成功，响应数据：', response)
+    
+    if (response.data.success) {
+      questionMaterials.value = response.data.data
+      total.value = response.data.total
+      console.log('数据已更新:', questionMaterials.value)
+    }
+  } catch (error) {
+    console.error('请求失败:', error)
+    ElMessage.error(`获取材料列表失败: ${error.message}`)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 监听分页和筛选变化
+watch([currentPage, pageSize, filterStatus], () => {
+  fetchQuestionMaterials()
+})
+
+// 页面加载时获取数据
+onMounted(() => {
+  console.log('组件已挂载，开始获取数据')
+  fetchQuestionMaterials()
+})
 
 // 材料预览相关
 const previewDialogVisible = ref(false)
@@ -282,6 +299,111 @@ const previewDialogVisible = ref(false)
 const viewMaterial = (row) => {
   currentMaterial.value = row
   previewDialogVisible.value = true
+}
+
+// 添加状态显示处理函数
+const getStatusType = (status) => {
+  const types = {
+    'REPORTED': 'warning',
+    'APPROVED': 'success',
+    'REJECTED': 'danger'
+  }
+  return types[status] || 'info'
+}
+
+const getStatusText = (status) => {
+  const texts = {
+    'REPORTED': '待审核',
+    'APPROVED': '已通过',
+    'REJECTED': '已驳回'
+  }
+  return texts[status] || status
+}
+
+const handleSizeChange = (val) => {
+  pageSize.value = val
+  currentPage.value = 1
+  fetchQuestionMaterials()
+}
+
+const handleCurrentChange = (val) => {
+  currentPage.value = val
+  fetchQuestionMaterials()
+}
+
+// 添加类型映射
+const getEvaluationType = (type) => {
+  const types = {
+    'practice': '实践活动',
+    'volunteer': '志愿服务',
+    'competition': '竞赛获奖',
+    'certificate': '技能证书'
+  }
+  return types[type] || type
+}
+
+// 添加附件预览和下载相关的状态
+const attachmentDialogVisible = ref(false)
+const selectedAttachments = ref([])
+
+// 添加附件查看方法
+const handleViewAttachments = (row) => {
+  if (!row.attachments || row.attachments.length === 0) {
+    ElMessage.warning('无附件')
+    return
+  }
+  selectedAttachments.value = row.attachments
+  attachmentDialogVisible.value = true
+}
+
+// 添加附件预览方法
+const previewAttachment = async (attachment) => {
+  const fileType = attachment.fileType.toLowerCase()
+  
+  if (['jpg', 'jpeg', 'png', 'pdf'].includes(fileType)) {
+    try {
+      const response = await axios.get(`/api/evaluation/preview/${attachment.id}`, {
+        responseType: 'blob'
+      })
+      
+      const url = URL.createObjectURL(response.data)
+      window.open(url, '_blank')
+    } catch (error) {
+      ElMessage.error('预览失败')
+    }
+  } else {
+    ElMessage.info('该文件类型不支持预览，请下载后查看')
+  }
+}
+
+// 添加附件下载方法
+const downloadAttachment = async (attachment) => {
+  try {
+    const response = await axios.get(`/api/evaluation/download/${attachment.id}`, {
+      responseType: 'blob'
+    })
+    
+    const url = URL.createObjectURL(response.data)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = attachment.fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    ElMessage.error('下载失败')
+  }
+}
+
+const formatFileSize = (size) => {
+  if (size < 1024) {
+    return size + ' B'
+  } else if (size < 1024 * 1024) {
+    return (size / 1024).toFixed(2) + ' KB'
+  } else {
+    return (size / (1024 * 1024)).toFixed(2) + ' MB'
+  }
 }
 </script>
 
@@ -406,6 +528,57 @@ const viewMaterial = (row) => {
 }
 
 :deep(.el-dialog__body) {
+  padding: 20px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.attachment-section {
+  padding: 10px;
+}
+
+.attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.attachment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.attachment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attachment-name {
+  font-weight: 500;
+}
+
+.attachment-size {
+  color: #666;
+  font-size: 12px;
+}
+
+.attachment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.no-attachments {
+  text-align: center;
+  color: #999;
   padding: 20px;
 }
 </style> 

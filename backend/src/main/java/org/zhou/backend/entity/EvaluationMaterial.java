@@ -53,4 +53,10 @@ public class EvaluationMaterial {
     
     @Column(name = "class_id")
     private String classId;
+    
+    @Column(name = "reported_at")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private LocalDateTime reportedAt;
+    
+    private LocalDateTime reviewedAt;
 } 

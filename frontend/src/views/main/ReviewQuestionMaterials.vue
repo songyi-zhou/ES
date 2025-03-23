@@ -166,11 +166,6 @@
           >
             <div class="report-form">
               <p>确定要将以下材料上报给导员审核吗？</p>
-              <div class="selected-materials">
-                <div v-for="material in selectedMaterials" :key="material.id" class="material-item">
-                  <p>{{ material.studentName }} - {{ material.materialName }}</p>
-                </div>
-              </div>
               <el-form :model="reportForm" label-width="100px">
                 <el-form-item label="补充说明">
                   <el-input
@@ -409,22 +404,25 @@ const handlePreview = async (index, attachments) => {
     } catch (error) {
       ElMessage.error('预览失败')
     }
-  } else if (fileType === 'pdf') {
+  } else {
+    // 对于不支持预览的文件类型，直接触发下载
     try {
-      const response = await axios.get(`/evaluation/preview/${attachment.id}`, {
+      const response = await axios.get(`/evaluation/download/${attachment.id}`, {
         responseType: 'blob'
       })
+      
       const url = URL.createObjectURL(response.data)
-      currentMaterial.value = {
-        materialType: 'pdf',
-        materialUrl: url
-      }
-      previewDialogVisible.value = true
+      const link = document.createElement('a')
+      link.href = url
+      link.download = attachment.fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      ElMessage.success('文件已开始下载')
     } catch (error) {
-      ElMessage.error('预览失败')
+      ElMessage.error('下载失败')
     }
-  } else {
-    ElMessage.info('该文件类型不支持预览，请下载后查看')
   }
 }
 
@@ -568,18 +566,18 @@ onMounted(() => {
 const submitReport = async () => {
   try {
     submitting.value = true
-    // TODO: 调用上报API
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    const response = await axios.post('/api/question-materials/report', {
+      materialIds: selectedForReport.value.map(m => m.id),
+      note: reportForm.value.note
+    })
     
-    ElMessage.success('上报成功')
-    reportDialogVisible.value = false
-    reportForm.value.note = ''
-    selectedMaterials.value = []
-    
-    // 刷新列表数据
-    await fetchQuestionMaterials()
+    if (response.data.success) {
+      ElMessage.success('材料已成功上报')
+      reportDialogVisible.value = false
+      await fetchQuestionMaterials() // 刷新列表
+    }
   } catch (error) {
-    ElMessage.error('上报失败')
+    ElMessage.error('上报失败：' + error.message)
   } finally {
     submitting.value = false
   }
@@ -834,5 +832,27 @@ axios.interceptors.response.use(
 /* 调整表格内按钮的间距 */
 .el-button + .el-button {
   margin-left: 0;
+}
+
+.instructor-info {
+  margin: 15px 0;
+  padding: 10px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+.instructor-info h4 {
+  margin: 0 0 10px 0;
+  color: #606266;
+}
+
+.instructor-info ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.instructor-info li {
+  color: #409eff;
+  margin: 5px 0;
 }
 </style> 

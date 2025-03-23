@@ -2,11 +2,15 @@ package org.zhou.backend.service;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -14,6 +18,7 @@ import org.zhou.backend.dto.EvaluationMaterialDTO;
 import org.zhou.backend.entity.EvaluationAttachment;
 import org.zhou.backend.entity.EvaluationMaterial;
 import org.zhou.backend.entity.User;
+import org.zhou.backend.model.request.ReviewRequest;
 import org.zhou.backend.repository.ClassGroupMemberRepository;
 import org.zhou.backend.repository.ClassRepository;
 import org.zhou.backend.repository.EvaluationAttachmentRepository;
@@ -23,6 +28,7 @@ import org.zhou.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 @RequiredArgsConstructor
@@ -142,5 +148,34 @@ public class EvaluationService {
         material.setStatus("REJECTED");
         material.setReviewComment(reason);
         materialRepository.save(material);
+    }
+
+    public Page<EvaluationMaterial> getReportedMaterialsForInstructor(
+            Long instructorId, String status, int page, int size) {
+        log.info("Fetching materials for instructor: {}, status: {}", instructorId, status);
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<EvaluationMaterial> materials = evaluationRepository.findByReviewerIdAndStatus(
+            instructorId,
+            status != null ? status : "REPORTED",
+            pageable
+        );
+        log.info("Found {} materials", materials.getTotalElements());
+        return materials;
+    }
+    
+    public void reviewReportedMaterial(ReviewRequest request) {
+        EvaluationMaterial material = evaluationRepository.findById(request.getMaterialId())
+            .orElseThrow(() -> new RuntimeException("材料不存在"));
+            
+        // 验证状态转换的合法性
+        if (!"REPORTED".equals(material.getStatus())) {
+            throw new RuntimeException("只能审核已上报的材料");
+        }
+        
+        material.setStatus(request.getStatus());
+        material.setReviewComment(request.getComment());
+        material.setReviewedAt(LocalDateTime.now());
+        
+        evaluationRepository.save(material);
     }
 } 

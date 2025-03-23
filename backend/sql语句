@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS evaluation_materials (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     class_id VARCHAR(50) NOT NULL,
+    reported_at TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (reviewer_id) REFERENCES users(id),
     FOREIGN KEY (class_id) REFERENCES classes(id),
@@ -227,4 +228,40 @@ CREATE TABLE grade_group_leader (
 -- 插入年级负责人数据，使用实际的年级值
 INSERT INTO grade_group_leader (user_id, grade_id) 
 VALUES (12, '2021');  -- 对应 classes 表中的 grade 字段值
+
+CREATE TABLE instructor_squad (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    instructor_id BIGINT NOT NULL,
+    department VARCHAR(50) NOT NULL,  -- 学院
+    grade VARCHAR(4) NOT NULL,        -- 年级，如 2024
+    UNIQUE KEY uk_instructor_squad (instructor_id, department, grade)
+);
+
+-- 添加索引
+CREATE INDEX idx_instructor_squad ON instructor_squad(instructor_id);
+CREATE INDEX idx_squad ON instructor_squad(department, grade);
+
+-- 材料表索引
+ALTER TABLE evaluation_materials ADD INDEX idx_status_reported_at (status, reported_at);
+ALTER TABLE evaluation_materials ADD INDEX idx_user_id (user_id);
+
+-- 用户表索引
+ALTER TABLE users ADD INDEX idx_department_class (department, class_id);
+
+-- 导员中队表索引
+ALTER TABLE instructor_squad ADD INDEX idx_instructor_dept_grade (instructor_id, department, grade);
+
+-- 加分规则表
+CREATE TABLE bonus_rules (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  type CHAR(1) NOT NULL COMMENT '加分类型:A-思想政治,C-科研竞赛,D-文体活动',
+  reason VARCHAR(200) NOT NULL COMMENT '加分理由',
+  level VARCHAR(50) NOT NULL COMMENT '级别',
+  award_level VARCHAR(50) DEFAULT NULL COMMENT '获奖等级(C类专用)',
+  activity_type VARCHAR(20) DEFAULT NULL COMMENT '活动类型(D类专用:society-社团,other-其他)',
+  points DECIMAL(5,2) NOT NULL COMMENT '分值',
+  description TEXT COMMENT '描述说明',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ;
 
