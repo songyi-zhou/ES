@@ -33,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
 
     @Bean
@@ -57,44 +57,31 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        log.info("Configuring SecurityFilterChain");
-        return http
-            .cors(cors -> {
-                log.info("Configuring CORS");
-                cors.configurationSource(corsConfigurationSource());
-            })
-            .csrf(csrf -> {
-                log.info("Disabling CSRF");
-                csrf.disable();
-            })
-            .authorizeHttpRequests(auth -> {
-                log.info("Configuring authorization rules");
-                auth
-                    .requestMatchers("/api/auth/**").permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/rules/**").hasAnyRole("STUDENT", "GROUP_LEADER", "GROUP_MEMBER", "ADMIN", "COUNSELOR")
-                    .requestMatchers(HttpMethod.POST, "/api/rules/**").hasAnyRole("GROUP_LEADER", "GROUP_MEMBER", "ADMIN", "COUNSELOR")
-                    .requestMatchers(HttpMethod.DELETE, "/api/rules/**").hasAnyRole("GROUP_LEADER", "GROUP_MEMBER", "ADMIN", "COUNSELOR")
-                    .anyRequest().authenticated();
-            })
-            .sessionManagement(session -> {
-                log.info("Setting session management to STATELESS");
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS);
-            })
-            .authenticationProvider(authenticationProvider())
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            .build();
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/bonus-rules/**").hasAnyAuthority("ROLE_GROUP_LEADER", "ROLE_INSTRUCTOR", "ROLE_ADMIN")
+                .requestMatchers("/api/group-members/**").authenticated()
+                .anyRequest().authenticated()
+            )
+            .csrf(csrf -> csrf.disable())
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            
+        return http.build();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        log.info("Creating CORS configuration");
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

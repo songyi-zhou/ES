@@ -30,13 +30,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         try {
+            log.info("Processing request to {}", request.getRequestURI());
             String jwt = getJwtFromRequest(request);
             log.info("Request URI: {}, Method: {}", request.getRequestURI(), request.getMethod());
             log.info("JWT Token present: {}", StringUtils.hasText(jwt));
 
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
                 String userId = tokenProvider.getUserIdFromJWT(jwt);
-                log.info("JWT Token valid for user: {}", userId);
+                log.info("JWT token valid for user ID: {}", userId);
 
                 UserDetails userDetails = userDetailsService.loadUserByUsername(userId);
                 log.info("User loaded: {}, Roles: {}", userDetails.getUsername(), 
@@ -47,7 +48,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
-                log.info("Authentication set in SecurityContext");
+                log.info("Successfully set authentication in SecurityContext");
             } else if (StringUtils.hasText(jwt)) {
                 log.warn("Invalid JWT token");
             } else {
@@ -55,6 +56,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         } catch (Exception ex) {
             log.error("Could not set user authentication in security context", ex);
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
         }
 
         filterChain.doFilter(request, response);

@@ -32,15 +32,15 @@
               <tr>
                 <th>姓名</th>
                 <th>负责班级</th>
-                <th>上级</th>
+                <th>专业</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="member in members" :key="member.id">
                 <td>{{ member.name }}</td>
-                <td>{{ member.class }}</td>
-                <td>{{ member.supervisor }}</td>
+                <td>{{ member.className }}</td>
+                <td>{{ member.major }}</td>
                 <td class="actions">
                   <button class="edit-btn" @click="editMember(member)">修改</button>
                   <button class="delete-btn" @click="confirmDelete(member)">删除</button>
@@ -138,20 +138,33 @@
 import { ref, computed, onMounted } from 'vue'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
+import { ElMessage } from 'element-plus'
+import request from '@/utils/request'
 
 // 筛选条件
 const selectedClass = ref('')
 
 // 成员数据
-const members = ref([
-  {
-    id: 1,
-    name: '张三',
-    class: '计算机科学与技术1班',
-    supervisor: 'C'
-  },
-  // 更多成员数据...
-])
+const members = ref([])
+
+// 获取成员列表
+const fetchMembers = async () => {
+  try {
+    const response = await request.get('/api/group-members')
+    if (response.data.success) {
+      // 直接使用后端返回的数据结构
+      members.value = response.data.data.map(member => ({
+        id: member.id,
+        name: member.name,
+        className: member.className,
+        major: member.major
+      }))
+    }
+  } catch (error) {
+    console.error('获取成员列表失败:', error)
+    ElMessage.error('获取成员列表失败')
+  }
+}
 
 // 添加专业数据
 const majors = ref([
@@ -208,64 +221,44 @@ const closeModal = () => {
 const submitMember = async () => {
   try {
     if (showEditModal.value) {
-      // 调用编辑API
-      // await fetch(\`/api/members/\${selectedMember.value.id}\`, {
-      //   method: 'PUT',
-      //   body: JSON.stringify(memberForm.value)
-      // })
-      
-      // 更新本地数据
-      const index = members.value.findIndex(m => m.id === selectedMember.value.id)
-      if (index !== -1) {
-        members.value[index] = { ...selectedMember.value, ...memberForm.value }
+      const response = await request.put(`/api/group-members-manage/${selectedMember.value.id}`, memberForm.value)
+      if (response.data.success) {
+        ElMessage.success('修改成功')
+        await fetchMembers()
       }
     } else {
-      // 调用添加API
-      // const response = await fetch('/api/members', {
-      //   method: 'POST',
-      //   body: JSON.stringify(memberForm.value)
-      // })
-      // const newMember = await response.json()
-      
-      // 添加到本地数据
-      members.value.push({
-        id: Date.now(), // 临时ID
-        ...memberForm.value
-      })
+      const response = await request.post('/api/group-members-manage', memberForm.value)
+      if (response.data.success) {
+        ElMessage.success('添加成功')
+        await fetchMembers()
+      }
     }
-    
     closeModal()
   } catch (error) {
     console.error('操作失败:', error)
+    ElMessage.error('操作失败')
   }
 }
 
 // 删除成员
 const deleteMember = async () => {
   try {
-    // 调用删除API
-    // await fetch(\`/api/members/\${selectedMember.value.id}\`, {
-    //   method: 'DELETE'
-    // })
-    
-    // 更新本地数据
-    members.value = members.value.filter(m => m.id !== selectedMember.value.id)
-    showDeleteModal.value = false
-    selectedMember.value = null
+    const response = await request.delete(`/api/group-members-manage/${selectedMember.value.id}`)
+    if (response.data.success) {
+      ElMessage.success('删除成功')
+      await fetchMembers()
+      showDeleteModal.value = false
+      selectedMember.value = null
+    }
   } catch (error) {
     console.error('删除失败:', error)
+    ElMessage.error('删除失败')
   }
 }
 
 // 在组件挂载时获取可选成员
 onMounted(async () => {
-  try {
-    // 获取已选定的综测小组成员池
-    // const response = await fetch('/api/evaluation-group/available-members')
-    // availableMembers.value = await response.json()
-  } catch (error) {
-    console.error('获取可选成员失败:', error)
-  }
+  await fetchMembers()
 })
 
 // 计算属性

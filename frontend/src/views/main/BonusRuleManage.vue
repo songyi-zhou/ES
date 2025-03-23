@@ -11,6 +11,65 @@
           </button>
         </div>
 
+        <!-- 在表格上方添加筛选区域 -->
+        <div class="filter-container">
+          <div class="filter-item">
+            <label>加分类型：</label>
+            <select v-model="filters.type">
+              <option value="">全部</option>
+              <option value="A">A类 - 思想政治</option>
+              <option value="C">C类 - 科研竞赛</option>
+              <option value="D">D类 - 文体活动</option>
+            </select>
+          </div>
+          
+          <!-- C类特有的奖项等级筛选 -->
+          <div class="filter-item" v-if="filters.type === 'C'">
+            <label>获奖等级：</label>
+            <select v-model="filters.award">
+              <option value="">全部</option>
+              <option value="一等奖">一等奖</option>
+              <option value="二等奖">二等奖</option>
+              <option value="三等奖">三等奖</option>
+            </select>
+          </div>
+          
+          <!-- D类特有的评级筛选 -->
+          <div class="filter-item" v-if="filters.type === 'D'">
+            <label>评级：</label>
+            <select v-model="filters.rating">
+              <option value="">全部</option>
+              <option value="优秀">优秀</option>
+              <option value="良好">良好</option>
+              <option value="合格">合格</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label>级别：</label>
+            <select v-model="filters.level">
+              <option value="">全部</option>
+              <option value="国家级">国家级</option>
+              <option value="省级">省级</option>
+              <option value="市级">市级</option>
+              <option value="校级">校级</option>
+              <option value="院级">院级</option>
+            </select>
+          </div>
+
+          <div class="filter-item">
+            <label>搜索：</label>
+            <input 
+              type="text" 
+              v-model="filters.search" 
+              placeholder="搜索加分理由或描述（支持多关键词）"
+            >
+            <el-tooltip content="支持多个关键词搜索，用空格分隔。例如：'社团 优秀' 将匹配包含'社团'和'优秀'的记录" placement="top">
+              <i class="el-icon-question"></i>
+            </el-tooltip>
+          </div>
+        </div>
+
         <!-- 规则列表 -->
         <div class="table-container">
           <table>
@@ -25,7 +84,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="rule in bonusRules" :key="rule.id">
+              <tr v-for="rule in filteredRules" :key="rule.id">
                 <td>{{ rule.type }}</td>
                 <td>{{ rule.reason }}</td>
                 <td>{{ rule.level }}</td>
@@ -33,7 +92,7 @@
                 <td>{{ rule.description }}</td>
                 <td>
                   <button class="edit-btn" @click="editRule(rule)">编辑</button>
-                  <button class="delete-btn" @click="deleteRule(rule)">删除</button>
+                  <button class="delete-btn" @click="deleteRule(rule.id)">删除</button>
                 </td>
               </tr>
             </tbody>
@@ -221,25 +280,7 @@ import axios from 'axios'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 
-// 加分规则数据
-const bonusRules = ref([
-  {
-    id: 1,
-    type: 'D',
-    reason: '参加公益活动、志愿活动并取得证书',
-    level: '国家级',
-    points: 0.5,
-    description: '个人参加公益活动、志愿活动并取得相应证书，国家级每次加0.5分'
-  },
-  {
-    id: 2,
-    type: 'D',
-    reason: '参加公益活动、志愿活动并取得证书',
-    level: '省级',
-    points: 0.4,
-    description: '个人参加公益活动、志愿活动并取得相应证书，省级每次加0.4分'
-  }
-])
+const rules = ref([]); // 添加这个响应式变量来存储规则
 
 // 通用级别（A类和C类行政级别使用）
 const commonLevels = ref([
@@ -326,6 +367,15 @@ const ruleForm = ref({
 // 编辑状态标记
 const editingRule = ref(null)
 
+// 添加筛选相关的响应式变量
+const filters = ref({
+  type: '',
+  level: '',
+  award: '',
+  rating: '',
+  search: ''
+});
+
 // 获取加分类型名称
 const getBonusTypeName = (type) => {
   const typeMap = {
@@ -348,9 +398,9 @@ const canSubmit = computed(() => {
 const fetchRules = async () => {
   try {
     const response = await axios.get('/api/bonus-rules')
-    bonusRules.value = response.data
+    rules.value = response.data
   } catch (error) {
-    ElMessage.error('获取规则列表失败')
+    ElMessage.error('获取规则列表失败: ' + error.message)
     console.error('获取规则失败:', error)
   }
 }
@@ -487,13 +537,13 @@ const editRule = (rule) => {
 }
 
 // 删除规则
-const deleteRule = async (rule) => {
+const deleteRule = async (id) => {
   try {
     await ElMessageBox.confirm('确定要删除该规则吗？', '提示', {
       type: 'warning'
     })
     
-    await axios.delete(`/api/bonus-rules/${rule.id}`)
+    await axios.delete(`/api/bonus-rules/${id}`)
     ElMessage.success('删除成功')
     await fetchRules()
   } catch (error) {
@@ -600,6 +650,36 @@ const handleLevelSelect = (type, selectedName, groupName = null) => {
     }
   }
 }
+
+// 改进的过滤逻辑
+const filteredRules = computed(() => {
+  return rules.value.filter(rule => {
+    // 基础类型过滤
+    if (filters.value.type && rule.type !== filters.value.type) return false;
+    
+    // 级别过滤
+    if (filters.value.level && rule.level !== filters.value.level) return false;
+    
+    // C类奖项过滤
+    if (filters.value.type === 'C' && filters.value.award && 
+        rule.awardLevel !== filters.value.award) return false;
+    
+    // D类评级过滤
+    if (filters.value.type === 'D' && filters.value.rating && 
+        rule.level !== filters.value.rating) return false;
+    
+    // 多关键词搜索
+    if (filters.value.search) {
+      const keywords = filters.value.search.toLowerCase().split(' ').filter(k => k);
+      return keywords.every(keyword => 
+        (rule.reason?.toLowerCase().includes(keyword) || '') ||
+        (rule.description?.toLowerCase().includes(keyword) || '')
+      );
+    }
+    
+    return true;
+  });
+});
 
 // 页面加载时获取规则列表
 onMounted(() => {
@@ -1110,5 +1190,31 @@ input[type="radio"]:hover {
     width: 100%;
     max-width: none;
   }
+}
+
+.filter-container {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-item select,
+.filter-item input {
+  padding: 6px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  width: 200px;
+}
+
+.filter-item label {
+  font-weight: 500;
+  color: #606266;
 }
 </style> 
