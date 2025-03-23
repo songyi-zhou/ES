@@ -109,17 +109,17 @@
           >
             <div class="review-form">
               <div class="material-info">
-                <p><strong>学生信息：</strong>{{ currentMaterial?.studentName }} ({{ currentMaterial?.studentId }})</p>
-                <p><strong>材料名称：</strong>{{ currentMaterial?.materialName }}</p>
-                <p><strong>申请类别：</strong>{{ currentMaterial?.requestedCategory }}</p>
-                <p><strong>申请分数：</strong>{{ currentMaterial?.requestedPoints }}</p>
-                <p><strong>疑问描述：</strong>{{ currentMaterial?.questionDescription }}</p>
+                <p><strong>学号：</strong>{{ currentMaterial?.userId }}</p>
+                <p><strong>材料名称：</strong>{{ currentMaterial?.title }}</p>
+                <p><strong>申请类别：</strong>{{ getEvaluationTypeText(currentMaterial?.evaluationType) }}</p>
+                <p><strong>疑问描述：</strong>{{ currentMaterial?.reviewComment }}</p>
+                <p><strong>提交时间：</strong>{{ formatDate(currentMaterial?.updatedAt) }}</p>
               </div>
               <el-form :model="reviewForm" label-width="100px">
                 <el-form-item label="审核结果">
                   <el-radio-group v-model="reviewForm.status">
-                    <el-radio label="approved">通过</el-radio>
-                    <el-radio label="rejected">驳回</el-radio>
+                    <el-radio label="APPROVED">通过</el-radio>
+                    <el-radio label="REJECTED">驳回</el-radio>
                   </el-radio-group>
                 </el-form-item>
                 <el-form-item label="审核意见">
@@ -316,32 +316,30 @@ const openReviewDialog = (row) => {
 
 const submitReview = async () => {
   if (!reviewForm.value.status) {
-    ElMessage.warning('请选择审核结果')
-    return
+    ElMessage.warning('请选择审核结果');
+    return;
   }
 
   if (!reviewForm.value.comment.trim()) {
-    ElMessage.warning('请输入审核意见')
-    return
+    ElMessage.warning('请输入审核意见');
+    return;
   }
 
   try {
-    submitting.value = true
-    // TODO: 调用审核API
-    await new Promise(resolve => setTimeout(resolve, 1000)) // 模拟API调用
+    submitting.value = true;
+    await axios.post('/question-materials/review', {
+      materialId: currentMaterial.value.id,
+      status: reviewForm.value.status,
+      comment: reviewForm.value.comment
+    });
     
-    ElMessage.success('审核提交成功')
-    reviewDialogVisible.value = false
-    
-    // 更新列表数据
-    const index = questionMaterials.value.findIndex(item => item.id === currentMaterial.value.id)
-    if (index !== -1) {
-      questionMaterials.value[index].status = reviewForm.value.status
-    }
+    ElMessage.success('审核提交成功');
+    reviewDialogVisible.value = false;
+    await fetchQuestionMaterials();
   } catch (error) {
-    ElMessage.error('审核提交失败')
+    ElMessage.error('审核提交失败：' + (error.response?.data?.message || '未知错误'));
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
 }
 
@@ -612,6 +610,32 @@ axios.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+// 添加评估类型文本转换函数
+const getEvaluationTypeText = (type: string) => {
+  const typeMap: Record<string, string> = {
+    'academic': '学术成果',
+    'practice': '社会实践',
+    'volunteer': '志愿服务',
+    'work': '学生工作',
+    'other': '其他'
+  };
+  return typeMap[type] || type;
+};
+
+// 添加日期格式化函数
+const formatDate = (dateString: string) => {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+};
 </script>
 
 <style scoped>

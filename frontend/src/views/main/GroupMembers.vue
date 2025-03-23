@@ -7,36 +7,21 @@
         <div class="members-card">
           <h2>小组成员</h2>
           
-          <div class="filter-section">
-            <div class="filter-item">
-              <label>请选择学院：</label>
-              <select v-model="selectedCollege" @change="fetchMembers">
-                <option value="">请选择</option>
-                <option value="信息科学技术学院">信息科学技术学院</option>
-                <option value="机械工程学院">机械工程学院</option>
-                <option value="电气工程学院">电气工程学院</option>
-                <option value="材料科学与工程学院">材料科学与工程学院</option>
-              </select>
-            </div>
-          </div>
-
           <!-- 成员表格 -->
           <div class="table-container">
             <table class="members-table">
               <thead>
                 <tr>
                   <th>姓名</th>
-                  <th>负责班级所在专业</th>
-                  <th>负责班级</th>
-                  <th>上级</th>
+                  <th>专业</th>
+                  <th>班级</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="member in members" :key="member.id">
                   <td>{{ member.name }}</td>
                   <td>{{ member.major }}</td>
-                  <td>{{ member.class }}</td>
-                  <td>{{ member.supervisor }}</td>
+                  <td>{{ member.className }}</td>
                 </tr>
               </tbody>
             </table>
@@ -52,43 +37,20 @@ import { ref, onMounted } from 'vue';
 import TopBar from "@/components/TopBar.vue";
 import Sidebar from "@/components/Sidebar.vue";
 import axios from 'axios';
+import { ElMessage } from 'element-plus';
 
-const selectedCollege = ref('');
-const members = ref([
-  {
-    name: '张三',
-    major: '计算机科学与技术',
-    class: '1班',
-    supervisor: '李明'
-  },
-  {
-    name: '李四',
-    major: '网络工程',
-    class: '1班',
-    supervisor: '李明'
-  },
-  {
-    name: '王五',
-    major: '软件工程',
-    class: '2班',
-    supervisor: '张华'
-  }
-]);
+const members = ref([]);
 
 const fetchMembers = async () => {
-  if (!selectedCollege.value) return;
-  
   try {
-    const response = await axios.get('/api/evaluation/group-members', {
-      params: {
-        college: selectedCollege.value
-      }
-    });
-    
-    if (response.data.members) {
-      members.value = response.data.members;
+    const response = await axios.get('/api/group-members');
+    if (response.data.success) {
+      members.value = response.data.data;
+    } else {
+      ElMessage.error(response.data.message || '获取成员数据失败');
     }
   } catch (error) {
+    ElMessage.error('获取成员数据失败');
     console.error('获取成员数据失败:', error);
   }
 };

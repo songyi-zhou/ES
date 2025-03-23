@@ -28,7 +28,6 @@ import org.zhou.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 @RequiredArgsConstructor
@@ -177,5 +176,21 @@ public class EvaluationService {
         material.setReviewedAt(LocalDateTime.now());
         
         evaluationRepository.save(material);
+    }
+
+    public void reviewMaterialByGroupMember(ReviewRequest request) {
+        EvaluationMaterial material = materialRepository.findById(request.getMaterialId())
+            .orElseThrow(() -> new RuntimeException("材料不存在"));
+            
+        // 验证状态转换的合法性
+        if (!"PENDING".equals(material.getStatus())) {
+            throw new RuntimeException("只能审核待审核的材料");
+        }
+        
+        material.setStatus(request.getStatus());
+        material.setReviewComment(request.getComment());
+        material.setReviewedAt(LocalDateTime.now());
+        
+        materialRepository.save(material);
     }
 } 

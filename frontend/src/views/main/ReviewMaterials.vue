@@ -66,7 +66,7 @@
                 {{ getEvaluationTypeText(scope.row.evaluationType) }}
               </template>
             </el-table-column>
-            <el-table-column prop="status" label="材料状态" width="90" align="center">
+            <el-table-column prop="status" label="材料状态" min-width="100" align="center">
               <template #default="scope">
                 <span class="status-tag" :class="getStatusClass(scope.row.status)">
                   {{ getStatusText(scope.row.status) }}
@@ -347,7 +347,9 @@ const getStatusText = (status: string) => {
   const textMap: Record<string, string> = {
     'PENDING': '待审核',
     'APPROVED': '已通过',
-    'REJECTED': '已驳回'
+    'REJECTED': '已驳回',
+    'QUESTIONED': '已提出疑问',
+    'Reported': '已上报至导员'
   };
   return textMap[status] || status;
 };
@@ -390,10 +392,22 @@ const openRejectDialog = (record: EvaluationMaterial) => {
 
 const handleReview = async (record: EvaluationMaterial) => {
   try {
+    submitting.value = true;
+    await axios.post('/evaluation/review-material', {
+      materialId: record.id,
+      status: 'APPROVED',
+      comment: '通过审核'
+    });
     ElMessage.success('审核通过成功');
     await fetchMaterials();
-  } catch (error) {
-    ElMessage.error('操作失败');
+  } catch (error: any) {
+    if (error.response?.status === 403) {
+      ElMessage.error('没有权限执行此操作');
+    } else {
+      ElMessage.error('操作失败：' + (error.response?.data?.message || '未知错误'));
+    }
+  } finally {
+    submitting.value = false;
   }
 };
 
@@ -405,12 +419,20 @@ const submitReject = async () => {
 
   try {
     submitting.value = true;
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await axios.post('/evaluation/review-material', {
+      materialId: selectedMaterial.value.id,
+      status: 'REJECTED',
+      comment: rejectForm.value.reason
+    });
     ElMessage.success('驳回成功');
     rejectDialogVisible.value = false;
     await fetchMaterials();
-  } catch (error) {
-    ElMessage.error('操作失败');
+  } catch (error: any) {
+    if (error.response?.status === 403) {
+      ElMessage.error('没有权限执行此操作');
+    } else {
+      ElMessage.error('操作失败：' + (error.response?.data?.message || '未知错误'));
+    }
   } finally {
     submitting.value = false;
   }
