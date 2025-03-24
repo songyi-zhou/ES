@@ -1,0 +1,31 @@
+/* 修复下拉框层级问题 */
+.el-select-dropdown {
+  z-index: 3000 !important;
+}
+
+.el-popper {
+  z-index: 3000 !important;
+}
+
+/* 修复下拉框位置问题 */
+.el-select-dropdown__wrap {
+  max-height: 274px;
+}
+
+/* 修复对话框中的表单元素问题 */
+.el-dialog {
+  margin-top: 8vh !important;
+}
+
+.el-dialog .el-select {
+  width: 100%;
+}
+
+/* 确保下拉菜单在对话框内正常显示 */
+.el-dialog__wrapper {
+  overflow: hidden;
+}
+
+.el-dialog__body {
+  padding: 20px;
+} 
