@@ -128,6 +128,10 @@ CREATE TABLE IF NOT EXISTS class_group_members (
     user_id BIGINT NOT NULL,
     class_id VARCHAR(50) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    name VARCHAR(100),
+    department VARCHAR(100),
+    major VARCHAR(100),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (class_id) REFERENCES classes(id),
     INDEX idx_user_id (user_id),
@@ -264,4 +268,7 @@ CREATE TABLE bonus_rules (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ;
+
+-- 删除 group_members 表
+DROP TABLE IF EXISTS group_members;
 

@@ -33,14 +33,16 @@
                 <th>姓名</th>
                 <th>负责班级</th>
                 <th>专业</th>
+                <th>学院</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="member in members" :key="member.id">
                 <td>{{ member.name }}</td>
-                <td>{{ member.className }}</td>
+                <td>{{ member.classId }}</td>
                 <td>{{ member.major }}</td>
+                <td>{{ member.department }}</td>
                 <td class="actions">
                   <button class="edit-btn" @click="editMember(member)">修改</button>
                   <button class="delete-btn" @click="confirmDelete(member)">删除</button>
@@ -57,35 +59,20 @@
               <h3>{{ showEditModal ? '修改成员信息' : '添加新成员' }}</h3>
               <button class="close-btn" @click="closeModal">×</button>
             </div>
-            <div class="form-group">
-              <label>选择成员：</label>
-              <select v-model="memberForm.memberId">
-                <option value="">请选择成员</option>
-                <option 
-                  v-for="member in availableMembers" 
-                  :key="member.id" 
-                  :value="member.id"
-                >
-                  {{ member.name }} ({{ member.studentId }})
-                </option>
-              </select>
-            </div>
+            
             <div class="form-group">
               <label>专业：</label>
-              <select v-model="memberForm.majorId">
+              <select v-model="memberForm.major" @change="handleMajorChange">
                 <option value="">请选择专业</option>
-                <option 
-                  v-for="major in majors" 
-                  :key="major.id" 
-                  :value="major.id"
-                >
-                  {{ major.name }}
+                <option v-for="major in majors" :key="major" :value="major">
+                  {{ major }}
                 </option>
               </select>
             </div>
+
             <div class="form-group">
               <label>班级：</label>
-              <select v-model="memberForm.class" :disabled="!memberForm.majorId">
+              <select v-model="memberForm.className" :disabled="!memberForm.major">
                 <option value="">请选择班级</option>
                 <option 
                   v-for="class_ in filteredClasses" 
@@ -96,14 +83,7 @@
                 </option>
               </select>
             </div>
-            <div class="form-group">
-              <label>上级：</label>
-              <input 
-                type="text" 
-                v-model="memberForm.supervisor"
-                placeholder="请输入上级姓名"
-              >
-            </div>
+
             <div class="modal-actions">
               <button @click="submitMember" class="btn-primary">
                 {{ showEditModal ? '保存修改' : '添加' }}
@@ -129,13 +109,34 @@
             </div>
           </div>
         </div>
+
+        <el-dialog title="修改成员信息" v-model="dialogVisible" width="30%">
+          <el-form :model="editForm" label-width="80px">
+            <el-form-item label="专业">
+              <el-select v-model="editForm.major" placeholder="请选择专业">
+                <el-option label="计算机科学与技术" value="计算机科学与技术" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="班级">
+              <el-select v-model="editForm.className" placeholder="请选择班级">
+                <el-option label="计科2401" value="计科2401" />
+              </el-select>
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <span class="dialog-footer">
+              <el-button @click="dialogVisible = false">取消</el-button>
+              <el-button type="primary" @click="handleUpdate">确定</el-button>
+            </span>
+          </template>
+        </el-dialog>
       </main>
     </div>
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted } from 'vue'
+<script setup lang="ts">
+import { ref, computed, onMounted, reactive } from 'vue'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 import { ElMessage } from 'element-plus'
@@ -150,15 +151,17 @@ const members = ref([])
 // 获取成员列表
 const fetchMembers = async () => {
   try {
-    const response = await request.get('/api/group-members')
+    const response = await request.get('/group-members')
     if (response.data.success) {
-      // 直接使用后端返回的数据结构
       members.value = response.data.data.map(member => ({
         id: member.id,
         name: member.name,
-        className: member.className,
-        major: member.major
+        classId: member.classId,
+        major: member.major,
+        department: member.department
       }))
+    } else {
+      ElMessage.error(response.data.message || '获取成员列表失败')
     }
   } catch (error) {
     console.error('获取成员列表失败:', error)
@@ -166,23 +169,46 @@ const fetchMembers = async () => {
   }
 }
 
-// 添加专业数据
-const majors = ref([
-  { id: 1, name: '计算机科学与技术' },
-  { id: 2, name: '软件工程' }
-])
-
-// 表单数据 (删除重复声明，合并所有需要的字段)
+const classes = ref([])
 const memberForm = ref({
-  memberId: '',
-  name: '',
-  majorId: '',
-  class: '',
-  supervisor: ''
+  major: '',
+  className: ''
 })
 
-// 获取可选成员列表
-const availableMembers = ref([])
+// 获取班级数据
+const fetchClasses = async () => {
+  try {
+    const response = await request.get('/classes')
+    if (response.data.success) {
+      classes.value = response.data.data.map(c => ({
+        id: c.id,
+        name: c.name,  // 直接使用班级名称，如 "1班"
+        displayName: `${c.major}${c.name}`,  // 保留完整名称用于显示
+        classId: c.id,  // 数据库中的 id，例如: "CS2101"
+        major: c.major
+      }))
+    }
+  } catch (error) {
+    console.error('获取班级数据失败:', error)
+    ElMessage.error('获取班级数据失败')
+  }
+}
+
+// 计算所有可用的专业
+const majors = computed(() => {
+  return Array.from(new Set(classes.value.map(c => c.major)))
+})
+
+// 根据选择的专业筛选班级
+const filteredClasses = computed(() => {
+  if (!memberForm.value.major) return []
+  return classes.value.filter(c => c.major === memberForm.value.major)
+})
+
+// 专业变更时重置班级选择
+const handleMajorChange = () => {
+  memberForm.value.className = ''
+}
 
 // 模态框控制
 const showAddModal = ref(false)
@@ -193,7 +219,10 @@ const selectedMember = ref(null)
 // 打开编辑模态框
 const editMember = (member) => {
   selectedMember.value = member
-  memberForm.value = { ...member }
+  memberForm.value = {
+    major: member.major,
+    className: member.classId
+  }
   showEditModal.value = true
 }
 
@@ -208,35 +237,58 @@ const closeModal = () => {
   showAddModal.value = false
   showEditModal.value = false
   memberForm.value = {
-    memberId: '',
-    name: '',
-    majorId: '',
-    class: '',
-    supervisor: ''
+    major: '',
+    className: ''
   }
   selectedMember.value = null
 }
 
 // 提交表单
 const submitMember = async () => {
+  if (!memberForm.value.major || !memberForm.value.className) {
+    ElMessage.error('请选择专业和班级')
+    return
+  }
+
   try {
     if (showEditModal.value) {
-      const response = await request.put(`/api/group-members-manage/${selectedMember.value.id}`, memberForm.value)
-      if (response.data.success) {
+      // 找到选中班级的完整信息
+      const selectedClass = classes.value.find(c => c.name === memberForm.value.className)
+      
+      const response = await request.put(
+        `/group-members/${selectedMember.value.id}/class`,
+        null,
+        { 
+          params: {
+            major: memberForm.value.major,
+            className: selectedClass?.classId  // 使用数据库中的班级ID
+          }
+        }
+      )
+      if (response.data) {
         ElMessage.success('修改成功')
         await fetchMembers()
+        closeModal()
       }
     } else {
-      const response = await request.post('/api/group-members-manage', memberForm.value)
+      const token = localStorage.getItem('token')
+      const params = {
+        major: memberForm.value.major,
+        className: memberForm.value.className
+      }
+
+      const response = await request.post('/api/group-members', params, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
       if (response.data.success) {
         ElMessage.success('添加成功')
         await fetchMembers()
+        closeModal()
       }
     }
-    closeModal()
-  } catch (error) {
+  } catch (error: any) {
     console.error('操作失败:', error)
-    ElMessage.error('操作失败')
+    ElMessage.error(error.response?.data?.message || '操作失败')
   }
 }
 
@@ -256,15 +308,52 @@ const deleteMember = async () => {
   }
 }
 
-// 在组件挂载时获取可选成员
-onMounted(async () => {
-  await fetchMembers()
+const dialogVisible = ref(false)
+const currentId = ref<number | null>(null)
+
+const editForm = reactive({
+  major: '',
+  className: ''
 })
 
-// 计算属性
-const filteredClasses = computed(() => {
-  if (!memberForm.value.majorId) return []
-  return classes.value.filter(c => c.majorId === memberForm.value.majorId)
+const handleEdit = (row: any) => {
+  selectedMember.value = row
+  memberForm.value = {
+    major: row.major,
+    className: row.classId
+  }
+  showEditModal.value = true
+}
+
+const handleUpdate = async () => {
+  try {
+    const response = await request.put(`/api/group-members/${currentId.value}/class`, null, {
+      params: {
+        major: editForm.major,
+        className: editForm.className
+      }
+    })
+    
+    if (response.data) {
+      ElMessage.success('更新成功')
+      dialogVisible.value = false
+      // 刷新列表
+      fetchData()
+    }
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '更新失败')
+  }
+}
+
+const fetchData = async () => {
+  // ... 获取列表数据的代码 ...
+}
+
+onMounted(() => {
+  Promise.all([
+    fetchMembers(),
+    fetchClasses()
+  ])
 })
 </script>
 
@@ -513,5 +602,11 @@ th {
 .form-group select:disabled {
   background: #f5f7fa;
   cursor: not-allowed;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 </style> 

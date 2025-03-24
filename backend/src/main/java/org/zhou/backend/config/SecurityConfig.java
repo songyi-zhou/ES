@@ -4,7 +4,6 @@ import java.util.Arrays;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -61,8 +60,7 @@ public class SecurityConfig {
         http
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/bonus-rules/**").hasAnyAuthority("ROLE_GROUP_LEADER", "ROLE_INSTRUCTOR", "ROLE_ADMIN")
-                .requestMatchers("/api/group-members/**").authenticated()
+                .requestMatchers("/api/group-members/**").hasAnyRole("ADMIN", "GROUP_LEADER")
                 .anyRequest().authenticated()
             )
             .csrf(csrf -> csrf.disable())

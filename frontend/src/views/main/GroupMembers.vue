@@ -13,15 +13,17 @@
               <thead>
                 <tr>
                   <th>姓名</th>
-                  <th>专业</th>
                   <th>班级</th>
+                  <th>专业</th>
+                  <th>学院</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="member in members" :key="member.id">
                   <td>{{ member.name }}</td>
+                  <td>{{ member.classId }}</td>
                   <td>{{ member.major }}</td>
-                  <td>{{ member.className }}</td>
+                  <td>{{ member.department }}</td>
                 </tr>
               </tbody>
             </table>
