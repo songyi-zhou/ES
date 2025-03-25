@@ -16,12 +16,18 @@
         <div class="filter-section">
           <div class="filter-item">
             <label>负责专业：</label>
-            <select v-model="selectedClass" class="filter-select">
-              <option value="">计算机科学与技术</option>
-              <option value="1">1班</option>
-              <option value="2">2班</option>
-              <option value="3">3班</option>
+            <select v-model="selectedMajor" class="filter-select" @change="handleMajorFilterChange">
+              <option value="">全部专业</option>
+              <option v-for="major in majors" 
+                      :key="major" 
+                      :value="major">
+                {{ major }}
+              </option>
             </select>
+          </div>
+          
+          <div class="filter-item">
+            <button class="reset-btn" @click="resetFilters">重置筛选</button>
           </div>
         </div>
 
@@ -38,7 +44,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="member in members" :key="member.id">
+              <tr v-for="member in filteredMembers" :key="member.id">
                 <td>{{ member.name }}</td>
                 <td>{{ member.classId }}</td>
                 <td>{{ member.major }}</td>
@@ -47,6 +53,9 @@
                   <button class="edit-btn" @click="editMember(member)">修改</button>
                   <button class="delete-btn" @click="confirmDelete(member)">删除</button>
                 </td>
+              </tr>
+              <tr v-if="filteredMembers.length === 0">
+                <td colspan="5" class="no-data">暂无数据</td>
               </tr>
             </tbody>
           </table>
@@ -109,34 +118,13 @@
             </div>
           </div>
         </div>
-
-        <el-dialog title="修改成员信息" v-model="dialogVisible" width="30%">
-          <el-form :model="editForm" label-width="80px">
-            <el-form-item label="专业">
-              <el-select v-model="editForm.major" placeholder="请选择专业">
-                <el-option label="计算机科学与技术" value="计算机科学与技术" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="班级">
-              <el-select v-model="editForm.className" placeholder="请选择班级">
-                <el-option label="计科2401" value="计科2401" />
-              </el-select>
-            </el-form-item>
-          </el-form>
-          <template #footer>
-            <span class="dialog-footer">
-              <el-button @click="dialogVisible = false">取消</el-button>
-              <el-button type="primary" @click="handleUpdate">确定</el-button>
-            </span>
-          </template>
-        </el-dialog>
       </main>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 import { ElMessage } from 'element-plus'
@@ -144,9 +132,11 @@ import request from '@/utils/request'
 
 // 筛选条件
 const selectedClass = ref('')
+const selectedMajor = ref('')
 
 // 成员数据
 const members = ref([])
+const filteredMembers = ref([])
 
 // 获取成员列表
 const fetchMembers = async () => {
@@ -160,6 +150,7 @@ const fetchMembers = async () => {
         major: member.major,
         department: member.department
       }))
+      filterMembers() // 初始化时应用筛选
     } else {
       ElMessage.error(response.data.message || '获取成员列表失败')
     }
@@ -168,6 +159,34 @@ const fetchMembers = async () => {
     ElMessage.error('获取成员列表失败')
   }
 }
+
+// 筛选成员
+const filterMembers = () => {
+  filteredMembers.value = members.value.filter(member => {
+    // 专业筛选
+    const majorMatch = !selectedMajor.value || member.major === selectedMajor.value
+    // 班级筛选
+    const classMatch = !selectedClass.value || member.classId === selectedClass.value
+    return majorMatch && classMatch
+  })
+}
+
+// 重置筛选条件
+const resetFilters = () => {
+  selectedMajor.value = ''
+  selectedClass.value = ''
+}
+
+// 专业筛选变化时重置班级筛选
+const handleMajorFilterChange = () => {
+  selectedClass.value = ''
+}
+
+// 根据选择的专业更新可选的班级列表
+const availableClasses = computed(() => {
+  if (!selectedMajor.value) return classes.value
+  return classes.value.filter(c => c.major === selectedMajor.value)
+})
 
 const classes = ref([])
 const memberForm = ref({
@@ -194,10 +213,26 @@ const fetchClasses = async () => {
   }
 }
 
-// 计算所有可用的专业
-const majors = computed(() => {
-  return Array.from(new Set(classes.value.map(c => c.major)))
-})
+const majors = ref<string[]>([])
+
+// 获取专业列表
+const fetchMajors = async () => {
+  try {
+    const token = localStorage.getItem('token')
+    const response = await request.get('/api/classes/majors', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      baseURL: 'http://localhost:8080'  // 添加后端基础URL
+    })
+    if (response.data.success) {
+      majors.value = response.data.data
+    }
+  } catch (error) {
+    console.error('获取专业列表失败:', error)
+    ElMessage.error('获取专业列表失败')
+  }
+}
 
 // 根据选择的专业筛选班级
 const filteredClasses = computed(() => {
@@ -297,7 +332,7 @@ const deleteMember = async () => {
   try {
     const token = localStorage.getItem('token');
     const response = await request.delete(
-      `/group-members-manage/${selectedMember.value.id}`,
+      `/api/group-members-manage/${selectedMember.value.id}`,
       {
         headers: {
           'Authorization': `Bearer ${token}`  // 确保添加 token
@@ -316,51 +351,16 @@ const deleteMember = async () => {
   }
 }
 
-const dialogVisible = ref(false)
-const currentId = ref<number | null>(null)
-
-const editForm = reactive({
-  major: '',
-  className: ''
+// 监听筛选条件变化
+watch([selectedMajor, selectedClass], () => {
+  filterMembers()
 })
-
-const handleEdit = (row: any) => {
-  selectedMember.value = row
-  memberForm.value = {
-    major: row.major,
-    className: row.classId
-  }
-  showEditModal.value = true
-}
-
-const handleUpdate = async () => {
-  try {
-    const response = await request.put(`/api/group-members/${currentId.value}/class`, null, {
-      params: {
-        major: editForm.major,
-        className: editForm.className
-      }
-    })
-    
-    if (response.data) {
-      ElMessage.success('更新成功')
-      dialogVisible.value = false
-      // 刷新列表
-      fetchData()
-    }
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || '更新失败')
-  }
-}
-
-const fetchData = async () => {
-  // ... 获取列表数据的代码 ...
-}
 
 onMounted(() => {
   Promise.all([
     fetchMembers(),
-    fetchClasses()
+    fetchClasses(),
+    fetchMajors()
   ])
 })
 </script>
@@ -412,9 +412,14 @@ onMounted(() => {
 }
 
 .filter-section {
-  margin-bottom: 20px;
   display: flex;
   gap: 20px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  align-items: center;
 }
 
 .filter-item {
@@ -423,12 +428,39 @@ onMounted(() => {
   gap: 10px;
 }
 
+.filter-item label {
+  white-space: nowrap;
+  font-size: 14px;
+  color: #606266;
+}
+
 .filter-select {
-  padding: 8px;
+  padding: 8px 12px;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
-  min-width: 200px;
+  min-width: 150px;
   font-size: 14px;
+  background-color: white;
+  cursor: pointer;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #409eff;
+}
+
+.reset-btn {
+  padding: 8px 15px;
+  background: #f4f4f5;
+  color: #606266;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.reset-btn:hover {
+  background: #e9e9eb;
 }
 
 .table-container {
@@ -485,6 +517,12 @@ th {
 
 .delete-btn:hover {
   background: #f78989;
+}
+
+.no-data {
+  text-align: center;
+  color: #909399;
+  padding: 20px;
 }
 
 /* 弹窗样式 */
@@ -611,10 +649,4 @@ th {
   background: #f5f7fa;
   cursor: not-allowed;
 }
-
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-</style> 
+</style>

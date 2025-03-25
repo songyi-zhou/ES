@@ -32,12 +32,20 @@ public class EvaluationMaterial {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
+    @Column(name = "user_id")
     private Long userId;
+    
+    @Column(name = "evaluation_type")
     private String evaluationType;
+    
     private String title;
     private String description;
     private String status;
+    
+    @Column(name = "reviewer_id")
     private Long reviewerId;
+    
+    @Column(name = "review_comment")
     private String reviewComment;
     
     @CreationTimestamp

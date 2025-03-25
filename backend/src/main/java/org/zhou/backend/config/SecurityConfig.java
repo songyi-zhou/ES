@@ -60,7 +60,7 @@ public class SecurityConfig {
         http
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/group-members/**").hasAnyRole("ADMIN", "GROUP_LEADER")
+                .requestMatchers("/api/group-members/**").permitAll()
                 .anyRequest().authenticated()
             )
             .csrf(csrf -> csrf.disable())

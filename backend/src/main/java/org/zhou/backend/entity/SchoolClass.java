@@ -5,8 +5,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Data;
 
-@Data
 @Entity
+@Data
 @Table(name = "classes")
 public class SchoolClass {
     @Id

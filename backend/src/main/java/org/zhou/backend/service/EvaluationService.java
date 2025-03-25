@@ -193,4 +193,11 @@ public class EvaluationService {
         
         materialRepository.save(material);
     }
+
+    public List<EvaluationMaterial> getAllMaterials() {
+        log.info("Fetching all materials");
+        List<EvaluationMaterial> materials = materialRepository.findAll();
+        log.info("Found {} materials", materials.size());
+        return materials;
+    }
 } 

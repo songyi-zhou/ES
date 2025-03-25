@@ -23,7 +23,7 @@
               </div>
               <div class="dropdown-menu" v-if="showStatusDropdown">
                 <div class="dropdown-item" @click="selectStatus('')">全部</div>
-                <div class="dropdown-item" @click="selectStatus('PENDING')">待审核</div>
+                <div class="dropdown-item active" @click="selectStatus('PENDING')">待审核</div>
                 <div class="dropdown-item" @click="selectStatus('APPROVED')">已通过</div>
                 <div class="dropdown-item" @click="selectStatus('REJECTED')">已驳回</div>
               </div>
@@ -240,6 +240,7 @@ import { getReviewMaterials } from '@/api/evaluation';
 import TopBar from "@/components/TopBar.vue";
 import Sidebar from "@/components/Sidebar.vue";
 import axios from '@/utils/axios';
+import request from '@/utils/request';
 
 interface EvaluationAttachment {
   id: number;
@@ -266,7 +267,7 @@ interface EvaluationMaterial {
 const materials = ref<EvaluationMaterial[]>([]);
 const loading = ref(true);
 const searchKeyword = ref('');
-const filterStatus = ref('');
+const filterStatus = ref('PENDING');
 const showStatusDropdown = ref(false);
 const detailsDialogVisible = ref(false);
 const rejectDialogVisible = ref(false);
@@ -510,17 +511,26 @@ const submitQuestion = async () => {
 const fetchMaterials = async () => {
   try {
     loading.value = true;
-    const response = await getReviewMaterials();
-    materials.value = response.data.data;
+    const token = localStorage.getItem('token');
+    const response = await request.get('/api/evaluation/review-materials', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      baseURL: 'http://localhost:8080'
+    });
+    if (response.data.success) {
+      materials.value = response.data.data;
+    }
   } catch (error) {
-    ElMessage.error('获取材料列表失败');
     console.error('获取材料列表失败:', error);
+    ElMessage.error('获取材料列表失败');
   } finally {
     loading.value = false;
   }
 };
 
 onMounted(() => {
+  selectStatus('PENDING');
   fetchMaterials();
 });
 </script>

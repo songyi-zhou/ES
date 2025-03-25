@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.zhou.backend.repository.ClassRepository;
 import org.zhou.backend.entity.SchoolClass;
+import org.zhou.backend.service.ClassService;
 
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,7 @@ import java.util.Map;
 public class ClassController {
     
     private final ClassRepository classRepository;
+    private final ClassService classService;
     
     @GetMapping
     public ResponseEntity<?> getAllClasses() {
@@ -28,6 +30,22 @@ public class ClassController {
             return ResponseEntity.badRequest().body(Map.of(
                 "success", false,
                 "message", "获取班级列表失败"
+            ));
+        }
+    }
+
+    @GetMapping("/majors")
+    public ResponseEntity<?> getMajors() {
+        try {
+            List<String> majors = classService.getDistinctMajors();
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", majors
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
             ));
         }
     }
