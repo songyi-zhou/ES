@@ -272,3 +272,46 @@ CREATE TABLE bonus_rules (
 -- 删除 group_members 表
 DROP TABLE IF EXISTS group_members;
 
+-- 学生表
+CREATE TABLE students (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    student_id VARCHAR(20) UNIQUE NOT NULL COMMENT '学号',
+    name VARCHAR(50) NOT NULL COMMENT '姓名',
+    department VARCHAR(50) NOT NULL COMMENT '学院',
+    major VARCHAR(50) COMMENT '专业',
+    class_name VARCHAR(50) COMMENT '班级名称',
+    class_id VARCHAR(20) COMMENT '班级ID',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_student_id (student_id)
+) COMMENT='学生信息表';
+
+-- 导员表
+CREATE TABLE instructors (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    instructor_id VARCHAR(20) UNIQUE NOT NULL COMMENT '工号',
+    name VARCHAR(50) NOT NULL COMMENT '姓名',
+    department VARCHAR(50) NOT NULL COMMENT '学院',
+    major VARCHAR(50) COMMENT '专业',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_instructor_id (instructor_id)
+) COMMENT='导员信息表';
+
+-- 导入日志表
+CREATE TABLE import_logs (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    type VARCHAR(20) NOT NULL COMMENT '导入类型',
+    status VARCHAR(20) NOT NULL COMMENT '导入状态',
+    description TEXT COMMENT '描述',
+    errors TEXT COMMENT '错误信息',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+) COMMENT='导入日志表';
+
+-- 修改现有的用户表（添加外键约束）
+ALTER TABLE users 
+ADD CONSTRAINT fk_student_id FOREIGN KEY (user_id) 
+REFERENCES students(student_id) ON DELETE RESTRICT,
+ADD CONSTRAINT fk_instructor_id FOREIGN KEY (user_id) 
+REFERENCES instructors(instructor_id) ON DELETE RESTRICT;
+

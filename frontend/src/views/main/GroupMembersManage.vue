@@ -15,7 +15,7 @@
         <!-- 筛选区域 -->
         <div class="filter-section">
           <div class="filter-item">
-            <label>负责班级：</label>
+            <label>负责专业：</label>
             <select v-model="selectedClass" class="filter-select">
               <option value="">计算机科学与技术</option>
               <option value="1">1班</option>
@@ -295,16 +295,24 @@ const submitMember = async () => {
 // 删除成员
 const deleteMember = async () => {
   try {
-    const response = await request.delete(`/api/group-members-manage/${selectedMember.value.id}`)
+    const token = localStorage.getItem('token');
+    const response = await request.delete(
+      `/group-members-manage/${selectedMember.value.id}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`  // 确保添加 token
+        }
+      }
+    );
     if (response.data.success) {
-      ElMessage.success('删除成功')
-      await fetchMembers()
-      showDeleteModal.value = false
-      selectedMember.value = null
+      ElMessage.success('删除成功');
+      await fetchMembers();
+      showDeleteModal.value = false;
+      selectedMember.value = null;
     }
   } catch (error) {
-    console.error('删除失败:', error)
-    ElMessage.error('删除失败')
+    console.error('删除失败:', error);
+    ElMessage.error('删除失败');
   }
 }
 

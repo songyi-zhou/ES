@@ -115,7 +115,14 @@ public class GroupMemberServiceImpl implements GroupMemberService {
 
     @Override
     public void deleteGroupMember(Long id) {
-        groupMemberRepository.deleteById(id);
+        // 首先检查成员是否存在
+        if (!classGroupMemberRepository.existsById(id)) {
+            throw new ResourceNotFoundException("成员不存在");
+        }
+        
+        // 执行删除操作
+        classGroupMemberRepository.deleteById(id);
+        log.info("成功删除组员 ID: {}", id);
     }
 
     @Override

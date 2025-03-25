@@ -45,7 +45,7 @@ public class AuthController {
             User user = userService.createUser(
                 request.getUserId(),
                 request.getPassword(),
-                "Test User"  // 这里可以根据需要修改
+                "Test Member2"  // 这里可以根据需要修改
             );
             return ResponseEntity.ok(new LoginResponse(
                 null, // 注册时不需要token
