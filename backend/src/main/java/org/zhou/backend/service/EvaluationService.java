@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -25,6 +26,7 @@ import org.zhou.backend.repository.EvaluationAttachmentRepository;
 import org.zhou.backend.repository.EvaluationMaterialRepository;
 import org.zhou.backend.repository.EvaluationRepository;
 import org.zhou.backend.repository.UserRepository;
+import org.zhou.backend.repository.GroupMemberRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,7 @@ public class EvaluationService {
     private final ClassGroupMemberRepository classGroupMemberRepository;
     private final UserRepository userRepository;
     private final ClassRepository classRepository;
+    private final GroupMemberRepository groupMemberRepository;
     
     @Value("${file.upload.path:${user.home}/evaluation-files}")
     private String uploadPath;
@@ -60,11 +63,10 @@ public class EvaluationService {
         material.setEvaluationType(dto.getEvaluationType());
         material.setTitle(dto.getTitle());
         material.setDescription(dto.getDescription());
-        material.setStatus("PENDING");
         material.setClassId(user.getClassId());
         
-        // 保存材料记录
-        material = materialRepository.save(material);
+        // 调用 createMaterial 方法设置审核人
+        material = createMaterial(material, userId);
         
         // 处理附件
         if (dto.getFiles() != null && !dto.getFiles().isEmpty()) {
@@ -195,9 +197,26 @@ public class EvaluationService {
     }
 
     public List<EvaluationMaterial> getAllMaterials() {
-        log.info("Fetching all materials");
-        List<EvaluationMaterial> materials = materialRepository.findAll();
-        log.info("Found {} materials", materials.size());
-        return materials;
+        return materialRepository.findAll();
+    }
+
+    public EvaluationMaterial createMaterial(EvaluationMaterial material, Long currentUserId) {
+        // 1. 通过 id 找到学生信息
+        User student = userRepository.findById(currentUserId)
+            .orElseThrow(() -> new RuntimeException("学生不存在"));
+            
+        // 2. 通过学生的专业和年级找到对应的导员
+        User counselor = userRepository.findInstructorsByDepartmentsAndGrades(
+            Set.of(student.getDepartment()),
+            Set.of(student.getGrade())
+        ).stream()
+            .findFirst()
+            .orElseThrow(() -> new RuntimeException("未找到对应导员"));
+        
+        // 3. 设置审核人ID
+        material.setReviewerId(counselor.getId());
+        material.setStatus("PENDING");  // 设置初始状态为待审核
+        
+        return materialRepository.save(material);
     }
 } 

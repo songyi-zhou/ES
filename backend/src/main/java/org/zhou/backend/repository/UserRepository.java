@@ -22,4 +22,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
         @Param("departments") Set<String> departments,
         @Param("grades") Set<String> grades
     );
+
+    @Query("SELECT u FROM User u WHERE u.major = :major AND u.grade = :grade AND 'ROLE_COUNSELOR' MEMBER OF u.roles")
+    Optional<User> findCounselorByMajorAndGrade(String major, String grade);
 } 

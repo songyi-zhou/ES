@@ -48,4 +48,7 @@ public class User {
     )
     @Column(name = "role")
     private Set<String> roles;
+    
+    @Column(name = "grade")
+    private String grade;
 } 
