@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -59,36 +60,73 @@ public class UserImportServiceImpl implements UserImportService {
             if (row.getRowNum() == 0) continue;
             
             try {
-                String userId = row.getCell(0).getStringCellValue();
-                String name = row.getCell(1).getStringCellValue();
-                String department = row.getCell(2).getStringCellValue();
+                // 获取单元格值时进行类型转换
+                String userId = getCellValueAsString(row.getCell(0));
+                String name = getCellValueAsString(row.getCell(1));
+                String department = getCellValueAsString(row.getCell(2));
+                String major = getCellValueAsString(row.getCell(3));
                 
+                // 检查必填字段
+                if (userId == null || name == null || department == null || major == null) {
+                    errors.add("第" + (row.getRowNum() + 1) + "行: 必填字段不能为空");
+                    continue;
+                }
+
+                // 创建用户基本信息
+                User user = new User();
+                user.setUserId(userId);
+                user.setPassword(passwordEncoder.encode("123456")); // 默认密码
+                user.setName(name);
+                user.setDepartment(department);
+                user.setMajor(major);
+                
+                Set<String> roles = new HashSet<>();
                 if (userId.startsWith("T")) {
-                    // 导入导员信息
+                    // 导员信息
+                    user.setRoleLevel(3);
+                    roles.add("ROLE_COUNSELOR");
+                    
                     Instructor instructor = new Instructor();
                     instructor.setInstructorId(userId);
                     instructor.setName(name);
                     instructor.setDepartment(department);
-                    instructor.setMajor(row.getCell(3).getStringCellValue());
+                    instructor.setMajor(major);
                     instructorRepository.save(instructor);
                 } else {
-                    // 导入学生信息
+                    // 学生信息
+                    user.setRoleLevel(0);
+                    roles.add("ROLE_STUDENT");
+                    
+                    String className = getCellValueAsString(row.getCell(4));
+                    String classId = getCellValueAsString(row.getCell(5));
+                    
+                    if (className == null || classId == null) {
+                        errors.add("第" + (row.getRowNum() + 1) + "行: 学生信息不完整");
+                        continue;
+                    }
+                    
                     Student student = new Student();
                     student.setStudentId(userId);
                     student.setName(name);
                     student.setDepartment(department);
-                    student.setMajor(row.getCell(3).getStringCellValue());
-                    student.setClassName(row.getCell(4).getStringCellValue());
-                    student.setClassId(row.getCell(5).getStringCellValue());
+                    student.setMajor(major);
+                    student.setClassName(className);
+                    student.setClassId(classId);
                     studentRepository.save(student);
+                    
+                    user.setClassName(className);
+                    user.setClassId(classId);
                 }
                 
+                user.setRoles(roles);
+                userRepository.save(user);
                 successCount++;
+                
             } catch (Exception e) {
                 errors.add("第" + (row.getRowNum() + 1) + "行: " + e.getMessage());
             }
         }
-
+        
         // 记录导入日志
         ImportLog importLog = new ImportLog();
         importLog.setType("批量导入");
@@ -100,6 +138,20 @@ public class UserImportServiceImpl implements UserImportService {
         result.setSuccessCount(successCount);
         result.setErrors(errors);
         return result;
+    }
+
+    // 工具方法：安全地获取单元格的字符串值
+    private String getCellValueAsString(Cell cell) {
+        if (cell == null) return null;
+        
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                return String.valueOf((long)cell.getNumericCellValue());
+            default:
+                return null;
+        }
     }
 
     @Override
@@ -197,7 +249,9 @@ public class UserImportServiceImpl implements UserImportService {
         headerRow.createCell(0).setCellValue("学号/工号");
         headerRow.createCell(1).setCellValue("姓名");
         headerRow.createCell(2).setCellValue("学院");
-        headerRow.createCell(3).setCellValue("班级");
+        headerRow.createCell(3).setCellValue("专业");
+        headerRow.createCell(4).setCellValue("班级名称");
+        headerRow.createCell(5).setCellValue("班级ID");
 
         // 设置响应头
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

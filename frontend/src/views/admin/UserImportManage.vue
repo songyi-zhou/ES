@@ -162,6 +162,7 @@ import { ElMessage, type FormInstance } from 'element-plus'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 import request from '@/utils/request'
+import { useUserStore } from '@/stores/user'
 
 // 文件上传相关
 const fileInfo = ref<File | null>(null)
@@ -369,7 +370,16 @@ const addImportLog = (
 // 获取导入日志
 const fetchLogs = async () => {
   try {
-    const token = localStorage.getItem('token')
+    const userStore = useUserStore()
+    const token = userStore.token
+    
+    if (!token) {
+      ElMessage.error('未登录或 token 已过期')
+      return
+    }
+    
+    console.log('Using token:', token) // 调试用
+    
     const response = await request.get('/user-import/logs', {
       headers: {
         'Authorization': `Bearer ${token}`
@@ -377,15 +387,16 @@ const fetchLogs = async () => {
     })
     
     if (response.data.success) {
-      importLogs.value = response.data.data.map(log => ({
-        ...log,
-        time: formatTime(log.time)
-      }))
+      importLogs.value = response.data.data
       ElMessage.success('日志已刷新')
     }
   } catch (error) {
     console.error('获取日志失败:', error)
-    ElMessage.error('获取日志失败')
+    if (error.response?.status === 403) {
+      ElMessage.error('没有权限访问')
+    } else {
+      ElMessage.error('获取日志失败')
+    }
   }
 }
 
@@ -400,7 +411,7 @@ onMounted(() => {
 })
 
 // 进度条格式化
-const progressFormat = (percentage: number) => {
+const progressFormat = (percentage: number) => {  
   return percentage === 100 ? '完成' : `${percentage}%`
 }
 
