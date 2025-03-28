@@ -1,6 +1,7 @@
 package org.zhou.backend.entity;
 
 import java.util.Set;
+import java.time.LocalDateTime;
 
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -13,6 +14,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import lombok.Data;
+import org.hibernate.annotations.UpdateTimestamp;
 
 @Data
 @Entity
@@ -54,4 +56,8 @@ public class User {
 
     @Column(name = "squad")
     private String squad;  // 对于学生是所属中队号，对于导员是负责的中队列表
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 } 
