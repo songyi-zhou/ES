@@ -1,11 +1,17 @@
 package org.zhou.backend.entity;
 
-import jakarta.persistence.*;
-import lombok.Data;
+import java.time.LocalDateTime;
+
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.time.LocalDateTime;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Data;
 
 @Entity
 @Data
@@ -15,7 +21,7 @@ public class Instructor {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(unique = true, nullable = false)
+    @Column(name = "instructor_id", unique = true, nullable = false)
     private String instructorId; // 工号
     
     @Column(nullable = false)
@@ -23,6 +29,9 @@ public class Instructor {
     
     private String department;
     private String major;
+    
+    @Column(name = "squad_list")
+    private String squadList;
     
     @CreationTimestamp
     private LocalDateTime createdAt;

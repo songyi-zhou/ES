@@ -46,6 +46,7 @@ CREATE TABLE users (
     last_login TIMESTAMP NULL COMMENT '最后登录时间',
     role_level INT DEFAULT 0 COMMENT '角色等级',
     class_id BIGINT COMMENT '班级ID',
+    squad VARCHAR(50) COMMENT '中队信息（学生为所属中队号，导员为负责中队列表）',
     INDEX idx_user_id (user_id),
     INDEX idx_department (department)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -281,6 +282,7 @@ CREATE TABLE students (
     major VARCHAR(50) COMMENT '专业',
     class_name VARCHAR(50) COMMENT '班级名称',
     class_id VARCHAR(20) COMMENT '班级ID',
+    squad VARCHAR(10) COMMENT '所属中队号',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX idx_student_id (student_id)
@@ -293,6 +295,7 @@ CREATE TABLE instructors (
     name VARCHAR(50) NOT NULL COMMENT '姓名',
     department VARCHAR(50) NOT NULL COMMENT '学院',
     major VARCHAR(50) COMMENT '专业',
+    squad_list VARCHAR(100) COMMENT '负责的中队列表，用逗号分隔',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX idx_instructor_id (instructor_id)
@@ -314,4 +317,9 @@ ADD CONSTRAINT fk_student_id FOREIGN KEY (user_id)
 REFERENCES students(student_id) ON DELETE RESTRICT,
 ADD CONSTRAINT fk_instructor_id FOREIGN KEY (user_id) 
 REFERENCES instructors(instructor_id) ON DELETE RESTRICT;
+
+-- 添加索引以提高查询性能
+ALTER TABLE users ADD INDEX idx_squad (squad);
+ALTER TABLE students ADD INDEX idx_squad (squad);
+ALTER TABLE instructors ADD INDEX idx_squad_list (squad_list);
 

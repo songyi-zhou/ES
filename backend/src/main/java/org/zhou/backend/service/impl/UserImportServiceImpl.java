@@ -97,11 +97,32 @@ public class UserImportServiceImpl implements UserImportService {
                     user.setRoleLevel(3);
                     roles.add("ROLE_COUNSELOR");
                     
+                    String squadList = getCellValueAsString(row.getCell(7));
+                    if (squadList == null) {
+                        errors.add("第" + (row.getRowNum() + 1) + "行: 导员必须填写负责的中队信息");
+                        continue;
+                    }
+                    
+                    // 验证每个中队的格式
+                    String[] squads = squadList.split(",");
+                    boolean isValid = true;
+                    for (String squad : squads) {
+                        if (!squad.trim().matches("^\\d{4}-[1-9]$")) {
+                            errors.add("第" + (row.getRowNum() + 1) + "行: 导员中队格式错误，应为'年级-序号'，如'2021-1'，多个用逗号分隔");
+                            isValid = false;
+                            break;
+                        }
+                    }
+                    if (!isValid) continue;
+                    
+                    user.setSquad(squadList);
+                    
                     Instructor instructor = new Instructor();
                     instructor.setInstructorId(userId);
                     instructor.setName(name);
                     instructor.setDepartment(department);
                     instructor.setMajor(major);
+                    instructor.setSquadList(squadList);
                     instructorRepository.save(instructor);
                 } else {
                     // 学生信息
@@ -109,9 +130,25 @@ public class UserImportServiceImpl implements UserImportService {
                         errors.add("第" + (row.getRowNum() + 1) + "行: 学生学号必须为10位纯数字");
                         continue;
                     }
+                    
+                    String squad = getCellValueAsString(row.getCell(7));
+                    if (squad == null || !squad.matches("^\\d{4}-[1-9]$")) {
+                        errors.add("第" + (row.getRowNum() + 1) + "行: 学生中队格式错误，应为'年级-序号'，如'2021-1'");
+                        continue;
+                    }
+                    user.setSquad(squad);
+                    
                     // 从学号中提取年级信息（第3-6位）
                     String grade = userId.substring(2, 6);
                     user.setGrade(grade);
+                    
+                    // 验证中队年级与学号年级是否匹配
+                    String squadGrade = squad.substring(0, 4);
+                    if (!grade.equals(squadGrade)) {
+                        errors.add("第" + (row.getRowNum() + 1) + "行: 中队年级与学号中的年级不匹配");
+                        continue;
+                    }
+                    
                     String className = getCellValueAsString(row.getCell(5));
                     String classId = getCellValueAsString(row.getCell(6));
                     
@@ -132,6 +169,7 @@ public class UserImportServiceImpl implements UserImportService {
                     student.setMajor(major);
                     student.setClassName(className);
                     student.setClassId(classId);
+                    student.setSquad(squad);
                     studentRepository.save(student);
                 }
                 
@@ -228,6 +266,7 @@ public class UserImportServiceImpl implements UserImportService {
             instructor.setName(request.getName());
             instructor.setDepartment(request.getDepartment());
             instructor.setMajor(request.getMajor());
+            instructor.setSquadList(request.getSquad());
             instructorRepository.save(instructor);
             
         } else if ("student".equals(request.getUserType())) {
@@ -235,9 +274,8 @@ public class UserImportServiceImpl implements UserImportService {
             user.setRoleLevel(0);
             roles.add("ROLE_STUDENT");
             user.setClassId(request.getClassId());
-            // 从学号中提取年级信息（第3-6位）
-            String grade = userId.substring(2, 6);
-            user.setGrade(grade);
+            String squad = request.getSquad();
+            user.setSquad(squad);
             
             Student student = new Student();
             student.setStudentId(userId);
@@ -246,6 +284,7 @@ public class UserImportServiceImpl implements UserImportService {
             student.setMajor(request.getMajor());
             student.setClassName(request.getClassName());
             student.setClassId(request.getClassId());
+            student.setSquad(squad);
             studentRepository.save(student);
             
         } else if (userId.startsWith("admin")) {
@@ -281,9 +320,10 @@ public class UserImportServiceImpl implements UserImportService {
         headerRow.createCell(4).setCellValue("专业");
         headerRow.createCell(5).setCellValue("班级名称");
         headerRow.createCell(6).setCellValue("班级ID");
+        headerRow.createCell(7).setCellValue("中队");  // 新增中队列
 
         // 添加示例数据
-        // 学生示例（22代表本科生，2021代表入学年份）
+        // 学生示例
         Row studentRow = sheet.createRow(1);
         studentRow.createCell(0).setCellValue("student");
         studentRow.createCell(1).setCellValue("2220210001");
@@ -292,6 +332,7 @@ public class UserImportServiceImpl implements UserImportService {
         studentRow.createCell(4).setCellValue("计算机科学与技术");
         studentRow.createCell(5).setCellValue("计科2101");
         studentRow.createCell(6).setCellValue("CS2101");
+        studentRow.createCell(7).setCellValue("2021-1");  // 修改为正确的中队格式
 
         // 导员示例
         Row instructorRow = sheet.createRow(2);
@@ -300,6 +341,7 @@ public class UserImportServiceImpl implements UserImportService {
         instructorRow.createCell(2).setCellValue("李导员");
         instructorRow.createCell(3).setCellValue("信息工程学院");
         instructorRow.createCell(4).setCellValue("计算机科学与技术");
+        instructorRow.createCell(7).setCellValue("2021-1,2021-2,2021-3");  // 修改为正确的中队格式
 
         // 设置响应头
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

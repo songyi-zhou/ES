@@ -11,4 +11,5 @@ public class UserImportRequest {
     private String className;
     private String classId;
     private String userType; // "student" 或 "instructor"
+    private String squad;    // 中队信息
 } 

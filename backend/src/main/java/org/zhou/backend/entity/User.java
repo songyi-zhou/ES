@@ -51,4 +51,7 @@ public class User {
     
     @Column(name = "grade")
     private String grade;
+
+    @Column(name = "squad")
+    private String squad;  // 对于学生是所属中队号，对于导员是负责的中队列表
 } 

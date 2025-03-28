@@ -111,6 +111,15 @@
                 >
                   <el-input v-model="formData.classId" clearable />
                 </el-form-item>
+                <el-form-item 
+                  :label="userType === 'instructor' ? '负责中队' : '所属中队'" 
+                  prop="squad"
+                >
+                  <el-input 
+                    v-model="formData.squad" 
+                    :placeholder="userType === 'instructor' ? '请输入负责的中队，多个用逗号分隔' : '请输入所属中队'"
+                  />
+                </el-form-item>
                 <el-form-item>
                   <el-button type="primary" @click="submitForm">添加</el-button>
                   <el-button @click="resetForm">重置</el-button>
@@ -180,7 +189,9 @@ const formData = reactive({
   department: '',
   major: '',
   className: '',
-  classId: ''
+  classId: '',
+  userType: 'student', // 默认为学生
+  squad: ''  // 新增中队字段
 })
 
 // 表单验证规则
@@ -218,6 +229,28 @@ const formRules = reactive({
   ],
   classId: [
     { required: true, message: '请输入班级ID', trigger: 'blur' }
+  ],
+  squad: [
+    { required: true, message: '请输入中队信息', trigger: 'blur' },
+    {
+      validator: (rule, value, callback) => {
+        if (userType.value === 'instructor') {
+          // 导员可以负责多个中队，用逗号分隔
+          const squads = value.split(',');
+          const isValid = squads.every(squad => /^\d{4}-[1-9]$/.test(squad.trim()));
+          if (!isValid) {
+            callback(new Error('中队格式错误，应为"年级-序号"，如"2021-1"，多个用逗号分隔'));
+          }
+        } else {
+          // 学生只能属于一个中队
+          if (!/^\d{4}-[1-9]$/.test(value)) {
+            callback(new Error('中队格式错误，应为"年级-序号"，如"2021-1"'));
+          }
+        }
+        callback();
+      },
+      trigger: 'blur'
+    }
   ]
 })
 
