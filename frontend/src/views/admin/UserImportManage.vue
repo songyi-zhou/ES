@@ -187,7 +187,21 @@ const formData = reactive({
 const formRules = reactive({
   userId: [
     { required: true, message: '请输入学号/工号', trigger: 'blur' },
-    { pattern: /^\d+$/, message: '请输入正确的学号/工号格式', trigger: 'blur' }
+    { 
+      validator: (rule, value, callback) => {
+        if (userType.value === 'instructor') {
+          if (!/^\d{8}$/.test(value)) {
+            callback(new Error('导员工号必须为8位纯数字'));
+          }
+        } else {
+          if (!/^\d{10}$/.test(value)) {
+            callback(new Error('学生学号必须为10位纯数字'));
+          }
+        }
+        callback();
+      },
+      trigger: 'blur'
+    }
   ],
   name: [
     { required: true, message: '请输入姓名', trigger: 'blur' }

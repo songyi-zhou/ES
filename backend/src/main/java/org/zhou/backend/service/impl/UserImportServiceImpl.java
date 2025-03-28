@@ -54,21 +54,27 @@ public class UserImportServiceImpl implements UserImportService {
         
         ImportResult result = new ImportResult();
         List<String> errors = new ArrayList<>();
-        int successCount = 0;
 
         for (Row row : sheet) {
             if (row.getRowNum() == 0) continue;
             
             try {
-                // 获取单元格值时进行类型转换
-                String userId = getCellValueAsString(row.getCell(0));
-                String name = getCellValueAsString(row.getCell(1));
-                String department = getCellValueAsString(row.getCell(2));
-                String major = getCellValueAsString(row.getCell(3));
+                // 获取单元格值
+                String userType = getCellValueAsString(row.getCell(0));
+                String userId = getCellValueAsString(row.getCell(1));
+                String name = getCellValueAsString(row.getCell(2));
+                String department = getCellValueAsString(row.getCell(3));
+                String major = getCellValueAsString(row.getCell(4));
                 
                 // 检查必填字段
-                if (userId == null || name == null || department == null || major == null) {
+                if (userType == null || userId == null || name == null || department == null) {
                     errors.add("第" + (row.getRowNum() + 1) + "行: 必填字段不能为空");
+                    continue;
+                }
+
+                // 验证用户类型
+                if (!userType.equals("student") && !userType.equals("instructor")) {
+                    errors.add("第" + (row.getRowNum() + 1) + "行: 用户类型必须是 student 或 instructor");
                     continue;
                 }
 
@@ -81,8 +87,13 @@ public class UserImportServiceImpl implements UserImportService {
                 user.setMajor(major);
                 
                 Set<String> roles = new HashSet<>();
-                if (userId.startsWith("T")) {
+                
+                if (userType.equals("instructor")) {
                     // 导员信息
+                    if (userId.length() != 8 || !userId.matches("\\d{8}")) {
+                        errors.add("第" + (row.getRowNum() + 1) + "行: 导员工号必须为8位纯数字");
+                        continue;
+                    }
                     user.setRoleLevel(3);
                     roles.add("ROLE_COUNSELOR");
                     
@@ -94,16 +105,25 @@ public class UserImportServiceImpl implements UserImportService {
                     instructorRepository.save(instructor);
                 } else {
                     // 学生信息
-                    user.setRoleLevel(0);
-                    roles.add("ROLE_STUDENT");
-                    
-                    String className = getCellValueAsString(row.getCell(4));
-                    String classId = getCellValueAsString(row.getCell(5));
-                    
-                    if (className == null || classId == null) {
-                        errors.add("第" + (row.getRowNum() + 1) + "行: 学生信息不完整");
+                    if (userId.length() != 10 || !userId.matches("\\d{10}")) {
+                        errors.add("第" + (row.getRowNum() + 1) + "行: 学生学号必须为10位纯数字");
                         continue;
                     }
+                    // 从学号中提取年级信息（第3-6位）
+                    String grade = userId.substring(2, 6);
+                    user.setGrade(grade);
+                    String className = getCellValueAsString(row.getCell(5));
+                    String classId = getCellValueAsString(row.getCell(6));
+                    
+                    if (className == null || classId == null) {
+                        errors.add("第" + (row.getRowNum() + 1) + "行: 学生必须填写班级信息");
+                        continue;
+                    }
+                    
+                    user.setRoleLevel(0);
+                    roles.add("ROLE_STUDENT");
+                    user.setClassName(className);
+                    user.setClassId(classId);
                     
                     Student student = new Student();
                     student.setStudentId(userId);
@@ -113,29 +133,18 @@ public class UserImportServiceImpl implements UserImportService {
                     student.setClassName(className);
                     student.setClassId(classId);
                     studentRepository.save(student);
-                    
-                    user.setClassName(className);
-                    user.setClassId(classId);
                 }
                 
                 user.setRoles(roles);
                 userRepository.save(user);
-                successCount++;
+                result.incrementSuccessCount();
                 
             } catch (Exception e) {
                 errors.add("第" + (row.getRowNum() + 1) + "行: " + e.getMessage());
+                result.incrementFailureCount();
             }
         }
         
-        // 记录导入日志
-        ImportLog importLog = new ImportLog();
-        importLog.setType("批量导入");
-        importLog.setStatus(errors.isEmpty() ? "success" : "partial");
-        importLog.setDescription("成功导入" + successCount + "条记录");
-        importLog.setErrors(String.join("\n", errors));
-        importLogRepository.save(importLog);
-
-        result.setSuccessCount(successCount);
         result.setErrors(errors);
         return result;
     }
@@ -185,42 +194,61 @@ public class UserImportServiceImpl implements UserImportService {
     }
 
     private User createUser(UserImportRequest request) {
+        // 1. 验证用户ID格式
+        String userId = request.getUserId();
+        if ("instructor".equals(request.getUserType())) {
+            if (!userId.matches("\\d{8}")) {
+                throw new IllegalArgumentException("导员工号必须为8位纯数字");
+            }
+        } else if ("student".equals(request.getUserType())) {
+            if (!userId.matches("\\d{10}")) {
+                throw new IllegalArgumentException("学生学号必须为10位纯数字");
+            }
+        } else if (!userId.startsWith("admin")) {
+            throw new IllegalArgumentException("无效的用户类型");
+        }
+
         // 2. 创建用户基本信息
         User user = new User();
-        user.setUserId(request.getUserId());
+        user.setUserId(userId);
         user.setName(request.getName());
         user.setDepartment(request.getDepartment());
         user.setPassword(passwordEncoder.encode("123456")); // 默认密码
         
         // 3. 设置角色和同步到对应表
         Set<String> roles = new HashSet<>();
-        if (request.getUserId().startsWith("T")) {
+        
+        if ("instructor".equals(request.getUserType())) {
             // 导员
             user.setRoleLevel(3);
             roles.add("ROLE_COUNSELOR");
             
             Instructor instructor = new Instructor();
-            instructor.setInstructorId(request.getUserId());
+            instructor.setInstructorId(userId);
             instructor.setName(request.getName());
             instructor.setDepartment(request.getDepartment());
             instructor.setMajor(request.getMajor());
             instructorRepository.save(instructor);
             
-        } else if (!request.getUserId().startsWith("admin")) {
+        } else if ("student".equals(request.getUserType())) {
             // 学生
             user.setRoleLevel(0);
             roles.add("ROLE_STUDENT");
             user.setClassId(request.getClassId());
+            // 从学号中提取年级信息（第3-6位）
+            String grade = userId.substring(2, 6);
+            user.setGrade(grade);
             
             Student student = new Student();
-            student.setStudentId(request.getUserId());
+            student.setStudentId(userId);
             student.setName(request.getName());
             student.setDepartment(request.getDepartment());
             student.setMajor(request.getMajor());
             student.setClassName(request.getClassName());
             student.setClassId(request.getClassId());
             studentRepository.save(student);
-        } else {
+            
+        } else if (userId.startsWith("admin")) {
             // 管理员
             user.setRoleLevel(4);
             roles.add("ROLE_ADMIN");
@@ -246,18 +274,37 @@ public class UserImportServiceImpl implements UserImportService {
         
         // 创建表头
         Row headerRow = sheet.createRow(0);
-        headerRow.createCell(0).setCellValue("学号/工号");
-        headerRow.createCell(1).setCellValue("姓名");
-        headerRow.createCell(2).setCellValue("学院");
-        headerRow.createCell(3).setCellValue("专业");
-        headerRow.createCell(4).setCellValue("班级名称");
-        headerRow.createCell(5).setCellValue("班级ID");
+        headerRow.createCell(0).setCellValue("用户类型(student/instructor)");
+        headerRow.createCell(1).setCellValue("学号/工号");
+        headerRow.createCell(2).setCellValue("姓名");
+        headerRow.createCell(3).setCellValue("学院");
+        headerRow.createCell(4).setCellValue("专业");
+        headerRow.createCell(5).setCellValue("班级名称");
+        headerRow.createCell(6).setCellValue("班级ID");
+
+        // 添加示例数据
+        // 学生示例（22代表本科生，2021代表入学年份）
+        Row studentRow = sheet.createRow(1);
+        studentRow.createCell(0).setCellValue("student");
+        studentRow.createCell(1).setCellValue("2220210001");
+        studentRow.createCell(2).setCellValue("张三");
+        studentRow.createCell(3).setCellValue("信息工程学院");
+        studentRow.createCell(4).setCellValue("计算机科学与技术");
+        studentRow.createCell(5).setCellValue("计科2101");
+        studentRow.createCell(6).setCellValue("CS2101");
+
+        // 导员示例
+        Row instructorRow = sheet.createRow(2);
+        instructorRow.createCell(0).setCellValue("instructor");
+        instructorRow.createCell(1).setCellValue("20240001");
+        instructorRow.createCell(2).setCellValue("李导员");
+        instructorRow.createCell(3).setCellValue("信息工程学院");
+        instructorRow.createCell(4).setCellValue("计算机科学与技术");
 
         // 设置响应头
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment; filename=user_import_template.xlsx");
         
-        // 写入响应
         workbook.write(response.getOutputStream());
         workbook.close();
     }
