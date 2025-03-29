@@ -1,7 +1,9 @@
 package org.zhou.backend.entity;
 
-import java.util.Set;
 import java.time.LocalDateTime;
+import java.util.Set;
+
+import org.hibernate.annotations.UpdateTimestamp;
 
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -14,7 +16,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import lombok.Data;
-import org.hibernate.annotations.UpdateTimestamp;
 
 @Data
 @Entity

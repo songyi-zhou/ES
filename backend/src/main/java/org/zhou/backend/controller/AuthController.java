@@ -29,7 +29,9 @@ public class AuthController {
         try {
             // 调用 AuthService 中的登录方法进行处理
             LoginResponse loginResponse = authService.authenticateAndGenerateToken(loginRequest);
-            return ResponseEntity.ok(loginResponse);
+            return ResponseEntity.ok()
+                .header("Token-Expiration", String.valueOf(System.currentTimeMillis() + 3600000))
+                .body(loginResponse);
         } catch (AuthenticationException ex) {
             log.error("Authentication failed for user: {}", loginRequest.getUserId(), ex);
             return ResponseEntity.status(401).body("Invalid credentials");

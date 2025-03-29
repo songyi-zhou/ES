@@ -11,11 +11,15 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Entity
-@Data
 @Table(name = "students")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class Student {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -37,9 +41,14 @@ public class Student {
     @Column(name = "squad")
     private String squad;
     
+    @Column(name = "role")
+    private String role;
+    
     @CreationTimestamp
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
     
     @UpdateTimestamp
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 } 

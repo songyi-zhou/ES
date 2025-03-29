@@ -95,36 +95,23 @@ const handleLogin = async () => {
     const response = await axios.post('/api/auth/login', {
       userId: loginForm.username,
       password: loginForm.password
-    })
+    });
     
-    const { token, userId, name, roleLevel } = response.data
+    console.log('Login response:', response.data); // 添加登录响应调试
     
-    // 存储用户信息
-    userStore.setUserInfo({
-      token,
-      userId,
-      name,
-      roleLevel
-    })
-
-    // 存储token到localStorage
-    localStorage.setItem('token', token)
-
-    // 设置 axios 默认 header
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    const { token, userId, name, roleLevel } = response.data;
     
-    ElMessage.success('登录成功')
-    //目前暂定为home
-    router.push('/home')
+    // 使用 userStore
+    userStore.setUserInfo({ token, userId, name, roleLevel });
+    
+    // 不再需要单独存储token
+    // localStorage.setItem('token', token);
+    
+    ElMessage.success('登录成功');
+    router.push('/home');
   } catch (error) {
-    // 显示具体的错误信息
-    if (error.response?.status === 401) {
-      ElMessage.error('用户名或密码错误')
-    } else if (error.response?.data) {
-      ElMessage.error(error.response.data)
-    } else {
-      ElMessage.error('登录失败，请稍后重试')
-    }
+    console.error('Login error:', error.response?.data);
+    ElMessage.error(error.response?.data || '登录失败');
   }
 }
 </script>

@@ -1,13 +1,15 @@
 package org.zhou.backend.repository;
 
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.zhou.backend.entity.User;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -25,4 +27,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u FROM User u WHERE u.major = :major AND u.grade = :grade AND 'ROLE_COUNSELOR' MEMBER OF u.roles")
     Optional<User> findCounselorByMajorAndGrade(String major, String grade);
+
+    @Modifying
+    @Query(value = "DELETE FROM user_roles WHERE user_id = :userId", nativeQuery = true)
+    void deleteUserRoles(@Param("userId") Long userId);
 } 
