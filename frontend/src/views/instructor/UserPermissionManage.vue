@@ -113,22 +113,30 @@
           v-model="roleDialogVisible"
           title="修改学生权限"
           width="500px"
-          :close-on-click-modal="false"
         >
-          <div class="user-info">
-            <p><strong>学生：</strong>{{ currentUser?.name }} ({{ currentUser?.userId }})</p>
-            <p><strong>班级：</strong>{{ currentUser?.className }}</p>
-            <p><strong>当前角色：</strong>{{ getRoleDisplayName(currentUser?.role) }}</p>
-          </div>
-          
-          <el-form :model="roleForm" label-width="100px" :rules="roleRules" ref="roleFormRef">
+          <el-form
+            ref="roleFormRef"
+            :model="roleForm"
+            :rules="roleRules"
+            label-width="80px"
+          >
+            <el-form-item label="学生">
+              {{ currentStudent?.name }} ({{ currentStudent?.userId }})
+            </el-form-item>
+            <el-form-item label="当前角色">
+              <el-tag>{{ getRoleDisplayName(currentStudent?.role) }}</el-tag>
+            </el-form-item>
             <el-form-item label="选择角色" prop="role">
-              <el-select v-model="roleForm.role" placeholder="请选择新角色">
-                <el-option 
-                  v-for="option in roleOptions"
-                  :key="option.value"
-                  :label="option.label"
-                  :value="option.value"
+              <el-select 
+                v-model="roleForm.role"
+                placeholder="请选择新角色"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="role in staticRoleOptions"
+                  :key="role.value"
+                  :label="role.label"
+                  :value="role.value"
                 />
               </el-select>
             </el-form-item>
@@ -138,23 +146,14 @@
                 type="textarea"
                 :rows="3"
                 placeholder="请输入修改原因"
-                maxlength="200"
-                show-word-limit
               />
             </el-form-item>
           </el-form>
-
           <template #footer>
-            <div class="dialog-footer">
+            <span class="dialog-footer">
               <el-button @click="roleDialogVisible = false">取消</el-button>
-              <el-button 
-                type="primary" 
-                @click="submitRoleChange" 
-                :loading="submitting"
-              >
-                确认修改
-              </el-button>
-            </div>
+              <el-button type="primary" @click="handleRoleSubmit">确认</el-button>
+            </span>
           </template>
         </el-dialog>
 
@@ -203,6 +202,11 @@
             </div>
           </div>
         </el-dialog>
+
+        <!-- 添加用于调试的内容 -->
+        <div v-if="false">
+          当前角色选项: {{ roleOptions }}
+        </div>
       </main>
     </div>
   </div>
@@ -231,7 +235,7 @@ const loading = ref(false)
 // 对话框相关
 const roleDialogVisible = ref(false)
 const detailsDialogVisible = ref(false)
-const currentUser = ref(null)
+const currentStudent = ref(null)
 const submitting = ref(false)
 const roleFormRef = ref(null)
 
@@ -258,10 +262,13 @@ const classOptions = ref([
   { label: '计科2104', value: '计科2104' }
 ])
 
-const roleOptions = [
-  { label: '普通学生', value: 'user' },
-  { label: '综测小组成员', value: 'groupMember' },
-  { label: '综测小组负责人', value: 'groupLeader' }
+const roleOptions = ref([])
+
+// 使用静态角色选项
+const staticRoleOptions = [
+  { value: 'user', label: '普通学生' },
+  { value: 'groupMember', label: '综测小组成员' },
+  { value: 'groupLeader', label: '综测小组负责人' }
 ]
 
 // 角色映射
@@ -290,12 +297,6 @@ const getRoleTagType = (role) => {
 const fetchUsers = async () => {
   loading.value = true
   try {
-    console.log('Fetching users with params:', {
-      keyword: searchKeyword.value,
-      className: selectedClass.value,
-      role: filterRole.value
-    });
-    
     const response = await request.get('/instructor/students', {
       params: {
         keyword: searchKeyword.value,
@@ -303,12 +304,9 @@ const fetchUsers = async () => {
         role: filterRole.value
       }
     });
-    
-    console.log('Raw response:', response);
     users.value = Array.isArray(response.data) ? response.data : [];
-    console.log('Processed users data:', users.value);
   } catch (error) {
-    console.error('获取学生列表失败:', error.response || error);
+    console.error('获取学生列表失败:', error.message);
     ElMessage.error('获取学生列表失败');
     users.value = [];
   } finally {
@@ -325,13 +323,15 @@ const filteredUsers = computed(() => {
 })
 
 // 打开修改权限对话框
-const openRoleDialog = (user) => {
-  currentUser.value = user
+const openRoleDialog = (row) => {
+  currentStudent.value = row
   roleForm.value = {
-    role: user.role,
+    role: row.role || '',  // 设置当前角色为默认值
     reason: ''
   }
   roleDialogVisible.value = true
+  console.log('当前表单数据:', roleForm.value) // 调试信息
+  console.log('可选角色:', staticRoleOptions)   // 调试信息
 }
 
 // 查看用户详情
@@ -339,7 +339,7 @@ const viewUserDetails = async (user) => {
   loading.value = true
   try {
     // 如果有需要，可以在这里获取更详细的用户信息
-    currentUser.value = user
+    currentStudent.value = user
     detailsDialogVisible.value = true
   } catch (error) {
     console.error('获取用户详情失败:', error)
@@ -359,7 +359,7 @@ const submitRoleChange = async () => {
     
     // 确认对话框
     await ElMessageBox.confirm(
-      `确定要将 ${currentUser.value.name} 的角色从 ${getRoleDisplayName(currentUser.value.role)} 修改为 ${getRoleDisplayName(roleForm.value.role)} 吗？`,
+      `确定要将 ${currentStudent.value.name} 的角色从 ${getRoleDisplayName(currentStudent.value.role)} 修改为 ${getRoleDisplayName(roleForm.value.role)} 吗？`,
       '确认修改',
       {
         confirmButtonText: '确定',
@@ -369,7 +369,7 @@ const submitRoleChange = async () => {
     )
     
     // 发送请求
-    await request.put(`/instructor/students/${currentUser.value.userId}/role`, {
+    await request.put(`/instructor/students/${currentStudent.value.userId}/role`, {
       role: roleForm.value.role,
       reason: roleForm.value.reason
     })
@@ -425,6 +425,32 @@ const handleFilterChange = () => {
   fetchUsers()
 }
 
+// 获取角色选项
+const fetchRoleOptions = async () => {
+  try {
+    const { data } = await request.get('/roles/student')
+    console.log('获取到的角色选项:', data)
+    roleOptions.value = data
+  } catch (error) {
+    console.error('获取角色列表失败:', error.message)
+    ElMessage.error('获取角色列表失败')
+  }
+}
+
+// 在 roleOptions 定义后添加
+const formatDate = (row, column) => {
+  if (!row.assignTime) return '';
+  const date = new Date(row.assignTime);
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
 // 初始化数据
 onMounted(() => {
   // 检查是否有 token
@@ -435,6 +461,7 @@ onMounted(() => {
     window.location.href = '/login'
     return
   }
+  fetchRoleOptions()
   fetchUsers()
 })
 
@@ -442,6 +469,27 @@ onMounted(() => {
 watch([currentPage, pageSize], () => {
   fetchUsers()
 }, { immediate: true })
+
+const handleRoleSubmit = async () => {
+  if (!roleForm.value.role || !roleForm.value.reason) {
+    ElMessage.warning('请填写完整信息')
+    return
+  }
+
+  try {
+    await request.put(`/instructor/student/${currentStudent.value.userId}/role`, {
+      role: roleForm.value.role,
+      reason: roleForm.value.reason
+    })
+    
+    ElMessage.success('修改权限成功')
+    roleDialogVisible.value = false
+    fetchUsers()
+  } catch (error) {
+    console.error('修改权限失败:', error)
+    ElMessage.error('修改权限失败')
+  }
+}
 </script>
 
 <style scoped>
@@ -531,9 +579,8 @@ watch([currentPage, pageSize], () => {
 }
 
 .dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  margin-top: 20px;
+  text-align: right;
 }
 
 .user-details {
@@ -583,7 +630,7 @@ watch([currentPage, pageSize], () => {
 }
 
 :deep(.el-select) {
-  width: 160px;
+  width: 100%;
 }
 
 :deep(.el-input__wrapper) {
@@ -596,5 +643,9 @@ watch([currentPage, pageSize], () => {
 
 :deep(.el-pagination) {
   --el-pagination-button-bg-color: white;
+}
+
+.w-full {
+  width: 100%;
 }
 </style>
