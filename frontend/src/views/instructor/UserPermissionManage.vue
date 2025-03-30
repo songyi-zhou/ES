@@ -127,18 +127,20 @@
               <el-tag>{{ getRoleDisplayName(currentStudent?.role) }}</el-tag>
             </el-form-item>
             <el-form-item label="选择角色" prop="role">
-              <el-select 
-                v-model="roleForm.role"
-                placeholder="请选择新角色"
-                style="width: 100%"
+              <select 
+                v-model="roleForm.role" 
+                class="el-input__inner" 
+                style="width: 100%; height: 32px; border-radius: 4px; border: 1px solid #dcdfe6; padding: 0 15px;"
               >
-                <el-option
-                  v-for="role in staticRoleOptions"
-                  :key="role.value"
-                  :label="role.label"
+                <option value="">请选择新角色</option>
+                <option 
+                  v-for="role in roleOptions" 
+                  :key="role.value" 
                   :value="role.value"
-                />
-              </el-select>
+                >
+                  {{ role.label }}
+                </option>
+              </select>
             </el-form-item>
             <el-form-item label="修改原因" prop="reason">
               <el-input
@@ -264,12 +266,16 @@ const classOptions = ref([
 
 const roleOptions = ref([])
 
-// 使用静态角色选项
-const staticRoleOptions = [
-  { value: 'user', label: '普通学生' },
-  { value: 'groupMember', label: '综测小组成员' },
-  { value: 'groupLeader', label: '综测小组负责人' }
-]
+// 获取角色选项
+const fetchRoleOptions = async () => {
+  try {
+    const { data } = await request.get('/roles/student')
+    roleOptions.value = data
+  } catch (error) {
+    console.error('获取角色列表失败:', error)
+    ElMessage.error('获取角色列表失败')
+  }
+}
 
 // 角色映射
 const roleMap = {
@@ -331,7 +337,7 @@ const openRoleDialog = (row) => {
   }
   roleDialogVisible.value = true
   console.log('当前表单数据:', roleForm.value) // 调试信息
-  console.log('可选角色:', staticRoleOptions)   // 调试信息
+  console.log('可选角色:', roleOptions.value)   // 调试信息
 }
 
 // 查看用户详情
@@ -425,33 +431,7 @@ const handleFilterChange = () => {
   fetchUsers()
 }
 
-// 获取角色选项
-const fetchRoleOptions = async () => {
-  try {
-    const { data } = await request.get('/roles/student')
-    console.log('获取到的角色选项:', data)
-    roleOptions.value = data
-  } catch (error) {
-    console.error('获取角色列表失败:', error.message)
-    ElMessage.error('获取角色列表失败')
-  }
-}
-
-// 在 roleOptions 定义后添加
-const formatDate = (row, column) => {
-  if (!row.assignTime) return '';
-  const date = new Date(row.assignTime);
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
-}
-
-// 初始化数据
+// 在组件挂载时获取角色列表
 onMounted(() => {
   // 检查是否有 token
   const token = localStorage.getItem('token')
@@ -489,6 +469,20 @@ const handleRoleSubmit = async () => {
     console.error('修改权限失败:', error)
     ElMessage.error('修改权限失败')
   }
+}
+
+// 在 roleOptions 定义后添加
+const formatDate = (row, column) => {
+  if (!row.assignTime) return '';
+  const date = new Date(row.assignTime);
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
 }
 </script>
 
@@ -646,6 +640,10 @@ const handleRoleSubmit = async () => {
 }
 
 .w-full {
+  width: 100%;
+}
+
+.role-select {
   width: 100%;
 }
 </style>
