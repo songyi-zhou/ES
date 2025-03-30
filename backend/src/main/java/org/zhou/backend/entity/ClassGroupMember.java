@@ -21,4 +21,6 @@ public class ClassGroupMember {
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    private String squad;
 } 

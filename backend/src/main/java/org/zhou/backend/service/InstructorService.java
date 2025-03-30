@@ -9,4 +9,5 @@ import org.zhou.backend.model.request.RoleUpdateRequest;
 public interface InstructorService {
     void updateStudentRole(String instructorId, String studentId, RoleUpdateRequest request) throws AccessDeniedException;
     List<StudentDTO> getStudentsByInstructor(String instructorId, String keyword, String className, String role);
+    void updateSelectedStudentsRole(String instructorId, List<String> studentIds) throws AccessDeniedException;
 } 

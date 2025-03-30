@@ -23,4 +23,8 @@ public interface GroupMemberService {
     void deleteGroupMember(Long id);
 
     Map<String, Object> updateGroupMemberClass(Long id, String major, String className);
+
+    List<GroupMember> batchAddGroupMembers(List<String> studentIds, String department);
+
+    List<GroupMember> getExistingGroupMembers(String department);
 }

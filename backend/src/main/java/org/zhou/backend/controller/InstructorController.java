@@ -28,6 +28,7 @@ import org.zhou.backend.service.EvaluationService;
 import org.zhou.backend.service.InstructorService;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 
 @RestController
 @RequestMapping("/api/instructor")
@@ -126,6 +127,25 @@ public class InstructorController {
         } catch (java.nio.file.AccessDeniedException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/students/batch-update-role")
+    public ResponseEntity<?> updateSelectedStudentsRole(
+            @RequestBody List<String> studentIds,
+            Principal principal) {
+        try {
+            instructorService.updateSelectedStudentsRole(principal.getName(), studentIds);
+            return ResponseEntity.ok(Map.of(
+                "message", "批量修改权限成功",
+                "updatedCount", studentIds.size()
+            ));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("message", "批量修改权限失败: " + e.getMessage()));
         }
     }
 } 

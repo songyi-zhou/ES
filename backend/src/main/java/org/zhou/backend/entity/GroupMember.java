@@ -26,7 +26,9 @@ public class GroupMember {
     @Column(name = "class_name")
     private String className;
 
- 
+    @Column(name = "student_id")
+    private String studentId;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 

@@ -136,7 +136,8 @@ CREATE TABLE IF NOT EXISTS class_group_members (
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (class_id) REFERENCES classes(id),
     INDEX idx_user_id (user_id),
-    INDEX idx_class_id (class_id)
+    INDEX idx_class_id (class_id),
+    squad VARCHAR(50) NOT NULL COMMENT '中队'
 );
 
 -- 创建综测材料表
@@ -156,7 +157,8 @@ CREATE TABLE IF NOT EXISTS evaluation_materials (
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (reviewer_id) REFERENCES users(id),
     FOREIGN KEY (class_id) REFERENCES classes(id),
-    INDEX idx_class_id (class_id)
+    INDEX idx_class_id (class_id),
+    squad VARCHAR(50) COMMENT '中队'
 );
 
 -- 创建材料附件表
@@ -227,7 +229,8 @@ CREATE TABLE grade_group_leader (
     grade_id VARCHAR(50) NOT NULL,  -- 例如：2021、2022等
     department VARCHAR(50) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_user_grade (user_id, grade_id)
+    UNIQUE KEY uk_user_grade (user_id, grade_id),
+    squad VARCHAR(50) NOT NULL COMMENT '中队'
 );
 
 -- 插入年级负责人数据，使用实际的年级值
@@ -239,7 +242,8 @@ CREATE TABLE instructor_squad (
     instructor_id BIGINT NOT NULL,
     department VARCHAR(50) NOT NULL,  -- 学院
     grade VARCHAR(4) NOT NULL,        -- 年级，如 2024
-    UNIQUE KEY uk_instructor_squad (instructor_id, department, grade)
+    UNIQUE KEY uk_instructor_squad (instructor_id, department, grade),
+    squad VARCHAR(50) NOT NULL COMMENT '中队'
 );
 
 -- 添加索引
@@ -322,4 +326,7 @@ REFERENCES instructors(instructor_id) ON DELETE RESTRICT;
 ALTER TABLE users ADD INDEX idx_squad (squad);
 ALTER TABLE students ADD INDEX idx_squad (squad);
 ALTER TABLE instructors ADD INDEX idx_squad_list (squad_list);
+
+ALTER TABLE group_members ADD COLUMN student_id VARCHAR(20);
+
 

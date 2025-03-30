@@ -9,8 +9,8 @@
           <div class="header-actions">
             <button 
               class="save-btn" 
+              :disabled="selectedStudents.length === 0"
               @click="saveSelectedMembers"
-              :disabled="!hasChanges"
             >
               保存更改
             </button>
@@ -45,38 +45,31 @@
             </div>
 
             <div class="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th width="50">
-                      <input 
-                        type="checkbox" 
-                        :checked="isAllSelected"
-                        @change="toggleAllSelection"
-                      >
-                    </th>
-                    <th>学号</th>
-                    <th>姓名</th>
-                    <th>专业</th>
-                    <th>班级</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="student in filteredStudents" :key="student.id">
-                    <td>
-                      <input 
-                        type="checkbox" 
-                        :checked="isSelected(student)"
-                        @change="toggleSelection(student)"
-                      >
-                    </td>
-                    <td>{{ student.studentId }}</td>
-                    <td>{{ student.name }}</td>
-                    <td>{{ student.major }}</td>
-                    <td>{{ student.class }}</td>
-                  </tr>
-                </tbody>
-              </table>
+              <el-table
+                ref="tableRef"
+                v-loading="loading"
+                :data="sortedStudents"
+                @selection-change="handleSelectionChange"
+              >
+                <el-table-column 
+                  type="selection" 
+                  :selectable="row => !isAlreadySelected(row)"
+                />
+                <el-table-column prop="studentId" label="学号" />
+                <el-table-column prop="name" label="姓名" />
+                <el-table-column prop="major" label="专业" />
+                <el-table-column prop="className" label="班级" />
+                <el-table-column label="状态" width="100">
+                  <template #default="scope">
+                    <el-tag 
+                      v-if="isAlreadySelected(scope.row)" 
+                      type="success"
+                    >
+                      已选定
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
             </div>
           </div>
 
@@ -92,7 +85,7 @@
                 <div class="student-info">
                   <span class="name">{{ student.name }}</span>
                   <span class="id">{{ student.studentId }}</span>
-                  <span class="class">{{ student.class }}</span>
+                  <span class="class">{{ student.className }}</span>
                 </div>
                 <button 
                   class="remove-btn"
@@ -109,10 +102,13 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted } from 'vue'
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
+import request from '@/utils/request'
+import { ElMessage } from 'element-plus'
 
 // 专业和班级数据
 const majors = ref([
@@ -146,43 +142,20 @@ const selectedMajor = ref('')
 const selectedClass = ref('')
 const selectedStudents = ref([])
 const originalSelection = ref([]) // 用于跟踪更改
+const router = useRouter()
+const loading = ref(false)
+const students = ref([])
+const existingMembers = ref([])
 
 // 计算属性
 const filteredClasses = computed(() => {
   if (!selectedMajor.value) return []
-  return classes.value.filter(c => c.majorId === selectedMajor.value)
-})
-
-const filteredStudents = computed(() => {
-  let result = allStudents.value
-
-  // 按专业筛选
-  if (selectedMajor.value) {
-    const majorName = majors.value.find(m => m.id === selectedMajor.value)?.name
-    result = result.filter(s => s.major === majorName)
-  }
-
-  // 按班级筛选
-  if (selectedClass.value) {
-    const className = classes.value.find(c => c.id === selectedClass.value)?.name
-    result = result.filter(s => s.class === className)
-  }
-
-  // 按搜索关键词筛选
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
-    result = result.filter(s => 
-      s.name.toLowerCase().includes(query) || 
-      s.studentId.toLowerCase().includes(query)
-    )
-  }
-
-  return result
+  return classes.value.filter(c => c.majorId === Number(selectedMajor.value))
 })
 
 const isAllSelected = computed(() => {
-  return filteredStudents.value.length > 0 && 
-         filteredStudents.value.every(s => isSelected(s))
+  return students.value.length > 0 && 
+         students.value.every(s => isSelected(s))
 })
 
 const hasChanges = computed(() => {
@@ -190,7 +163,6 @@ const hasChanges = computed(() => {
          JSON.stringify(originalSelection.value.sort())
 })
 
-// 方法
 const isSelected = (student) => {
   return selectedStudents.value.some(s => s.id === student.id)
 }
@@ -207,10 +179,10 @@ const toggleSelection = (student) => {
 const toggleAllSelection = () => {
   if (isAllSelected.value) {
     selectedStudents.value = selectedStudents.value.filter(s => 
-      !filteredStudents.value.some(fs => fs.id === s.id)
+      !students.value.some(fs => fs.id === s.id)
     )
   } else {
-    const newSelections = filteredStudents.value.filter(s => !isSelected(s))
+    const newSelections = students.value.filter(s => !isSelected(s))
     selectedStudents.value = [...selectedStudents.value, ...newSelections]
   }
 }
@@ -224,33 +196,121 @@ const removeSelection = (student) => {
 
 const saveSelectedMembers = async () => {
   try {
-    // 调用API保存选定的成员
-    // await fetch('/api/evaluation-group/members', {
-    //   method: 'POST',
-    //   body: JSON.stringify(selectedStudents.value)
-    // })
-    
-    // 更新原始选择记录
-    originalSelection.value = selectedStudents.value.map(s => s.id)
-    alert('保存成功！')
+    const response = await request.post('/group-members/batch', {
+      studentIds: selectedStudents.value.map(s => s.studentId)
+    })
+    if (response.data.success) {
+      ElMessage.success('选择成功！')
+      // 重置选择状态
+      selectedStudents.value = []
+      // 刷新数据
+      await fetchExistingMembers()
+      await fetchStudents()
+    }
   } catch (error) {
-    console.error('保存失败:', error)
-    alert('保存失败，请重试')
+    console.error('提交选择失败:', error)
+    ElMessage.error('提交失败，请重试')
   }
+}
+
+const fetchStudents = async () => {
+  loading.value = true
+  try {
+    const response = await request.get('/students/list', {
+      params: {
+        major: selectedMajor.value || undefined,
+        className: selectedClass.value || undefined,
+        keyword: searchQuery.value || undefined
+      }
+    })
+    if (response.data.success) {
+      students.value = response.data.data
+    }
+  } catch (error) {
+    if (error.response?.status === 403) {
+      router.push('/login')
+    }
+    console.error('获取学生列表失败:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+const fetchExistingMembers = async () => {
+  try {
+    const response = await request.get('/group-members')
+    if (response.data.success) {
+      existingMembers.value = response.data.data.map(member => ({
+        ...member,
+        studentId: member.studentId || member.id
+      }))
+      console.log('Processed existing members:', existingMembers.value)
+    }
+  } catch (error) {
+    console.error('获取已选定成员失败:', error)
+  }
+}
+
+const isAlreadySelected = (student) => {
+  console.log('Checking student:', student)
+  const studentId = student.studentId?.toString()
+  console.log(`Comparing member.studentId: ${existingMembers.value.some(member => member.studentId === studentId)} with student.studentId: ${studentId}`)
+  return existingMembers.value.some(member => {
+    return studentId === member.studentId
+  })
+}
+
+const handleSelectionChange = (selection) => {
+  console.log('Selection changed:', selection);
+  selectedStudents.value = selection;
+}
+
+// 添加表格引用以便清除选择状态
+const tableRef = ref()
+
+// 在保存成功后清除表格选择状态
+const clearSelection = () => {
+  tableRef.value?.clearSelection()
 }
 
 // 初始化
 onMounted(async () => {
-  try {
-    // 获取已选成员
-    // const response = await fetch('/api/evaluation-group/members')
-    // const data = await response.json()
-    // selectedStudents.value = data
-    // originalSelection.value = data.map(s => s.id)
-  } catch (error) {
-    console.error('获取数据失败:', error)
-  }
+  await fetchExistingMembers() // 先获取已选成员
+  await fetchStudents()        // 再获取学生列表
 })
+
+// 添加 watch
+watch(selectedStudents, (newValue) => {
+  originalSelection.value = newValue.map(s => s.id)
+})
+
+// 添加监听器以检查数据变化
+watch(existingMembers, (newVal) => {
+  console.log('Existing members updated:', newVal)
+}, { deep: true })
+
+watch(students, (newVal) => {
+  console.log('Students updated:', newVal)
+}, { deep: true })
+
+// 添加调试信息
+watch(() => students.value, (newStudents) => {
+  console.log('Students data structure:', newStudents?.[0]);
+}, { immediate: true, deep: true });
+
+// 添加计算属性对表格数据进行排序
+const sortedStudents = computed(() => {
+  return [...students.value].sort((a, b) => {
+    const aSelected = isAlreadySelected(a);
+    const bSelected = isAlreadySelected(b);
+    if (aSelected === bSelected) {
+      // 如果选择状态相同，按学号排序
+      return a.studentId?.localeCompare(b.studentId) || 0;
+    }
+    // 已选定的排在后面
+    return aSelected ? 1 : -1;
+  });
+});
 </script>
 
 <style scoped>
@@ -338,26 +398,6 @@ onMounted(async () => {
 .table-container {
   flex: 1;
   overflow: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th, td {
-  padding: 12px;
-  text-align: left;
-  border-bottom: 1px solid #ebeef5;
-}
-
-th {
-  background: #f5f7fa;
-  color: #606266;
-  font-weight: 500;
-  position: sticky;
-  top: 0;
-  z-index: 1;
 }
 
 .selected-members {

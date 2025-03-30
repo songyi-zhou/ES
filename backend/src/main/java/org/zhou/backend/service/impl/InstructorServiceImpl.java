@@ -142,4 +142,41 @@ public class InstructorServiceImpl implements InstructorService {
         return matchesKeyword && matchesClass && matchesRole;
     }
 
+    @Transactional
+    public void updateSelectedStudentsRole(String instructorId, List<String> studentIds) throws AccessDeniedException {
+        // 验证导员权限
+        Instructor instructor = instructorRepository.findByInstructorId(instructorId)
+            .orElseThrow(() -> new ResourceNotFoundException("导员不存在"));
+        
+        List<String> squads = Arrays.asList(instructor.getSquadList().split(","));
+        
+        for (String studentId : studentIds) {
+            Student student = studentRepository.findByStudentId(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException("学生不存在: " + studentId));
+            
+            // 验证学生是否在导员负责的中队中
+            if (!squads.contains(student.getSquad())) {
+                throw new AccessDeniedException("无权限修改学生: " + studentId);
+            }
+
+            // 更新用户角色
+            User user = userRepository.findByUserId(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException("用户不存在: " + studentId));
+            
+            // 设置为小组成员角色
+            Set<String> roles = new HashSet<>();
+            roles.add("ROLE_STUDENT");
+            roles.add("ROLE_GROUP_MEMBER");
+            user.setRoles(roles);
+            user.setRoleLevel(1);  // 小组成员的角色等级
+            userRepository.save(user);
+            
+            // 同步更新 Student 表
+            student.setRole("groupMember");
+            studentRepository.save(student);
+            
+            log.info("Updated student {} to group member role", studentId);
+        }
+    }
+
 } 

@@ -292,58 +292,47 @@ const downloadTemplate = async () => {
 }
 
 // 处理文件选择
-const handleFileChange = (file: File) => {
-  fileInfo.value = file
-  addImportLog('系统', 'info', `已选择文件: ${file.name}`)
+const handleFileChange = (file) => {
+  fileInfo.value = file.raw
 }
 
-// 导入Excel
+// 修改导入方法
 const importExcel = async () => {
   if (!fileInfo.value) {
     ElMessage.warning('请先选择文件')
     return
   }
 
+  const formData = new FormData()
+  formData.append('file', fileInfo.value)
+
   try {
     importing.value = true
     importProgress.value = 0
-    
-    const formData = new FormData()
-    formData.append('file', fileInfo.value)
-    
-    const token = localStorage.getItem('token')
-    if (!token) {
-      throw new Error('未登录或登录已过期')
-    }
-    
+
     const response = await request.post('/user-import/excel', formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
-        'Authorization': `Bearer ${token}`  
+        'Content-Type': 'multipart/form-data'
       },
       onUploadProgress: (progressEvent) => {
-        if (progressEvent.total) {
-          importProgress.value = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          )
-        }
+        importProgress.value = Math.round(
+          (progressEvent.loaded * 100) / progressEvent.total
+        )
       }
     })
 
     if (response.data.success) {
       ElMessage.success('导入成功')
-      addImportLog('批量导入', 'success', `成功导入${response.data.data}条记录`)
-    } else {
-      throw new Error(response.data.message)
+      fileInfo.value = null
+      importProgress.value = 100
+      // 刷新日志
+      refreshLogs()
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('导入失败:', error)
-    ElMessage.error(error.message || '导入失败')
-    addImportLog('批量导入', 'error', '导入失败', error.message)
+    ElMessage.error(error.response?.data?.message || '导入失败')
   } finally {
     importing.value = false
-    fileInfo.value = null
-    importProgress.value = 0
   }
 }
 

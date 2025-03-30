@@ -19,6 +19,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,6 +29,7 @@ import org.zhou.backend.entity.GroupMember;
 import org.zhou.backend.entity.User;
 import org.zhou.backend.exception.ResourceNotFoundException;
 import org.zhou.backend.model.request.GroupMemberRequest;
+import org.zhou.backend.model.request.BatchGroupMemberRequest;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.GroupMemberService;
 import org.zhou.backend.service.UserService;
@@ -51,16 +53,11 @@ public class GroupMemberController {
     public ResponseEntity<?> getGroupMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         try {
             User currentUser = userService.getUserById(userPrincipal.getId());
-            List<?> members;
+            List<GroupMember> members = groupMemberService.getExistingGroupMembers(currentUser.getDepartment());
             
-            // 所有用户都只能查看自己中队的成员
-            String classId = currentUser.getClassId();
-            String grade = classId != null ? "20" + classId.substring(2, 4) : null;
-            
-            members = groupMemberService.getSquadGroupMembers(
-                currentUser.getDepartment(), 
-                grade
-            );
+            // 添加日志调试
+            log.info("当前用户部门: {}", currentUser.getDepartment());
+            log.info("查询到的成员数量: {}", members.size());
             
             return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -69,7 +66,7 @@ public class GroupMemberController {
         } catch (Exception e) {
             log.error("获取小组成员失败", e);
             return ResponseEntity.badRequest().body(Map.of(
-                "success", false, 
+                "success", false,
                 "message", e.getMessage()
             ));
         }
@@ -131,6 +128,33 @@ public class GroupMemberController {
             log.error("更新组员班级信息时发生错误 - ID: {}", id, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Collections.singletonMap("error", "更新组员信息失败: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/batch")
+    @PreAuthorize("hasAnyRole('COUNSELOR', 'GROUP_LEADER')")
+    public ResponseEntity<?> batchAddGroupMembers(
+            @RequestBody BatchGroupMemberRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        try {
+            User currentUser = userService.getUserById(userPrincipal.getId());
+            
+            List<GroupMember> addedMembers = groupMemberService.batchAddGroupMembers(
+                request.getStudentIds(),
+                currentUser.getDepartment()
+            );
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "批量添加成员成功",
+                "data", Map.of("addedCount", addedMembers.size())
+            ));
+        } catch (Exception e) {
+            log.error("批量添加小组成员失败", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
         }
     }
 } 

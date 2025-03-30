@@ -1,5 +1,6 @@
 package org.zhou.backend.service.impl;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,11 +15,13 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.zhou.backend.entity.ClassGroupMember;
 import org.zhou.backend.entity.GroupMember;
+import org.zhou.backend.entity.Student;
 import org.zhou.backend.entity.User;
 import org.zhou.backend.exception.ResourceNotFoundException;
 import org.zhou.backend.repository.ClassGroupMemberRepository;
 import org.zhou.backend.repository.ClassRepository;
 import org.zhou.backend.repository.GroupMemberRepository;
+import org.zhou.backend.repository.StudentRepository;
 import org.zhou.backend.repository.UserRepository;
 import org.zhou.backend.service.GroupMemberService;
 
@@ -32,13 +35,29 @@ public class GroupMemberServiceImpl implements GroupMemberService {
     private final GroupMemberRepository groupMemberRepository;
     private final UserRepository userRepository;
     private final ClassRepository classRepository;
+    private final StudentRepository studentRepository;
     private static final Logger log = LoggerFactory.getLogger(GroupMemberServiceImpl.class);
 
     @Override
     public List<Map<String, Object>> getSquadGroupMembers(String department, String grade) {
-        // 从 classId 提取年级，例如 "2401" 提取 "24"
-        String gradePrefix = grade.substring(2, 4);
-        return classGroupMemberRepository.findByDepartmentAndGrade(department, gradePrefix);
+        // 构造中队号，例如 "2024-1"
+        String squad = grade + "-1"; // 这里假设是第一中队，实际使用时需要从用户信息获取完整中队号
+        
+        List<Student> students = studentRepository.findByDepartmentAndSquad(department, squad);
+        
+        return students.stream().map(student -> {
+            Map<String, Object> memberMap = new HashMap<>();
+            memberMap.put("id", student.getId());
+            memberMap.put("studentId", student.getStudentId());
+            memberMap.put("name", student.getName());
+            memberMap.put("department", student.getDepartment());
+            memberMap.put("major", student.getMajor());
+            memberMap.put("className", student.getClassName());
+            memberMap.put("squad", student.getSquad());
+            memberMap.put("role", student.getRole());
+            memberMap.put("createdAt", student.getCreatedAt());
+            return memberMap;
+        }).collect(Collectors.toList());
     }
 
     @Override
@@ -136,5 +155,30 @@ public class GroupMemberServiceImpl implements GroupMemberService {
                 return map;
             })
             .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<GroupMember> batchAddGroupMembers(List<String> studentIds, String department) {
+        List<GroupMember> addedMembers = new ArrayList<>();
+        for (String studentId : studentIds) {
+            User student = userRepository.findByUserId(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException("学生不存在: " + studentId));
+            
+            GroupMember member = new GroupMember();
+            member.setUserId(student.getId());
+            member.setStudentId(student.getUserId());  // 设置学号
+            member.setName(student.getName());
+            member.setDepartment(department);
+            member.setClassName(student.getClassName());
+            member.setGrade(student.getGrade());
+            
+            addedMembers.add(groupMemberRepository.save(member));
+        }
+        return addedMembers;
+    }
+
+    @Override
+    public List<GroupMember> getExistingGroupMembers(String department) {
+        return groupMemberRepository.findByDepartment(department);
     }
 }
