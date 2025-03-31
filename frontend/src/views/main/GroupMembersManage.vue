@@ -404,7 +404,7 @@ const handleAdd = async () => {
   }
 
   try {
-    const response = await request.post('/api/class-group-members/batch', {
+    const response = await request.post('/class-group-members/batch', {
       memberIds: [memberForm.value.memberId]
     })
     if (response.data.success) {

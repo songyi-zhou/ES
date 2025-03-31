@@ -13,6 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.zhou.backend.entity.ClassGroupMember;
 import org.zhou.backend.entity.GroupMember;
 import org.zhou.backend.entity.Student;
@@ -24,6 +25,8 @@ import org.zhou.backend.repository.GroupMemberRepository;
 import org.zhou.backend.repository.StudentRepository;
 import org.zhou.backend.repository.UserRepository;
 import org.zhou.backend.service.GroupMemberService;
+import org.zhou.backend.service.InstructorService;
+import org.zhou.backend.model.request.RoleUpdateRequest;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,26 +39,22 @@ public class GroupMemberServiceImpl implements GroupMemberService {
     private final UserRepository userRepository;
     private final ClassRepository classRepository;
     private final StudentRepository studentRepository;
+    private final InstructorService instructorService;
     private static final Logger log = LoggerFactory.getLogger(GroupMemberServiceImpl.class);
 
     @Override
-    public List<Map<String, Object>> getSquadGroupMembers(String department, String grade) {
-        // 构造中队号，例如 "2024-1"
-        String squad = grade + "-1"; // 这里假设是第一中队，实际使用时需要从用户信息获取完整中队号
-        
-        List<Student> students = studentRepository.findByDepartmentAndSquad(department, squad);
-        
-        return students.stream().map(student -> {
+    public List<Map<String, Object>> getSquadGroupMembers(Long leaderId) {
+        List<GroupMember> members = groupMemberRepository.findByLeaderId(leaderId);
+
+        return members.stream().map(member -> {
             Map<String, Object> memberMap = new HashMap<>();
-            memberMap.put("id", student.getId());
-            memberMap.put("studentId", student.getStudentId());
-            memberMap.put("name", student.getName());
-            memberMap.put("department", student.getDepartment());
-            memberMap.put("major", student.getMajor());
-            memberMap.put("className", student.getClassName());
-            memberMap.put("squad", student.getSquad());
-            memberMap.put("role", student.getRole());
-            memberMap.put("createdAt", student.getCreatedAt());
+            memberMap.put("id", member.getId());
+            memberMap.put("studentId", member.getStudentId());
+            memberMap.put("name", member.getName());
+            memberMap.put("department", member.getDepartment());
+            memberMap.put("className", member.getClassName());
+            memberMap.put("classId", member.getClassId());
+            memberMap.put("grade", member.getGrade());
             return memberMap;
         }).collect(Collectors.toList());
     }
@@ -158,22 +157,24 @@ public class GroupMemberServiceImpl implements GroupMemberService {
     }
 
     @Override
-    public List<GroupMember> batchAddGroupMembers(List<String> studentIds, String department) {
+    @Transactional
+    public List<GroupMember> batchAddGroupMembers(List<String> studentIds, String department, String instructorId) {
         List<GroupMember> addedMembers = new ArrayList<>();
+        
         for (String studentId : studentIds) {
-            User student = userRepository.findByUserId(studentId)
-                .orElseThrow(() -> new ResourceNotFoundException("学生不存在: " + studentId));
+            // 更新用户角色为综测小组成员
+            RoleUpdateRequest roleRequest = new RoleUpdateRequest();
+            roleRequest.setRole("groupmember");
             
-            GroupMember member = new GroupMember();
-            member.setUserId(student.getId());
-            member.setStudentId(student.getUserId());  // 设置学号
-            member.setName(student.getName());
-            member.setDepartment(department);
-            member.setClassName(student.getClassName());
-            member.setGrade(student.getGrade());
+            instructorService.updateStudentRole(studentId, instructorId, roleRequest);
             
-            addedMembers.add(groupMemberRepository.save(member));
+            // 获取更新后的成员信息
+            GroupMember member = groupMemberRepository.findByStudentId(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException("成员不存在: " + studentId));
+            
+            addedMembers.add(member);
         }
+        
         return addedMembers;
     }
 

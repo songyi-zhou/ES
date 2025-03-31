@@ -35,18 +35,10 @@ public class GroupMembersManageController {
     private static final Logger log = LoggerFactory.getLogger(GroupMembersManageController.class);
 
     @GetMapping
+    @PreAuthorize("hasRole('GROUP_LEADER')")
     public ResponseEntity<?> getGroupMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         try {
-            User currentUser = userService.getUserById(userPrincipal.getId());
-            
-            // 获取当前用户所在班级的成员
-            String classId = currentUser.getClassId();
-            String grade = classId != null ? "20" + classId.substring(2, 4) : null;
-            
-            List<Map<String, Object>> members = groupMemberService.getSquadGroupMembers(
-                currentUser.getDepartment(), 
-                grade
-            );
+            List<Map<String, Object>> members = groupMemberService.getSquadGroupMembers(userPrincipal.getId());
             
             return ResponseEntity.ok(Map.of(
                 "success", true,

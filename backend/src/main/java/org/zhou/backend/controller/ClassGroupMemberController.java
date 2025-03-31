@@ -1,20 +1,28 @@
 package org.zhou.backend.controller;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.zhou.backend.dto.BatchClassMemberRequest;
 import org.zhou.backend.entity.User;
+import org.zhou.backend.repository.ClassGroupMemberRepository;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.ClassGroupMemberService;
 import org.zhou.backend.service.UserService;
 
-import java.util.List;
-import java.util.Map;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/class-group-members")
@@ -23,21 +31,22 @@ public class ClassGroupMemberController {
     
     private final ClassGroupMemberService classGroupMemberService;
     private final UserService userService;
+    private final ClassGroupMemberRepository classGroupMemberRepository;
     private static final Logger log = LoggerFactory.getLogger(ClassGroupMemberController.class);
 
     @GetMapping
     @PreAuthorize("hasRole('GROUP_LEADER')")
-    public ResponseEntity<?> getClassMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+    public ResponseEntity<?> getAllClassGroupMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         try {
-            User currentUser = userService.getUserById(userPrincipal.getId());
-            List<Map<String, Object>> members = classGroupMemberService.getClassMembers(currentUser.getClassId());
+            log.info("获取综测负责人(ID:{})负责的中队成员列表", userPrincipal.getId());
+            List<Map<String, Object>> members = classGroupMemberRepository.findAllWithDetailsByLeaderId(userPrincipal.getId());
             
             return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", members
             ));
         } catch (Exception e) {
-            log.error("获取班级成员失败", e);
+            log.error("获取中队成员列表失败", e);
             return ResponseEntity.badRequest().body(Map.of(
                 "success", false,
                 "message", e.getMessage()

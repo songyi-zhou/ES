@@ -28,8 +28,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.zhou.backend.entity.GroupMember;
 import org.zhou.backend.entity.User;
 import org.zhou.backend.exception.ResourceNotFoundException;
-import org.zhou.backend.model.request.GroupMemberRequest;
 import org.zhou.backend.model.request.BatchGroupMemberRequest;
+import org.zhou.backend.model.request.GroupMemberRequest;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.GroupMemberService;
 import org.zhou.backend.service.UserService;
@@ -141,7 +141,8 @@ public class GroupMemberController {
             
             List<GroupMember> addedMembers = groupMemberService.batchAddGroupMembers(
                 request.getStudentIds(),
-                currentUser.getDepartment()
+                currentUser.getDepartment(),
+                userPrincipal.getUsername()  // 作为 instructorId 传入
             );
             
             return ResponseEntity.ok(Map.of(

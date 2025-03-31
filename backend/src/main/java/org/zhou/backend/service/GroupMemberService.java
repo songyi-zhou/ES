@@ -11,7 +11,7 @@ public interface GroupMemberService {
     /**
      * 获取指定学院和年级的小组成员
      */
-    List<Map<String, Object>> getSquadGroupMembers(String department, String grade);
+    List<Map<String, Object>> getSquadGroupMembers(Long leaderId);
     
     /**
      * 获取所有小组成员
@@ -24,7 +24,7 @@ public interface GroupMemberService {
 
     Map<String, Object> updateGroupMemberClass(Long id, String major, String className);
 
-    List<GroupMember> batchAddGroupMembers(List<String> studentIds, String department);
+    List<GroupMember> batchAddGroupMembers(List<String> studentIds, String department, String instructorId);
 
     List<GroupMember> getExistingGroupMembers(String department);
 }

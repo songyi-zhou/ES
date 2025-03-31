@@ -70,26 +70,6 @@ public class InstructorServiceImpl implements InstructorService {
         // 更新用户角色
         updateUserRole(user, request.getRole());
         
-        // 如果是设置为综测负责人，需要添加到 squad_group_leader 表
-        if ("groupLeader".equals(request.getRole())) {
-            SquadGroupLeader squadLeader = new SquadGroupLeader();
-            squadLeader.setUserId(user.getId());
-            squadLeader.setStudentId(studentId);
-            squadLeader.setName(user.getName());
-            squadLeader.setSquad(student.getSquad());
-            squadLeader.setClassName(student.getClassName());
-            squadLeader.setDepartment(student.getDepartment());
-            squadGroupLeaderRepository.save(squadLeader);
-            
-            log.info("Added student {} as squad group leader for squad {}", 
-                    studentId, student.getSquad());
-        }
-        
-        // 如果从综测负责人降级，需要从 squad_group_leader 表中移除
-        if (!"groupLeader".equals(request.getRole())) {
-            squadGroupLeaderRepository.deleteByStudentId(studentId);
-        }
-        
         // 更新学生表中的角色
         student.setRole(request.getRole());
         studentRepository.save(student);
@@ -99,16 +79,26 @@ public class InstructorServiceImpl implements InstructorService {
     
     @Transactional
     protected void updateUserRole(User user, String newRole) {
+        log.info("开始更新用户角色: userId={}, newRole={}", user.getId(), newRole);
+        
         // 先删除现有角色
         userRepository.deleteUserRoles(user.getId());
         userRepository.flush();
+        
+        // 清理旧角色相关数据
+        if (!"groupmember".equals(newRole.toLowerCase())) {
+            groupMemberRepository.deleteByUserId(user.getId());
+        }
+        if (!"groupleader".equals(newRole.toLowerCase())) {
+            squadGroupLeaderRepository.deleteByStudentId(user.getUserId());
+        }
         
         Set<String> roles = new HashSet<>();
         switch (newRole.toLowerCase()) {
             case "user":
                 roles.add("ROLE_STUDENT");
                 user.setRoleLevel(0);
-                // 如果之前是小组成员，需要从 group_members 表中删除
+                // 删除相关记录
                 groupMemberRepository.deleteByUserId(user.getId());
                 break;
             
@@ -116,29 +106,41 @@ public class InstructorServiceImpl implements InstructorService {
                 roles.add("ROLE_STUDENT");
                 roles.add("ROLE_GROUP_MEMBER");
                 user.setRoleLevel(1);
-                // 添加到 group_members 表
-                if (!groupMemberRepository.existsByUserId(user.getId())) {
-                    Student student = studentRepository.findByStudentId(user.getUserId())
-                        .orElseThrow(() -> new ResourceNotFoundException("学生不存在"));
-                        
-                    GroupMember groupMember = new GroupMember();
-                    groupMember.setUserId(user.getId());
-                    groupMember.setStudentId(student.getStudentId());
-                    groupMember.setName(student.getName());
-                    groupMember.setDepartment(student.getDepartment());
-                    groupMember.setClassName(student.getClassName());
-                    groupMember.setClassId(student.getClassId());
-                    groupMember.setGrade("20" + student.getClassId().substring(2, 4));
-                    groupMemberRepository.save(groupMember);
-                }
+                
+                // 添加到 group_members 表，但不设置 classId
+                Student student = studentRepository.findByStudentId(user.getUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("学生不存在"));
+                    
+                GroupMember member = new GroupMember();
+                member.setUserId(user.getId());
+                member.setStudentId(student.getStudentId());
+                member.setName(student.getName());
+                member.setDepartment(student.getDepartment());
+                member.setGrade(student.getSquad().substring(0, 4));  // 从squad提取年级
+                
+                groupMemberRepository.save(member);
                 break;
             
             case "groupleader":
+                log.info("设置为组长角色: userId={}", user.getId());
                 roles.add("ROLE_STUDENT");
                 roles.add("ROLE_GROUP_LEADER");
                 user.setRoleLevel(2);
-                // 如果之前是小组成员，需要从 group_members 表中删除
-                groupMemberRepository.deleteByUserId(user.getId());
+                
+                // 添加到 squad_group_leader 表
+                Student studentLeader = studentRepository.findByStudentId(user.getUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("学生不存在"));
+                    
+                SquadGroupLeader leader = new SquadGroupLeader();
+                leader.setUserId(user.getId());
+                leader.setStudentId(studentLeader.getStudentId());
+                leader.setName(studentLeader.getName());
+                leader.setSquad(studentLeader.getSquad());
+                leader.setClassName(studentLeader.getClassName());
+                leader.setDepartment(studentLeader.getDepartment());
+                
+                log.info("保存组长信息: leader={}", leader);
+                squadGroupLeaderRepository.save(leader);
                 break;
             
             default:
@@ -147,6 +149,7 @@ public class InstructorServiceImpl implements InstructorService {
         
         user.setRoles(roles);
         userRepository.save(user);
+        log.info("用户角色更新完成: userId={}, roles={}", user.getId(), roles);
     }
 
     private String getRoleFromUser(User user) {
