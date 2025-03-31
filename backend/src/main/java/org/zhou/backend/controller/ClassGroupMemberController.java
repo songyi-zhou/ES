@@ -1,0 +1,117 @@
+package org.zhou.backend.controller;
+
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+import org.zhou.backend.dto.BatchClassMemberRequest;
+import org.zhou.backend.entity.User;
+import org.zhou.backend.security.UserPrincipal;
+import org.zhou.backend.service.ClassGroupMemberService;
+import org.zhou.backend.service.UserService;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/class-group-members")
+@RequiredArgsConstructor
+public class ClassGroupMemberController {
+    
+    private final ClassGroupMemberService classGroupMemberService;
+    private final UserService userService;
+    private static final Logger log = LoggerFactory.getLogger(ClassGroupMemberController.class);
+
+    @GetMapping
+    @PreAuthorize("hasRole('GROUP_LEADER')")
+    public ResponseEntity<?> getClassMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        try {
+            User currentUser = userService.getUserById(userPrincipal.getId());
+            List<Map<String, Object>> members = classGroupMemberService.getClassMembers(currentUser.getClassId());
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", members
+            ));
+        } catch (Exception e) {
+            log.error("获取班级成员失败", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
+        }
+    }
+
+    @GetMapping("/available")
+    @PreAuthorize("hasRole('GROUP_LEADER')")
+    public ResponseEntity<?> getAvailableMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        try {
+            User currentUser = userService.getUserById(userPrincipal.getId());
+            List<Map<String, Object>> availableMembers = classGroupMemberService.getAvailableMembers(
+                currentUser.getDepartment(),
+                currentUser.getClassId()
+            );
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", availableMembers
+            ));
+        } catch (Exception e) {
+            log.error("获取可用成员失败", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
+        }
+    }
+
+    @PostMapping("/batch")
+    @PreAuthorize("hasRole('GROUP_LEADER')")
+    public ResponseEntity<?> addClassMembers(
+            @RequestBody BatchClassMemberRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        try {
+            User currentUser = userService.getUserById(userPrincipal.getId());
+            classGroupMemberService.batchAddClassMembers(
+                request.getMemberIds(),
+                currentUser.getClassId()
+            );
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "添加班级成员成功"
+            ));
+        } catch (Exception e) {
+            log.error("添加班级成员失败", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('GROUP_LEADER')")
+    public ResponseEntity<?> removeClassMember(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        try {
+            User currentUser = userService.getUserById(userPrincipal.getId());
+            classGroupMemberService.removeClassMember(id, currentUser.getClassId());
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "移除班级成员成功"
+            ));
+        } catch (Exception e) {
+            log.error("移除班级成员失败", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
+        }
+    }
+} 
