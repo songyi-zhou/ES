@@ -8,7 +8,7 @@
           <h2>综测小组成员管理</h2>
           <button class="add-btn" @click="showAddMemberDialog">
             <i class="el-icon-plus"></i>
-            添加成员
+            为组员指定班级
           </button>
         </div>
 
@@ -54,7 +54,7 @@
         <!-- 添加成员弹窗 -->
         <el-dialog
           v-model="showAddModal"
-          title="添加新成员"
+          title="请分配班级"
           width="500px"
         >
           <el-form ref="memberForm" :model="memberForm" label-width="80px">
@@ -112,7 +112,7 @@
           <template #footer>
             <span class="dialog-footer">
               <button class="btn-cancel" @click="showAddModal = false">取消</button>
-              <button class="btn-primary" @click="handleAdd">添加</button>
+              <button class="btn-primary" @click="handleAdd">分配</button>
             </span>
           </template>
         </el-dialog>
