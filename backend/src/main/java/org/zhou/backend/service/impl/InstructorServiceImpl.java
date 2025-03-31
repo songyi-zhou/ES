@@ -7,96 +7,152 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.zhou.backend.entity.GroupMember;
 import org.zhou.backend.entity.Instructor;
+import org.zhou.backend.entity.SquadGroupLeader;
 import org.zhou.backend.entity.Student;
 import org.zhou.backend.entity.User;
 import org.zhou.backend.exception.ResourceNotFoundException;
 import org.zhou.backend.model.dto.StudentDTO;
 import org.zhou.backend.model.request.RoleUpdateRequest;
+import org.zhou.backend.repository.GroupMemberRepository;
 import org.zhou.backend.repository.InstructorRepository;
+import org.zhou.backend.repository.RoleRepository;
+import org.zhou.backend.repository.SquadGroupLeaderRepository;
 import org.zhou.backend.repository.StudentRepository;
 import org.zhou.backend.repository.UserRepository;
 import org.zhou.backend.service.InstructorService;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Transactional
 @RequiredArgsConstructor
-@Slf4j
 public class InstructorServiceImpl implements InstructorService {
     private final UserRepository userRepository;
     private final StudentRepository studentRepository;
     private final InstructorRepository instructorRepository;
+    private final RoleRepository roleRepository;
+    private final SquadGroupLeaderRepository squadGroupLeaderRepository;
+    private final GroupMemberRepository groupMemberRepository;
+    private static final Logger log = LoggerFactory.getLogger(InstructorServiceImpl.class);
 
-    // ... 其他方法保持不变 ...
-
+    @Override
     @Transactional
-    private void updateUserRole(User user, String newRole) {
+    public void updateStudentRole(String studentId, String instructorId, RoleUpdateRequest request) 
+        throws org.springframework.security.access.AccessDeniedException {
+        // 1. 验证导员权限
+        Instructor instructor = instructorRepository.findByInstructorId(instructorId)
+            .orElseThrow(() -> new ResourceNotFoundException("导员不存在"));
+        
+        // 2. 获取导员负责的中队列表
+        List<String> squads = Arrays.asList(instructor.getSquadList().split(","));
+        
+        // 3. 获取学生信息
+        Student student = studentRepository.findByStudentId(studentId)
+            .orElseThrow(() -> new ResourceNotFoundException("学生不存在: " + studentId));
+        
+        // 4. 验证学生是否在导员负责的中队中
+        if (!squads.contains(student.getSquad())) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "无权限修改该学生: " + studentId + "，该学生不在您负责的中队内"
+            );
+        }
+        
+        // 5. 获取用户信息并更新角色
+        User user = userRepository.findByUserId(studentId)
+            .orElseThrow(() -> new ResourceNotFoundException("用户不存在: " + studentId));
+
+        // 更新用户角色
+        updateUserRole(user, request.getRole());
+        
+        // 如果是设置为综测负责人，需要添加到 squad_group_leader 表
+        if ("groupLeader".equals(request.getRole())) {
+            SquadGroupLeader squadLeader = new SquadGroupLeader();
+            squadLeader.setUserId(user.getId());
+            squadLeader.setStudentId(studentId);
+            squadLeader.setName(user.getName());
+            squadLeader.setSquad(student.getSquad());
+            squadLeader.setClassName(student.getClassName());
+            squadLeader.setDepartment(student.getDepartment());
+            squadGroupLeaderRepository.save(squadLeader);
+            
+            log.info("Added student {} as squad group leader for squad {}", 
+                    studentId, student.getSquad());
+        }
+        
+        // 如果从综测负责人降级，需要从 squad_group_leader 表中移除
+        if (!"groupLeader".equals(request.getRole())) {
+            squadGroupLeaderRepository.deleteByStudentId(studentId);
+        }
+        
+        // 更新学生表中的角色
+        student.setRole(request.getRole());
+        studentRepository.save(student);
+        
+        log.info("Updated student {} role to {}", studentId, request.getRole());
+    }
+    
+    @Transactional
+    protected void updateUserRole(User user, String newRole) {
         // 先删除现有角色
         userRepository.deleteUserRoles(user.getId());
-        userRepository.flush();  // 确保删除操作立即执行
+        userRepository.flush();
         
         Set<String> roles = new HashSet<>();
-        switch (newRole) {
+        switch (newRole.toLowerCase()) {
             case "user":
                 roles.add("ROLE_STUDENT");
                 user.setRoleLevel(0);
+                // 如果之前是小组成员，需要从 group_members 表中删除
+                groupMemberRepository.deleteByUserId(user.getId());
                 break;
-            case "groupMember":
+            
+            case "groupmember":
                 roles.add("ROLE_STUDENT");
                 roles.add("ROLE_GROUP_MEMBER");
                 user.setRoleLevel(1);
+                // 添加到 group_members 表
+                if (!groupMemberRepository.existsByUserId(user.getId())) {
+                    Student student = studentRepository.findByStudentId(user.getUserId())
+                        .orElseThrow(() -> new ResourceNotFoundException("学生不存在"));
+                        
+                    GroupMember groupMember = new GroupMember();
+                    groupMember.setUserId(user.getId());
+                    groupMember.setStudentId(student.getStudentId());
+                    groupMember.setName(student.getName());
+                    groupMember.setDepartment(student.getDepartment());
+                    groupMember.setClassName(student.getClassName());
+                    groupMember.setClassId(student.getClassId());
+                    groupMember.setGrade("20" + student.getClassId().substring(2, 4));
+                    groupMemberRepository.save(groupMember);
+                }
                 break;
-            case "groupLeader":
+            
+            case "groupleader":
                 roles.add("ROLE_STUDENT");
                 roles.add("ROLE_GROUP_LEADER");
                 user.setRoleLevel(2);
+                // 如果之前是小组成员，需要从 group_members 表中删除
+                groupMemberRepository.deleteByUserId(user.getId());
                 break;
+            
             default:
-                throw new IllegalArgumentException("无效的角色类型");
+                throw new IllegalArgumentException("无效的角色类型: " + newRole);
         }
         
         user.setRoles(roles);
+        userRepository.save(user);
     }
 
     private String getRoleFromUser(User user) {
         if (user.getRoleLevel() == 2) return "groupLeader";     // 综测负责人
         if (user.getRoleLevel() == 1) return "groupMember";     // 综测小组成员
         return "user";                                          // 普通学生
-    }
-
-    @Override
-    @Transactional
-    public void updateStudentRole(String instructorId, String studentId, RoleUpdateRequest request) throws AccessDeniedException {
-        log.info("Updating role for student {} by instructor {}, new role: {}", studentId, instructorId, request.getRole());
-        
-        // 验证导员权限
-        Instructor instructor = instructorRepository.findByInstructorId(instructorId)
-            .orElseThrow(() -> new ResourceNotFoundException("导员不存在"));
-        
-        List<String> squads = Arrays.asList(instructor.getSquadList().split(","));
-        Student student = studentRepository.findByStudentId(studentId)
-            .orElseThrow(() -> new ResourceNotFoundException("学生不存在"));
-        
-        // 验证学生是否在导员负责的中队中
-        if (!squads.contains(student.getSquad())) {
-            throw new AccessDeniedException("无权限修改该学生");
-        }
-
-        // 更新用户角色
-        User user = userRepository.findByUserId(studentId)
-            .orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
-        
-        // 更新 User 表中的角色
-        updateUserRole(user, request.getRole());
-        userRepository.save(user);
-        
-        // 同步更新 Student 表中的角色
-        student.setRole(request.getRole());
-        studentRepository.save(student);
     }
 
     @Override
@@ -142,6 +198,7 @@ public class InstructorServiceImpl implements InstructorService {
         return matchesKeyword && matchesClass && matchesRole;
     }
 
+    @Override
     @Transactional
     public void updateSelectedStudentsRole(String instructorId, List<String> studentIds) throws AccessDeniedException {
         // 验证导员权限
@@ -154,28 +211,14 @@ public class InstructorServiceImpl implements InstructorService {
             Student student = studentRepository.findByStudentId(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("学生不存在: " + studentId));
             
-            // 验证学生是否在导员负责的中队中
             if (!squads.contains(student.getSquad())) {
-                throw new AccessDeniedException("无权限修改学生: " + studentId);
+                throw new AccessDeniedException("无权限修改该学生: " + studentId);
             }
-
-            // 更新用户角色
+            
             User user = userRepository.findByUserId(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("用户不存在: " + studentId));
             
-            // 设置为小组成员角色
-            Set<String> roles = new HashSet<>();
-            roles.add("ROLE_STUDENT");
-            roles.add("ROLE_GROUP_MEMBER");
-            user.setRoles(roles);
-            user.setRoleLevel(1);  // 小组成员的角色等级
-            userRepository.save(user);
-            
-            // 同步更新 Student 表
-            student.setRole("groupMember");
-            studentRepository.save(student);
-            
-            log.info("Updated student {} to group member role", studentId);
+            updateUserRole(user, "groupmember");  // 批量更新为小组成员
         }
     }
 

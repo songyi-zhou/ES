@@ -117,14 +117,14 @@ public class InstructorController {
             @RequestBody RoleUpdateRequest request,
             Principal principal) {
         try {
-            instructorService.updateStudentRole(principal.getName(), studentId, request);
+            instructorService.updateStudentRole(studentId, principal.getName(), request);
             return ResponseEntity.ok(Map.of(
                 "message", "权限修改成功",
                 "studentId", studentId,
                 "newRole", request.getRole(),
                 "updatedBy", principal.getName()
             ));
-        } catch (java.nio.file.AccessDeniedException e) {
+        } catch (org.springframework.security.access.AccessDeniedException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(Map.of("message", e.getMessage()));
         }

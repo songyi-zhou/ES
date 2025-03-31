@@ -329,4 +329,4 @@ ALTER TABLE instructors ADD INDEX idx_squad_list (squad_list);
 
 ALTER TABLE group_members ADD COLUMN student_id VARCHAR(20);
 
-
+--group_members用来存储所有综测小组成员信息

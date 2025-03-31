@@ -60,11 +60,9 @@
             <el-table-column prop="userId" label="学号" min-width="120" sortable />
             <el-table-column prop="name" label="姓名" min-width="100" sortable />
             <el-table-column prop="className" label="班级" min-width="120" sortable />
-            <el-table-column label="角色" min-width="100" sortable>
+            <el-table-column label="角色" width="120">
               <template #default="{ row }">
-                <el-tag :type="getRoleTagType(row.role)">
-                  {{ getRoleDisplayName(row.role) }}
-                </el-tag>
+                {{ getRoleDisplayName(row.role) }}
               </template>
             </el-table-column>
             <el-table-column prop="squad" label="中队" min-width="100" />
@@ -87,7 +85,7 @@
                 <el-button
                   type="info"
                   size="small"
-                  @click="viewUserDetails(row)"
+                  @click="handleDetail(row)"
                 >
                   详情
                 </el-button>
@@ -205,6 +203,13 @@
           </div>
         </el-dialog>
 
+        <!-- 学生详情对话框 -->
+        <StudentDetailDialog
+          :visible="dialogVisible"
+          :student="currentStudent"
+          @update:visible="handleDialogClose"
+        />
+
         <!-- 添加用于调试的内容 -->
         <div v-if="false">
           当前角色选项: {{ roleOptions }}
@@ -222,8 +227,10 @@ import request from '@/utils/request.ts'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 import { useUserStore } from '@/stores/user'
+import StudentDetailDialog from './components/StudentDetailDialog.vue'
 
 const userStore = useUserStore()
+const currentUser = ref(userStore.currentUser)
 
 // 搜索和筛选相关
 const searchKeyword = ref('')
@@ -277,31 +284,20 @@ const fetchRoleOptions = async () => {
   }
 }
 
-// 角色映射
-const roleMap = {
+// 角色显示名称映射
+const roleDisplayNames = {
   'user': '普通学生',
-  'groupMember': '综测小组成员',
-  'groupLeader': '综测小组负责人'
-}
+  'groupMember': '组员',
+  'groupLeader': '组长'
+};
 
 // 获取角色显示名称
 const getRoleDisplayName = (role) => {
-  return roleMap[role] || role
-}
-
-// 获取角色标签类型
-const getRoleTagType = (role) => {
-  const typeMap = {
-    user: '',
-    groupMember: 'success',
-    groupLeader: 'warning'
-  }
-  return typeMap[role] || ''
-}
+  return roleDisplayNames[role] || '普通学生';
+};
 
 // 获取学生列表
-const fetchUsers = async () => {
-  loading.value = true
+const fetchStudents = async () => {
   try {
     const response = await request.get('/instructor/students', {
       params: {
@@ -310,15 +306,14 @@ const fetchUsers = async () => {
         role: filterRole.value
       }
     });
-    users.value = Array.isArray(response.data) ? response.data : [];
+    
+    // 直接使用后端返回的数据，不需要转换
+    users.value = response.data;
   } catch (error) {
-    console.error('获取学生列表失败:', error.message);
+    console.error('获取学生列表失败:', error);
     ElMessage.error('获取学生列表失败');
-    users.value = [];
-  } finally {
-    loading.value = false;
   }
-}
+};
 
 // 过滤后的用户列表
 const filteredUsers = computed(() => {
@@ -384,7 +379,7 @@ const submitRoleChange = async () => {
     roleDialogVisible.value = false
     
     // 重新获取用户列表
-    await fetchUsers()
+    await fetchStudents()
   } catch (error) {
     if (error === 'cancel') {
       // 用户取消了操作
@@ -404,50 +399,44 @@ const submitRoleChange = async () => {
 // 处理分页大小变化
 const handleSizeChange = (val) => {
   pageSize.value = val
-  fetchUsers()
+  fetchStudents()
 }
 
 // 处理当前页变化
 const handleCurrentChange = (val) => {
   currentPage.value = val
-  fetchUsers()
+  fetchStudents()
 }
 
 // 处理搜索
 const handleSearch = () => {
   currentPage.value = 1
-  fetchUsers()
+  fetchStudents()
 }
 
 // 处理搜索清除
 const handleSearchClear = () => {
   currentPage.value = 1
-  fetchUsers()
+  fetchStudents()
 }
 
 // 处理筛选条件变化
 const handleFilterChange = () => {
   currentPage.value = 1
-  fetchUsers()
+  fetchStudents()
 }
 
 // 在组件挂载时获取角色列表
 onMounted(() => {
-  // 检查是否有 token
-  const token = localStorage.getItem('token')
-  if (!token) {
-    ElMessage.error('请先登录')
-    // 重定向到登录页
-    window.location.href = '/login'
-    return
-  }
+  // 如果需要刷新用户信息，可以调用 store 中的相关方法
+  // 比如 userStore.getUserInfo() 或其他已定义的方法
   fetchRoleOptions()
-  fetchUsers()
+  fetchStudents()
 })
 
 // 监听分页和筛选条件变化
 watch([currentPage, pageSize], () => {
-  fetchUsers()
+  fetchStudents()
 }, { immediate: true })
 
 const handleRoleSubmit = async () => {
@@ -464,7 +453,7 @@ const handleRoleSubmit = async () => {
     
     ElMessage.success('修改权限成功')
     roleDialogVisible.value = false
-    fetchUsers()
+    fetchStudents()
   } catch (error) {
     console.error('修改权限失败:', error)
     ElMessage.error('修改权限失败')
@@ -483,6 +472,53 @@ const formatDate = (row, column) => {
     minute: '2-digit',
     second: '2-digit'
   });
+}
+
+// 修改角色更新方法
+const handleRoleChange = async (row, newRole) => {
+  try {
+    const response = await request.put(`/instructor/student/${row.userId}/role`, {
+      role: newRole,
+      reason: '角色更新'
+    });
+    
+    if (response.data.message === '权限修改成功') {
+      ElMessage.success('角色更新成功');
+      await fetchStudents(); // 刷新列表
+    }
+  } catch (error) {
+    console.error('角色更新失败:', error);
+    ElMessage.error('角色更新失败：' + (error.response?.data?.message || error.message));
+  }
+};
+
+// 获取角色标签类型
+const getRoleTagType = (role) => {
+  const typeMap = {
+    'user': '',
+    'groupMember': 'success',
+    'groupLeader': 'warning'
+  }
+  return typeMap[role] || ''
+}
+
+const dialogVisible = ref(false)
+
+// 显示学生详情
+const handleDetail = (row) => {
+  currentStudent.value = {
+    userId: row.studentId,
+    name: row.name,
+    className: row.className,
+    squad: row.squad,
+    role: row.role,
+    assignTime: row.assignTime
+  }
+  dialogVisible.value = true
+}
+
+const handleDialogClose = (val) => {
+  dialogVisible.value = val
 }
 </script>
 
@@ -645,5 +681,25 @@ const formatDate = (row, column) => {
 
 .role-select {
   width: 100%;
+}
+
+.student-detail {
+  padding: 20px;
+}
+
+.detail-item {
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+}
+
+.label {
+  width: 100px;
+  color: #606266;
+  font-weight: 500;
+}
+
+.detail-item span:last-child {
+  color: #333;
 }
 </style>

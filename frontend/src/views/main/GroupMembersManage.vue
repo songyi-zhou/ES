@@ -6,7 +6,7 @@
       <main class="main-content">
         <div class="page-header">
           <h2>综测小组成员管理</h2>
-          <button class="add-btn" @click="showAddModal = true">
+          <button class="add-btn" @click="showAddMemberDialog">
             <i class="el-icon-plus"></i>
             添加成员
           </button>
@@ -33,74 +33,89 @@
 
         <!-- 成员列表 -->
         <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>姓名</th>
-                <th>负责班级</th>
-                <th>专业</th>
-                <th>学院</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="member in filteredMembers" :key="member.id">
-                <td>{{ member.name }}</td>
-                <td>{{ member.classId }}</td>
-                <td>{{ member.major }}</td>
-                <td>{{ member.department }}</td>
-                <td class="actions">
-                  <button class="edit-btn" @click="editMember(member)">修改</button>
-                  <button class="delete-btn" @click="confirmDelete(member)">删除</button>
-                </td>
-              </tr>
-              <tr v-if="filteredMembers.length === 0">
-                <td colspan="5" class="no-data">暂无数据</td>
-              </tr>
-            </tbody>
-          </table>
+          <el-table :data="members" border stripe>
+            <el-table-column prop="name" label="姓名" />
+            <el-table-column prop="className" label="负责班级" />
+            <el-table-column prop="major" label="专业" />
+            <el-table-column prop="department" label="学院" />
+            <el-table-column label="操作" width="200">
+              <template #default="{ row }">
+                <el-button type="primary" size="small" @click="editMember(row)">
+                  修改
+                </el-button>
+                <el-button type="danger" size="small" @click="confirmDelete(row)">
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
 
-        <!-- 添加/编辑成员弹窗 -->
-        <div v-if="showAddModal || showEditModal" class="modal">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h3>{{ showEditModal ? '修改成员信息' : '添加新成员' }}</h3>
-              <button class="close-btn" @click="closeModal">×</button>
-            </div>
+        <!-- 添加成员弹窗 -->
+        <el-dialog
+          v-model="showAddModal"
+          title="添加新成员"
+          width="500px"
+        >
+          <el-form ref="memberForm" :model="memberForm" label-width="80px">
+            <el-form-item label="姓名">
+              <select 
+                v-model="memberForm.memberId"
+                class="form-select"
+                @change="handleMemberSelect"
+              >
+                <option value="">请选择成员</option>
+                <option
+                  v-for="member in availableMembers"
+                  :key="member.userId"
+                  :value="member.userId"
+                >
+                  {{ member.name }}
+                </option>
+              </select>
+            </el-form-item>
             
-            <div class="form-group">
-              <label>专业：</label>
-              <select v-model="memberForm.major" @change="handleMajorChange">
+            <el-form-item label="专业">
+              <select 
+                v-model="memberForm.major"
+                class="form-select"
+                @change="handleMajorChange"
+              >
                 <option value="">请选择专业</option>
-                <option v-for="major in majors" :key="major" :value="major">
+                <option
+                  v-for="major in majors"
+                  :key="major"
+                  :value="major"
+                >
                   {{ major }}
                 </option>
               </select>
-            </div>
-
-            <div class="form-group">
-              <label>班级：</label>
-              <select v-model="memberForm.className" :disabled="!memberForm.major">
+            </el-form-item>
+            
+            <el-form-item label="班级">
+              <select 
+                v-model="memberForm.className"
+                class="form-select"
+              >
                 <option value="">请选择班级</option>
-                <option 
-                  v-for="class_ in filteredClasses" 
-                  :key="class_.id" 
-                  :value="class_.name"
+                <option
+                  v-for="cls in filteredClasses"
+                  :key="cls.classId"
+                  :value="cls.classId"
                 >
-                  {{ class_.name }}
+                  {{ cls.name }}
                 </option>
               </select>
-            </div>
-
-            <div class="modal-actions">
-              <button @click="submitMember" class="btn-primary">
-                {{ showEditModal ? '保存修改' : '添加' }}
-              </button>
-              <button @click="closeModal" class="btn-secondary">取消</button>
-            </div>
-          </div>
-        </div>
+            </el-form-item>
+          </el-form>
+          
+          <template #footer>
+            <span class="dialog-footer">
+              <button class="btn-cancel" @click="showAddModal = false">取消</button>
+              <button class="btn-primary" @click="handleAdd">添加</button>
+            </span>
+          </template>
+        </el-dialog>
 
         <!-- 删除确认弹窗 -->
         <div v-if="showDeleteModal" class="modal">
@@ -141,18 +156,9 @@ const filteredMembers = ref([])
 // 获取成员列表
 const fetchMembers = async () => {
   try {
-    const response = await request.get('/group-members')
+    const response = await request.get('/class-group-members')
     if (response.data.success) {
-      members.value = response.data.data.map(member => ({
-        id: member.id,
-        name: member.name,
-        classId: member.classId,
-        major: member.major,
-        department: member.department
-      }))
-      filterMembers() // 初始化时应用筛选
-    } else {
-      ElMessage.error(response.data.message || '获取成员列表失败')
+      members.value = response.data.data
     }
   } catch (error) {
     console.error('获取成员列表失败:', error)
@@ -190,8 +196,13 @@ const availableClasses = computed(() => {
 
 const classes = ref([])
 const memberForm = ref({
-  major: '',
-  className: ''
+  memberId: '',
+  className: '',
+  major: ''
+})
+const selectedMemberInfo = ref({
+  className: '',
+  major: ''
 })
 
 // 获取班级数据
@@ -199,17 +210,11 @@ const fetchClasses = async () => {
   try {
     const response = await request.get('/classes')
     if (response.data.success) {
-      classes.value = response.data.data.map(c => ({
-        id: c.id,
-        name: c.name,  // 直接使用班级名称，如 "1班"
-        displayName: `${c.major}${c.name}`,  // 保留完整名称用于显示
-        classId: c.id,  // 数据库中的 id，例如: "CS2101"
-        major: c.major
-      }))
+      classes.value = response.data.data
     }
   } catch (error) {
-    console.error('获取班级数据失败:', error)
-    ElMessage.error('获取班级数据失败')
+    console.error('获取班级列表失败:', error)
+    ElMessage.error('获取班级列表失败')
   }
 }
 
@@ -218,13 +223,7 @@ const majors = ref<string[]>([])
 // 获取专业列表
 const fetchMajors = async () => {
   try {
-    const token = localStorage.getItem('token')
-    const response = await request.get('/api/classes/majors', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
-      baseURL: 'http://localhost:8080'  // 添加后端基础URL
-    })
+    const response = await request.get('/classes/majors')
     if (response.data.success) {
       majors.value = response.data.data
     }
@@ -250,11 +249,13 @@ const showAddModal = ref(false)
 const showEditModal = ref(false)
 const showDeleteModal = ref(false)
 const selectedMember = ref(null)
+const isEditing = ref(false)
 
 // 打开编辑模态框
 const editMember = (member) => {
   selectedMember.value = member
   memberForm.value = {
+    memberId: member.userId,
     major: member.major,
     className: member.classId
   }
@@ -272,8 +273,9 @@ const closeModal = () => {
   showAddModal.value = false
   showEditModal.value = false
   memberForm.value = {
-    major: '',
-    className: ''
+    memberId: '',
+    className: '',
+    major: ''
   }
   selectedMember.value = null
 }
@@ -356,12 +358,70 @@ watch([selectedMajor, selectedClass], () => {
   filterMembers()
 })
 
+const availableMembers = ref([])
+
+// 获取可选成员列表
+const fetchAvailableMembers = async () => {
+  try {
+    const response = await request.get('/class-group-members/available')
+    if (response.data.success) {
+      availableMembers.value = response.data.data
+    }
+  } catch (error) {
+    console.error('获取可选成员失败:', error)
+    ElMessage.error('获取可选成员失败')
+  }
+}
+
+// 选择成员时更新信息
+const handleMemberSelect = (userId) => {
+  const selected = availableMembers.value.find(member => member.userId === userId)
+  if (selected) {
+    selectedMemberInfo.value = {
+      className: selected.className,
+      major: selected.major
+    }
+  }
+}
+
+// 打开添加弹窗时获取可选成员
+const showAddMemberDialog = () => {
+  showAddModal.value = true
+  fetchAvailableMembers()
+  fetchMajors()
+  fetchClasses()
+  memberForm.value = { 
+    memberId: '',
+    major: '',
+    className: ''
+  }
+}
+
+const handleAdd = async () => {
+  if (!memberForm.value.memberId) {
+    ElMessage.error('请选择成员')
+    return
+  }
+
+  try {
+    const response = await request.post('/api/class-group-members/batch', {
+      memberIds: [memberForm.value.memberId]
+    })
+    if (response.data.success) {
+      ElMessage.success('添加成功')
+      showAddModal.value = false
+      await fetchMembers()
+    }
+  } catch (error) {
+    console.error('添加失败:', error)
+    ElMessage.error('添加失败')
+  }
+}
+
 onMounted(() => {
-  Promise.all([
-    fetchMembers(),
-    fetchClasses(),
-    fetchMajors()
-  ])
+  fetchMembers()
+  fetchMajors()
+  fetchClasses()
 })
 </script>
 
@@ -648,5 +708,67 @@ th {
 .form-group select:disabled {
   background: #f5f7fa;
   cursor: not-allowed;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+:deep(.el-select) {
+  width: 100%;
+}
+
+.form-select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #606266;
+  background-color: #fff;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #606266;
+  background-color: #f5f7fa;
+}
+
+.form-input:disabled {
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  padding: 8px 20px;
+  background-color: #409eff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-cancel {
+  padding: 8px 20px;
+  background-color: #fff;
+  color: #606266;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  margin-right: 10px;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background-color: #66b1ff;
+}
+
+.btn-cancel:hover {
+  background-color: #f5f7fa;
 }
 </style>

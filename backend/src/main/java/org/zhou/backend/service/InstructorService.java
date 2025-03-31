@@ -7,7 +7,8 @@ import org.zhou.backend.model.dto.StudentDTO;
 import org.zhou.backend.model.request.RoleUpdateRequest;
 
 public interface InstructorService {
-    void updateStudentRole(String instructorId, String studentId, RoleUpdateRequest request) throws AccessDeniedException;
+    void updateStudentRole(String studentId, String instructorId, RoleUpdateRequest request) 
+        throws org.springframework.security.access.AccessDeniedException;
     List<StudentDTO> getStudentsByInstructor(String instructorId, String keyword, String className, String role);
     void updateSelectedStudentsRole(String instructorId, List<String> studentIds) throws AccessDeniedException;
 } 

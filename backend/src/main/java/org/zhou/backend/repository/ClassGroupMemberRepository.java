@@ -27,4 +27,6 @@ public interface ClassGroupMemberRepository extends JpaRepository<ClassGroupMemb
            "u.major as major) " +
            "FROM ClassGroupMember cgm JOIN User u ON cgm.userId = u.id")
     List<Map<String, Object>> findAllWithDetails();
+
+    List<ClassGroupMember> findByClassId(String classId);
 } 
