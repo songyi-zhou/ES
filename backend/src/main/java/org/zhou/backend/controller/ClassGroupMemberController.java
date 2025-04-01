@@ -21,6 +21,8 @@ import org.zhou.backend.repository.ClassGroupMemberRepository;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.ClassGroupMemberService;
 import org.zhou.backend.service.UserService;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.http.HttpStatus;
 
 import lombok.RequiredArgsConstructor;
 
@@ -33,29 +35,33 @@ public class ClassGroupMemberController {
     private final UserService userService;
     private final ClassGroupMemberRepository classGroupMemberRepository;
     private static final Logger log = LoggerFactory.getLogger(ClassGroupMemberController.class);
+    private final JdbcTemplate jdbcTemplate;
 
     @GetMapping
     @PreAuthorize("hasRole('GROUP_LEADER')")
-    public ResponseEntity<?> getAllClassGroupMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+    public ResponseEntity<?> getClassGroupMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("获取综测负责人(ID:{})负责的中队成员列表", userPrincipal.getId());
+        
         try {
-            log.info("获取综测负责人(ID:{})负责的中队成员列表", userPrincipal.getId());
-            List<Map<String, Object>> members = classGroupMemberRepository.findAllWithDetailsByLeaderId(userPrincipal.getId());
+            // 查询当前用户负责的班级成员
+            List<Map<String, Object>> members = classGroupMemberService.getGroupMembersByLeaderId(userPrincipal.getId());
             
             return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", members
             ));
         } catch (Exception e) {
-            log.error("获取中队成员列表失败", e);
-            return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "message", e.getMessage()
-            ));
+            log.error("获取班级成员列表失败", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                        "success", false,
+                        "message", "获取班级成员列表失败: " + e.getMessage()
+                    ));
         }
     }
 
     @GetMapping("/available")
-    @PreAuthorize("hasRole('GROUP_LEADER')")
+    @PreAuthorize("hasAnyRole('GROUP_LEADER', 'INSTRUCTOR')")
     public ResponseEntity<?> getAvailableMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         try {
             User currentUser = userService.getUserById(userPrincipal.getId());

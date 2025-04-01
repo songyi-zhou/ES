@@ -13,6 +13,10 @@ public class ClassGroupMember {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
+    private String name;
+    private String department;
+    private String major;
+    
     @Column(name = "class_id")
     private String classId;
     

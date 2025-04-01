@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.zhou.backend.entity.ClassGroupMember;
 import org.zhou.backend.entity.GroupMember;
 
 @Service
@@ -19,7 +20,7 @@ public interface GroupMemberService {
     List<Map<String, Object>> getAllGroupMembers();
 
     GroupMember addGroupMember(Long memberId, Long majorId, String className, String leaderName, String department);
-    GroupMember updateGroupMember(Long id, String major, String className);
+    ClassGroupMember updateGroupMember(Long id, String major, String className);
     void deleteGroupMember(Long id);
 
     Map<String, Object> updateGroupMemberClass(Long id, String major, String className);
@@ -27,4 +28,6 @@ public interface GroupMemberService {
     List<GroupMember> batchAddGroupMembers(List<String> studentIds, String department, String instructorId);
 
     List<GroupMember> getExistingGroupMembers(String department);
+
+    Map<String, Object> assignMemberToClass(Long memberId, String major, String className, Long leaderId);
 }

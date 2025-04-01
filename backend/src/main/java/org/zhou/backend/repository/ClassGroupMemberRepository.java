@@ -24,10 +24,11 @@ public interface ClassGroupMemberRepository extends JpaRepository<ClassGroupMemb
 
     @Query("SELECT new map(cgm.id as id, cgm.userId as userId, cgm.classId as classId, " +
            "cgm.createdAt as createdAt, u.name as name, u.department as department, " +
-           "u.major as major, s.squad as squad) " +
+           "gm.major as major, s.squad as squad) " +
            "FROM ClassGroupMember cgm " +
            "JOIN User u ON cgm.userId = u.id " +
            "JOIN Student s ON u.userId = s.studentId " +
+           "JOIN GroupMember gm ON cgm.userId = gm.userId " +
            "WHERE s.squad IN " +
            "(SELECT DISTINCT sgl.squad FROM SquadGroupLeader sgl WHERE sgl.userId = :leaderId)")
     List<Map<String, Object>> findAllWithDetailsByLeaderId(@Param("leaderId") Long leaderId);

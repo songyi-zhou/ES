@@ -9,4 +9,10 @@ export const formatDate = (dateString) => {
     minute: '2-digit',
     second: '2-digit'
   });
+};
+
+export const formatDateTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleString();
 }; 

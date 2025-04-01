@@ -11,4 +11,7 @@ import org.zhou.backend.entity.SchoolClass;
 public interface ClassRepository extends JpaRepository<SchoolClass, String> {
     @Query("SELECT DISTINCT c.major FROM SchoolClass c ORDER BY c.major")
     List<String> findDistinctMajors();
+
+    List<SchoolClass> findByDepartment(String department);
+    List<SchoolClass> findByMajor(String major);
 } 

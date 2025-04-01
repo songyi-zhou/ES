@@ -103,12 +103,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 import request from '@/utils/request'
 import { ElMessage } from 'element-plus'
+import { formatDateTime } from '@/utils/format'
 
 // 专业和班级数据
 const majors = ref([
@@ -146,6 +147,8 @@ const router = useRouter()
 const loading = ref(false)
 const students = ref([])
 const existingMembers = ref([])
+const members = ref([])
+const isComponentMounted = ref(true)
 
 // 计算属性
 const filteredClasses = computed(() => {
@@ -274,9 +277,15 @@ const clearSelection = () => {
 }
 
 // 初始化
-onMounted(async () => {
-  await fetchExistingMembers() // 先获取已选成员
-  await fetchStudents()        // 再获取学生列表
+onMounted(() => {
+  isComponentMounted.value = true
+  fetchExistingMembers() // 先获取已选成员
+  fetchStudents()        // 再获取学生列表
+  fetchMembers()
+})
+
+onBeforeUnmount(() => {
+  isComponentMounted.value = false
 })
 
 // 添加 watch
@@ -311,6 +320,22 @@ const sortedStudents = computed(() => {
     return aSelected ? 1 : -1;
   });
 });
+
+const fetchMembers = async () => {
+  if (!isComponentMounted.value) return
+  
+  try {
+    const response = await request.get('/class-group-members')
+    if (response.data.success && isComponentMounted.value) {
+      members.value = response.data.data
+    }
+  } catch (error) {
+    if (isComponentMounted.value) {
+      console.error('获取成员列表失败:', error)
+      ElMessage.error('获取成员列表失败')
+    }
+  }
+}
 </script>
 
 <style scoped>

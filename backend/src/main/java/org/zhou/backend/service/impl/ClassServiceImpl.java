@@ -1,11 +1,13 @@
 package org.zhou.backend.service.impl;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.springframework.stereotype.Service;
 import org.zhou.backend.repository.ClassRepository;
 import org.zhou.backend.service.ClassService;
 
-import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -15,6 +17,10 @@ public class ClassServiceImpl implements ClassService {
     
     @Override
     public List<String> getDistinctMajors() {
-        return classRepository.findDistinctMajors();
+        return classRepository.findAll().stream()
+            .map(schoolClass -> schoolClass.getMajor())
+            .filter(major -> major != null && !major.isEmpty())
+            .distinct()
+            .collect(Collectors.toList());
     }
 } 

@@ -14,7 +14,8 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     List<GroupMember> findByDepartmentAndGrade(String department, String grade);
     @Query("SELECT gm FROM GroupMember gm WHERE gm.department = :department")
     List<GroupMember> findByDepartment(String department);
-    List<GroupMember> findByDepartmentAndClassIdIsNull(String department);
+    @Query("SELECT gm FROM GroupMember gm WHERE gm.department = :department AND (gm.classId IS NULL OR gm.classId = '')")
+    List<GroupMember> findByDepartmentAndClassIdIsNullOrClassIdEmpty(@Param("department") String department);
     Optional<GroupMember> findByStudentId(String studentId);
     Optional<GroupMember> findByUserId(Long userId);
     boolean existsByUserId(Long userId);
@@ -24,4 +25,5 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
            "WHERE s.squad IN " +
            "(SELECT DISTINCT sgl.squad FROM SquadGroupLeader sgl WHERE sgl.userId = :leaderId)")
     List<GroupMember> findByLeaderId(@Param("leaderId") Long leaderId);
+    List<GroupMember> findAllByUserId(Long userId);
 } 

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.zhou.backend.entity.ClassGroupMember;
 import org.zhou.backend.entity.GroupMember;
 import org.zhou.backend.entity.User;
 import org.zhou.backend.model.request.GroupMemberRequest;
@@ -86,7 +87,7 @@ public class GroupMembersManageController {
     public ResponseEntity<?> updateGroupMember(@PathVariable Long id,
                                              @RequestBody GroupMemberRequest request) {
         try {
-            GroupMember updatedMember = groupMemberService.updateGroupMember(
+            ClassGroupMember updatedMember = groupMemberService.updateGroupMember(
                 id,
                 request.getMajor(),
                 request.getClassName()

@@ -7,13 +7,24 @@
         <div class="members-card">
           <h2>小组成员</h2>
           
+          <!-- 加载状态 -->
+          <div v-if="loading" class="loading-state">
+            正在加载成员数据...
+          </div>
+          
+          <!-- 错误提示 -->
+          <div v-if="error" class="error-message">
+            {{ error }}
+          </div>
+          
           <!-- 成员表格 -->
-          <div class="table-container">
+          <div v-if="!loading && !error" class="table-container">
             <table class="members-table">
               <thead>
                 <tr>
                   <th>姓名</th>
-                  <th>班级</th>
+                  <th>学号</th>
+                  <th>负责班级</th>
                   <th>专业</th>
                   <th>学院</th>
                 </tr>
@@ -21,9 +32,10 @@
               <tbody>
                 <tr v-for="member in members" :key="member.id">
                   <td>{{ member.name }}</td>
-                  <td>{{ member.classId }}</td>
+                  <td>{{ member.userId }}</td>
+                  <td>{{ member.className }}</td>
                   <td>{{ member.major }}</td>
-                  <td>{{ member.department }}</td>
+                  <td>{{ member.college }}</td>
                 </tr>
               </tbody>
             </table>
@@ -39,21 +51,52 @@ import { ref, onMounted } from 'vue';
 import TopBar from "@/components/TopBar.vue";
 import Sidebar from "@/components/Sidebar.vue";
 import axios from 'axios';
-import { ElMessage } from 'element-plus';
+import { useRouter } from 'vue-router';
+import { useUserStore } from '@/stores/user';
 
 const members = ref([]);
+const router = useRouter();
+const loading = ref(false);
+const error = ref(null);
+const userStore = useUserStore();
 
 const fetchMembers = async () => {
+  loading.value = true;
+  error.value = null;
+  
   try {
-    const response = await axios.get('/api/group-members');
+    // 从用户存储中获取令牌
+    const token = userStore.token;
+    if (!token) {
+      console.log('未找到认证令牌，重定向到登录页面');
+      router.push('/login');
+      return;
+    }
+    
+    const response = await axios.get('/api/group-members', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
     if (response.data.success) {
       members.value = response.data.data;
     } else {
-      ElMessage.error(response.data.message || '获取成员数据失败');
+      error.value = response.data.message || '获取成员数据失败';
     }
-  } catch (error) {
-    ElMessage.error('获取成员数据失败');
-    console.error('获取成员数据失败:', error);
+  } catch (err) {
+    console.error('获取小组成员失败:', err);
+    error.value = '获取小组成员失败';
+    
+    if (err.response) {
+      if (err.response.status === 401 || err.response.status === 403) {
+        // 如果是认证问题，清除令牌并重定向到登录页面
+        userStore.clearUserInfo();
+        router.push('/login');
+      }
+    }
+  } finally {
+    loading.value = false;
   }
 };
 

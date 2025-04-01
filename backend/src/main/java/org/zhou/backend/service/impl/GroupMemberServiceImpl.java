@@ -1,5 +1,6 @@
 package org.zhou.backend.service.impl;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -14,11 +15,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.zhou.backend.entity.ClassGroupMember;
 import org.zhou.backend.entity.GroupMember;
+import org.zhou.backend.entity.SchoolClass;
 import org.zhou.backend.entity.Student;
 import org.zhou.backend.entity.User;
 import org.zhou.backend.exception.ResourceNotFoundException;
+import org.zhou.backend.model.request.RoleUpdateRequest;
 import org.zhou.backend.repository.ClassGroupMemberRepository;
 import org.zhou.backend.repository.ClassRepository;
 import org.zhou.backend.repository.GroupMemberRepository;
@@ -26,7 +30,6 @@ import org.zhou.backend.repository.StudentRepository;
 import org.zhou.backend.repository.UserRepository;
 import org.zhou.backend.service.GroupMemberService;
 import org.zhou.backend.service.InstructorService;
-import org.zhou.backend.model.request.RoleUpdateRequest;
 
 import lombok.RequiredArgsConstructor;
 
@@ -40,6 +43,7 @@ public class GroupMemberServiceImpl implements GroupMemberService {
     private final ClassRepository classRepository;
     private final StudentRepository studentRepository;
     private final InstructorService instructorService;
+    private final JdbcTemplate jdbcTemplate;
     private static final Logger log = LoggerFactory.getLogger(GroupMemberServiceImpl.class);
 
     @Override
@@ -76,43 +80,56 @@ public class GroupMemberServiceImpl implements GroupMemberService {
 
     @Override
     @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER')")
+    @Transactional
     public Map<String, Object> updateGroupMemberClass(Long id, String major, String className) {
         log.info("开始更新组员信息: id={}, major={}, className={}", id, major, className);
         
-        ClassGroupMember member = classGroupMemberRepository.findById(id)
+        // 查找 class_group_members 表中的记录
+        ClassGroupMember classMember = classGroupMemberRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("成员不存在"));
-            
-        // 直接使用传入的 className 作为 classId（假设它已经是正确的班级ID格式）
-        String classId = className;  // 例如："CS2102"
         
-        // 验证班级是否存在
-        if (!classRepository.existsById(classId)) {
-            throw new ResourceNotFoundException("班级不存在: " + classId);
-        }
+        Long userId = classMember.getUserId();
+        log.info("找到成员，userId={}", userId);
+        
+        // 获取班级信息，确保使用正确的专业
+        SchoolClass targetClass = classRepository.findById(className)
+            .orElseThrow(() -> new ResourceNotFoundException("班级不存在"));
+        
+        String correctMajor = targetClass.getMajor();
+        log.info("获取到班级专业信息: className={}, major={}", className, correctMajor);
         
         // 更新 class_group_members 表
-        member.setClassId(classId);
-        classGroupMemberRepository.save(member);
+        classMember.setClassId(className);
+        classMember.setMajor(correctMajor); // 使用班级的专业
+        classGroupMemberRepository.save(classMember);
+        log.info("已更新 class_group_members 表，classId={}, major={}", className, correctMajor);
+        
+        // 使用 JdbcTemplate 直接更新 group_members 表
+        jdbcTemplate.update(
+            "UPDATE group_members SET class_id = ?, major = ? WHERE user_id = ?",
+            className, correctMajor, userId
+        );
+        log.info("已通过 SQL 更新 group_members 表，userId={}", userId);
         
         Map<String, Object> result = new HashMap<>();
-        result.put("id", member.getId());
-        result.put("major", major);
+        result.put("success", true);
+        result.put("id", id);
+        result.put("userId", userId);
+        result.put("major", correctMajor);
         result.put("className", className);
-        result.put("classId", member.getClassId());
         return result;
     }
 
     @Override
     @PreAuthorize("hasAnyRole('ADMIN', 'GROUP_LEADER')")
-    public GroupMember updateGroupMember(Long id, String major, String className) {
-        log.info("开始更新组员信息: id={}, major={}, className={}", id, major, className);
-        
-        GroupMember member = groupMemberRepository.findById(id)
+    public ClassGroupMember updateGroupMember(Long id, String major, String className) {
+        return classGroupMemberRepository.findById(id)
+            .map(member -> {
+                member.setMajor(major);
+                member.setClassId(className);
+                return classGroupMemberRepository.save(member);
+            })
             .orElseThrow(() -> new ResourceNotFoundException("成员不存在"));
-            
-        member.setMajor(major);
-        member.setClassName(className);
-        return groupMemberRepository.save(member);
     }
 
     private boolean hasPermissionToModify(GroupMember member) {
@@ -132,28 +149,49 @@ public class GroupMemberServiceImpl implements GroupMemberService {
     }
 
     @Override
+    @Transactional
     public void deleteGroupMember(Long id) {
-        // 首先检查成员是否存在
-        if (!classGroupMemberRepository.existsById(id)) {
-            throw new ResourceNotFoundException("成员不存在");
-        }
+        ClassGroupMember member = classGroupMemberRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("成员不存在"));
         
-        // 执行删除操作
-        classGroupMemberRepository.deleteById(id);
-        log.info("成功删除组员 ID: {}", id);
+        // 清除 group_member 表中的相关字段
+        GroupMember groupMember = groupMemberRepository.findByUserId(member.getUserId())
+            .orElseThrow(() -> new ResourceNotFoundException("成员不存在"));
+        groupMember.setClassId(null);
+        groupMember.setClassName(null);
+        groupMember.setMajor(null);
+        groupMemberRepository.save(groupMember);
+        
+        // 删除班级成员记录
+        classGroupMemberRepository.delete(member);
     }
 
     @Override
     public List<Map<String, Object>> getAllGroupMembers() {
-        return classGroupMemberRepository.findAll().stream()
-            .map(member -> {
-                Map<String, Object> map = new HashMap<>();
-                map.put("id", member.getId());
-                map.put("userId", member.getUserId());
-                map.put("classId", member.getClassId());
-                return map;
-            })
-            .collect(Collectors.toList());
+        // 使用原始 SQL 查询获取数据
+        String sql = "SELECT " +
+                    "cgm.id, " +
+                    "cgm.user_id as userId, " +
+                    "gm.name, " +
+                    "cgm.class_id as classId, " +
+                    "gm.major, " +
+                    "gm.department, " +
+                    "gm.grade as squad " +
+                    "FROM " +
+                    "class_group_members cgm " +
+                    "JOIN " +
+                    "group_members gm ON cgm.user_id = gm.user_id";
+        
+        List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
+        
+        // 添加日志，查看查询结果
+        for (Map<String, Object> result : results) {
+            log.info("查询结果: id={}, userId={}, name={}, classId={}, major={}, department={}, squad={}",
+                result.get("id"), result.get("userId"), result.get("name"), 
+                result.get("classId"), result.get("major"), result.get("department"), result.get("squad"));
+        }
+        
+        return results;
     }
 
     @Override
@@ -181,5 +219,56 @@ public class GroupMemberServiceImpl implements GroupMemberService {
     @Override
     public List<GroupMember> getExistingGroupMembers(String department) {
         return groupMemberRepository.findByDepartment(department);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> assignMemberToClass(Long memberId, String major, String className, Long leaderId) {
+        // 查找组员
+        GroupMember member = groupMemberRepository.findById(memberId)
+            .orElseThrow(() -> new ResourceNotFoundException("成员不存在"));
+        
+        // 获取用户信息
+        User user = userRepository.findById(member.getUserId())
+            .orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
+            
+        // 获取班级信息
+        SchoolClass targetClass = classRepository.findById(className)
+            .orElseThrow(() -> new ResourceNotFoundException("班级不存在"));
+        
+        String correctMajor = targetClass.getMajor();
+        log.info("获取到班级专业信息: className={}, major={}", className, correctMajor);
+        
+        // 创建班级成员记录
+        ClassGroupMember classMember = new ClassGroupMember();
+        classMember.setUserId(member.getUserId());
+        classMember.setClassId(className);
+        classMember.setName(member.getName());
+        classMember.setDepartment(targetClass.getDepartment());  // 使用目标班级的院系
+        classMember.setMajor(correctMajor);                     // 使用目标班级的专业
+        classMember.setCreatedAt(LocalDateTime.now());
+        
+        // 从 Student 表获取 squad 信息
+        Student student = studentRepository.findByStudentId(user.getUserId())
+            .orElseThrow(() -> new ResourceNotFoundException("学生不存在"));
+        classMember.setSquad(student.getSquad());
+        
+        classGroupMemberRepository.save(classMember);
+        log.info("已创建班级成员记录: id={}, classId={}, major={}", classMember.getId(), className, correctMajor);
+        
+        // 更新组员信息 - 使用正确的专业信息
+        member.setMajor(correctMajor);  // 使用班级的专业，而不是传入的参数
+        member.setClassName(className);
+        member.setClassId(className);
+        groupMemberRepository.save(member);
+        log.info("已更新组员信息: id={}, classId={}, major={}", member.getId(), className, correctMajor);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("id", member.getId());
+        result.put("major", correctMajor);
+        result.put("className", className);
+        result.put("classId", className);
+        
+        return result;
     }
 }

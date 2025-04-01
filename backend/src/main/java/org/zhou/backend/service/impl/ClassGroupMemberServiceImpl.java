@@ -17,6 +17,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.stream.Collectors;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.zhou.backend.entity.SchoolClass;
+import org.zhou.backend.repository.ClassRepository;
+import org.zhou.backend.entity.Student;
+import org.zhou.backend.repository.StudentRepository;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 
 @Service
 @Transactional
@@ -25,12 +32,18 @@ public class ClassGroupMemberServiceImpl implements ClassGroupMemberService {
     private final ClassGroupMemberRepository classGroupMemberRepository;
     private final GroupMemberRepository groupMemberRepository;
     private final UserRepository userRepository;
+    private final JdbcTemplate jdbcTemplate;
+    private final ClassRepository classRepository;
+    private final StudentRepository studentRepository;
     private static final Logger log = LoggerFactory.getLogger(ClassGroupMemberServiceImpl.class);
 
-    public ClassGroupMemberServiceImpl(ClassGroupMemberRepository classGroupMemberRepository, GroupMemberRepository groupMemberRepository, UserRepository userRepository) {
+    public ClassGroupMemberServiceImpl(ClassGroupMemberRepository classGroupMemberRepository, GroupMemberRepository groupMemberRepository, UserRepository userRepository, JdbcTemplate jdbcTemplate, ClassRepository classRepository, StudentRepository studentRepository) {
         this.classGroupMemberRepository = classGroupMemberRepository;
         this.groupMemberRepository = groupMemberRepository;
         this.userRepository = userRepository;
+        this.jdbcTemplate = jdbcTemplate;
+        this.classRepository = classRepository;
+        this.studentRepository = studentRepository;
     }
 
     @Override
@@ -54,8 +67,8 @@ public class ClassGroupMemberServiceImpl implements ClassGroupMemberService {
 
     @Override
     public List<Map<String, Object>> getAvailableMembers(String department, String classId) {
-        // 获取已经是小组成员但还未分配到班级的用户
-        List<GroupMember> groupMembers = groupMemberRepository.findByDepartmentAndClassIdIsNull(department);
+        // 获取已经是小组成员且未分配到班级或刚被移除班级的用户
+        List<GroupMember> groupMembers = groupMemberRepository.findByDepartmentAndClassIdIsNullOrClassIdEmpty(department);
         
         return groupMembers.stream().map(member -> {
             Map<String, Object> memberMap = new HashMap<>();
@@ -70,21 +83,46 @@ public class ClassGroupMemberServiceImpl implements ClassGroupMemberService {
     @Override
     @Transactional
     public void batchAddClassMembers(List<String> memberIds, String classId) {
-        for (String memberId : memberIds) {
-            GroupMember groupMember = groupMemberRepository.findByStudentId(memberId)
-                .orElseThrow(() -> new ResourceNotFoundException("成员不存在: " + memberId));
-                
-            User user = userRepository.findByUserId(memberId)
-                .orElseThrow(() -> new ResourceNotFoundException("用户不存在: " + memberId));
-
-            ClassGroupMember classMember = new ClassGroupMember();
-            classMember.setUserId(user.getId());
-            classMember.setClassId(classId);
-            classGroupMemberRepository.save(classMember);
+        // 获取班级信息，确保使用正确的专业
+        SchoolClass targetClass = classRepository.findById(classId)
+            .orElseThrow(() -> new ResourceNotFoundException("班级不存在"));
+        
+        String correctMajor = targetClass.getMajor();
+        String department = targetClass.getDepartment();
+        log.info("获取到班级信息: classId={}, major={}, department={}", classId, correctMajor, department);
+        
+        for (String studentId : memberIds) {
+            // 查找组员 - 使用 studentId 而不是 id
+            GroupMember member = groupMemberRepository.findByStudentId(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException("成员不存在: " + studentId));
             
-            // 更新 group_member 表中的 classId
-            groupMember.setClassId(classId);
-            groupMemberRepository.save(groupMember);
+            // 获取用户信息
+            User user = userRepository.findById(member.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
+                
+            // 从 Student 表获取 squad 信息
+            Student student = studentRepository.findByStudentId(user.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("学生不存在"));
+                
+            // 创建班级成员记录
+            ClassGroupMember classMember = new ClassGroupMember();
+            classMember.setUserId(member.getUserId());
+            classMember.setClassId(classId);
+            classMember.setName(member.getName());
+            classMember.setDepartment(department);  // 使用目标班级的院系
+            classMember.setMajor(correctMajor);     // 使用目标班级的专业
+            classMember.setSquad(student.getSquad());
+            classMember.setCreatedAt(LocalDateTime.now());
+            
+            classGroupMemberRepository.save(classMember);
+            log.info("已创建班级成员记录: userId={}, classId={}, major={}", member.getUserId(), classId, correctMajor);
+            
+            // 更新组员信息 - 使用正确的专业信息
+            member.setMajor(correctMajor);  // 使用班级的专业
+            member.setClassName(targetClass.getName());
+            member.setClassId(classId);
+            groupMemberRepository.save(member);
+            log.info("已更新组员信息: id={}, classId={}, major={}", member.getId(), classId, correctMajor);
         }
     }
 
@@ -107,5 +145,43 @@ public class ClassGroupMemberServiceImpl implements ClassGroupMemberService {
         
         // 删除班级成员记录
         classGroupMemberRepository.delete(member);
+    }
+
+    @Override
+    public List<Map<String, Object>> getGroupMembersByLeaderId(Long leaderId) {
+        // 使用 ClassGroupMemberRepository 中已有的 JPA 查询方法
+        return classGroupMemberRepository.findAllWithDetailsByLeaderId(leaderId);
+    }
+
+    @Override
+    public List<Map<String, Object>> getAssignedGroupMembers(String department) {
+        // 修改SQL查询，获取小组成员负责的班级信息
+        String sql = """
+            SELECT 
+                cgm.id, 
+                u.user_id AS userId,
+                u.name, 
+                c.name AS className, 
+                c.major, 
+                c.department AS college,
+                cgm.squad
+            FROM 
+                class_group_members cgm
+            JOIN 
+                users u ON cgm.user_id = u.id
+            JOIN 
+                classes c ON cgm.class_id = c.id
+            WHERE 
+                u.department = ?
+            ORDER BY 
+                u.name
+        """;
+        
+        try {
+            return jdbcTemplate.queryForList(sql, department);
+        } catch (Exception e) {
+            log.error("获取已分配班级成员失败", e);
+            return new ArrayList<>();
+        }
     }
 } 

@@ -27,12 +27,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.zhou.backend.entity.GroupMember;
 import org.zhou.backend.entity.User;
+import org.zhou.backend.entity.ClassGroupMember;
 import org.zhou.backend.exception.ResourceNotFoundException;
 import org.zhou.backend.model.request.BatchGroupMemberRequest;
 import org.zhou.backend.model.request.GroupMemberRequest;
+import org.zhou.backend.model.request.ClassAssignRequest;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.GroupMemberService;
 import org.zhou.backend.service.UserService;
+import org.zhou.backend.service.ClassGroupMemberService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -49,15 +52,20 @@ public class GroupMemberController {
     @Autowired
     private UserService userService;
     
+    @Autowired
+    private ClassGroupMemberService classGroupMemberService;
+    
     @GetMapping
     public ResponseEntity<?> getGroupMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         try {
             User currentUser = userService.getUserById(userPrincipal.getId());
-            List<GroupMember> members = groupMemberService.getExistingGroupMembers(currentUser.getDepartment());
+            
+            // 从class_group_members表获取已分配班级的小组成员
+            List<Map<String, Object>> members = classGroupMemberService.getAssignedGroupMembers(currentUser.getDepartment());
             
             // 添加日志调试
             log.info("当前用户部门: {}", currentUser.getDepartment());
-            log.info("查询到的成员数量: {}", members.size());
+            log.info("查询到的已分配班级成员数量: {}", members.size());
             
             return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -78,7 +86,7 @@ public class GroupMemberController {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         log.info("Current user roles: {}", auth.getAuthorities());
         try {
-            GroupMember updatedMember = groupMemberService.updateGroupMember(id, request.getMajor(), request.getClassName());
+            ClassGroupMember updatedMember = groupMemberService.updateGroupMember(id, request.getMajor(), request.getClassName());
             return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", updatedMember
@@ -152,6 +160,34 @@ public class GroupMemberController {
             ));
         } catch (Exception e) {
             log.error("批量添加小组成员失败", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
+        }
+    }
+
+    @PutMapping("/{id}/assign")
+    @PreAuthorize("hasRole('GROUP_LEADER')")
+    public ResponseEntity<?> assignMemberToClass(
+            @PathVariable Long id,
+            @RequestBody ClassAssignRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        try {
+            Map<String, Object> result = groupMemberService.assignMemberToClass(
+                id, 
+                request.getMajor(), 
+                request.getClassName(),
+                userPrincipal.getId()
+            );
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "分配成功",
+                "data", result
+            ));
+        } catch (Exception e) {
+            log.error("分配班级失败", e);
             return ResponseEntity.badRequest().body(Map.of(
                 "success", false,
                 "message", e.getMessage()
