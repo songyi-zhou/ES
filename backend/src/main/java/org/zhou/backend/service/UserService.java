@@ -8,12 +8,14 @@ import org.springframework.stereotype.Service;
 import org.zhou.backend.entity.User;
 import org.zhou.backend.exception.ResourceNotFoundException;
 import org.zhou.backend.repository.UserRepository;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class UserService {
+public class 
+UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     
@@ -54,6 +56,11 @@ public class UserService {
     public User getUserById(Long id) {
         return userRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    }
+    
+    public User findByUsername(String username) {
+        return userRepository.findByUserId(username)
+            .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
     }
     
     // 用户相关的业务逻辑方法将在这里实现

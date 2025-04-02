@@ -47,7 +47,9 @@ import TopBar from '../../components/TopBar.vue'
 import Sidebar from '../../components/Sidebar.vue'
 import { ElMessage } from 'element-plus'
 import axiosInstance from '../../utils/axios.js'
+import { useUserStore } from '@/stores/user'
 
+const userStore = useUserStore()
 const rules = ref([])
 const loading = ref(false)
 
@@ -131,11 +133,20 @@ const downloadFile = async (id, fileName) => {
 const fetchRules = async () => {
   loading.value = true
   try {
+    console.log('开始获取规则，当前token:', userStore.token)
+    
     const response = await axiosInstance.get('/rules')
+    console.log('规则响应:', response.data)
+    
     rules.value = response.data
+    
   } catch (error) {
-    console.error('获取规章列表失败:', error)
-    ElMessage.error('获取规章列表失败')
+    console.error('获取规则失败:', error)
+    if (error.response?.status === 403) {
+      ElMessage.error('没有权限访问')
+    } else {
+      ElMessage.error('获取规则失败')
+    }
   } finally {
     loading.value = false
   }

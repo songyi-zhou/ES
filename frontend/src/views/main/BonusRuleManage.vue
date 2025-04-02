@@ -276,7 +276,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import axios from 'axios'
+import axiosInstance from '@/utils/axios'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 
@@ -397,11 +397,11 @@ const canSubmit = computed(() => {
 // 获取所有规则
 const fetchRules = async () => {
   try {
-    const response = await axios.get('/api/bonus-rules')
+    const response = await axiosInstance.get('/bonus-rules')
     rules.value = response.data
   } catch (error) {
-    ElMessage.error('获取规则列表失败: ' + error.message)
     console.error('获取规则失败:', error)
+    ElMessage.error('获取规则失败')
   }
 }
 
@@ -482,9 +482,9 @@ const submitRule = async () => {
     // 提交每个规则
     for (const data of submitData) {
       if (editingRule.value) {
-        await axios.put(`/api/bonus-rules/${editingRule.value.id}`, data)
+        await axiosInstance.put(`/bonus-rules/${editingRule.value.id}`, data)
       } else {
-        await axios.post('/api/bonus-rules', data)
+        await axiosInstance.post('/bonus-rules', data)
       }
     }
 
@@ -543,7 +543,7 @@ const deleteRule = async (id) => {
       type: 'warning'
     })
     
-    await axios.delete(`/api/bonus-rules/${id}`)
+    await axiosInstance.delete(`/bonus-rules/${id}`)
     ElMessage.success('删除成功')
     await fetchRules()
   } catch (error) {

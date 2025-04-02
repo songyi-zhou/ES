@@ -45,4 +45,26 @@ public class BonusRule {
     
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+    
+    @Column(nullable = false)
+    private String department;
+    
+    @Column(nullable = false)
+    private String squad;
+    
+    public String getDepartment() {
+        return department;
+    }
+    
+    public void setDepartment(String department) {
+        this.department = department;
+    }
+    
+    public String getSquad() {
+        return squad;
+    }
+    
+    public void setSquad(String squad) {
+        this.squad = squad;
+    }
 }

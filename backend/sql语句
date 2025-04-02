@@ -203,7 +203,8 @@ CREATE TABLE evaluation_rules (
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE-生效 INACTIVE-失效',
     version INT NOT NULL DEFAULT 1 COMMENT '版本号',
     department VARCHAR(50),
-    uploaded_by_department VARCHAR(50)
+    uploaded_by_department VARCHAR(50),
+    squad VARCHAR(50) COMMENT '中队标识，用于区分材料应用的中队和查看权限'
 );
 
 -- 规章附件表
@@ -271,8 +272,13 @@ CREATE TABLE bonus_rules (
   points DECIMAL(5,2) NOT NULL COMMENT '分值',
   description TEXT COMMENT '描述说明',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  department VARCHAR(50) NOT NULL DEFAULT '',
+  squad VARCHAR(50) NOT NULL DEFAULT ''
 ) ;
+
+-- 添加联合索引以提高查询性能
+CREATE INDEX idx_dept_squad ON bonus_rules(department, squad);
 
 -- 删除 group_members 表
 DROP TABLE IF EXISTS group_members;

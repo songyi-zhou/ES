@@ -10,4 +10,5 @@ import java.util.List;
 public interface BonusRuleRepository extends JpaRepository<BonusRule, Long> {
     List<BonusRule> findByType(String type);
     List<BonusRule> findByTypeAndActivityType(String type, String activityType);
+    List<BonusRule> findByDepartmentAndSquad(String department, String squad);
 }

@@ -6,6 +6,10 @@ import org.springframework.web.bind.annotation.*;
 import org.zhou.backend.entity.BonusRule;
 import org.zhou.backend.service.BonusRuleService;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.zhou.backend.entity.User;
+import org.zhou.backend.service.UserService;
 
 import java.util.List;
 
@@ -17,14 +21,25 @@ public class BonusRuleController {
     @Autowired
     private BonusRuleService bonusRuleService;
     
+    @Autowired
+    private UserService userService;
+    
     @GetMapping
-    public List<BonusRule> getAllRules() {
-        return bonusRuleService.getAllRules();
+    public List<BonusRule> getAllRules(Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        User user = userService.findByUsername(userDetails.getUsername());
+        return bonusRuleService.getRulesByDepartmentAndSquad(user.getDepartment(), user.getSquad());
     }
     
     @PostMapping
-    public ResponseEntity<?> createRule(@RequestBody BonusRule rule) {
+    public ResponseEntity<?> createRule(@RequestBody BonusRule rule, Authentication authentication) {
         try {
+            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+            User user = userService.findByUsername(userDetails.getUsername());
+            
+            rule.setDepartment(user.getDepartment());
+            rule.setSquad(user.getSquad());
+            
             BonusRule savedRule = bonusRuleService.createRule(rule);
             return ResponseEntity.ok(savedRule);
         } catch (Exception e) {

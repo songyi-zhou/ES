@@ -72,4 +72,8 @@ public class BonusRuleService {
             throw new IllegalArgumentException("分值必须在0-100之间");
         }
     }
+
+    public List<BonusRule> getRulesByDepartmentAndSquad(String department, String squad) {
+        return ruleRepository.findByDepartmentAndSquad(department, squad);
+    }
 }
