@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -133,20 +134,15 @@ public class EvaluationController {
         }
     }
 
-    @GetMapping("/review-materials")
-    public ResponseEntity<?> getReviewMaterials() {
+    @GetMapping("/materials")
+    @PreAuthorize("hasAnyRole('STUDENT', 'GROUP_MEMBER', 'COUNSELOR', 'ADMIN')")
+    public ResponseEntity<?> getAllMaterials(@AuthenticationPrincipal UserPrincipal userDetails) {
         try {
-            List<EvaluationMaterial> materials = evaluationService.getAllMaterials();
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "data", materials  // 确保返回的数据不为空
-            ));
+            Long userId = userDetails.getId();
+            List<EvaluationMaterial> materials = evaluationService.getAllMaterials(userId);
+            return ResponseEntity.ok(materials);
         } catch (Exception e) {
-            log.error("获取评测材料失败", e);
-            return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "message", "获取评测材料失败: " + e.getMessage()
-            ));
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
         }
     }
 
@@ -239,6 +235,18 @@ public class EvaluationController {
             return ResponseEntity.ok(Map.of("success", true));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(createErrorResponse("审核失败：" + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/review-materials")
+    @PreAuthorize("hasAnyRole('GROUP_MEMBER', 'COUNSELOR', 'ADMIN')")
+    public ResponseEntity<?> getReviewMaterials(@AuthenticationPrincipal UserPrincipal userDetails) {
+        try {
+            Long userId = userDetails.getId();
+            List<EvaluationMaterial> materials = evaluationService.getAllMaterials(userId);
+            return ResponseEntity.ok(materials);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
         }
     }
 } 

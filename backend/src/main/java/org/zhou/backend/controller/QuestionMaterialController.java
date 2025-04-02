@@ -24,6 +24,8 @@ import org.zhou.backend.model.response.ApiResponse;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.QuestionMaterialService;
 import org.zhou.backend.util.SecurityUtils;
+import org.zhou.backend.entity.User;
+import org.zhou.backend.repository.UserRepository;
 
 @RestController
 @RequestMapping("/api/question-materials")
@@ -35,6 +37,9 @@ public class QuestionMaterialController {
     @Autowired
     private QuestionMaterialService questionMaterialService;
     
+    @Autowired
+    private UserRepository userRepository;
+    
     @GetMapping
     public ResponseEntity<?> getQuestionMaterials(
             Authentication authentication,
@@ -44,8 +49,14 @@ public class QuestionMaterialController {
             @RequestParam(required = false) String keyword) {
         try {
             UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            // 获取当前用户信息
+            User currentUser = userRepository.findById(userPrincipal.getId())
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+            
             Page<EvaluationMaterial> materials = questionMaterialService.getQuestionMaterials(
-                userPrincipal.getId(), status, page, size, keyword);
+                currentUser.getDepartment(),  // 传入院系
+                currentUser.getSquad(),       // 传入中队
+                status, page - 1, size, keyword);
             
             return ResponseEntity.ok(Map.of(
                 "success", true,

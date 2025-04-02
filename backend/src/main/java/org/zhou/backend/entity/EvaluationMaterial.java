@@ -67,4 +67,10 @@ public class EvaluationMaterial {
     private LocalDateTime reportedAt;
     
     private LocalDateTime reviewedAt;
+    
+    @Column(nullable = false)
+    private String department;
+    
+    @Column(nullable = false)
+    private String squad;
 } 

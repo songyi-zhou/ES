@@ -1,6 +1,7 @@
 package org.zhou.backend.service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -12,13 +13,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.zhou.backend.entity.EvaluationMaterial;
-import org.zhou.backend.entity.GradeGroupLeader;
 import org.zhou.backend.entity.SchoolClass;
 import org.zhou.backend.entity.User;
 import org.zhou.backend.model.request.ReportRequest;
@@ -28,6 +28,9 @@ import org.zhou.backend.repository.ClassRepository;
 import org.zhou.backend.repository.GradeGroupLeaderRepository;
 import org.zhou.backend.repository.QuestionMaterialRepository;
 import org.zhou.backend.repository.UserRepository;
+import org.zhou.backend.repository.EvaluationMaterialRepository;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
 
 @Service
 @Transactional
@@ -50,30 +53,39 @@ public class QuestionMaterialService {
     @Autowired
     private ClassRepository classRepository;
     
-    public Page<EvaluationMaterial> getQuestionMaterials(Long userId, String status, int page, int size, String keyword) {
-        log.info("Starting query for userId={}", userId);
+    @Autowired
+    private EvaluationMaterialRepository materialRepository;
+    
+    public Page<EvaluationMaterial> getQuestionMaterials(
+            String department,
+            String squad,
+            String status,
+            int page,
+            int size,
+            String keyword) {
         
-        // 获取年级和部门
-        List<GradeGroupLeader> leaders = gradeGroupLeaderRepository.findByUserId(userId);
-        log.info("Found leaders: {}", leaders);
+        Pageable pageable = PageRequest.of(page, size);
         
-        // 获取班级
-        List<String> classIds = gradeGroupLeaderRepository.findClassIdsByUserId(userId);
-        log.info("Found classIds: {}", classIds);
-        
-        if (classIds.isEmpty()) {
-            log.warn("No classes found for user {}", userId);
-            return new PageImpl<>(Collections.emptyList());
-        }
-        
-        // 查询材料
-        Pageable pageable = PageRequest.of(page - 1, size);
-        Page<EvaluationMaterial> materials = status != null && !status.isEmpty() 
-            ? questionMaterialRepository.findByClassIdsAndStatus(classIds, status, pageable)
-            : questionMaterialRepository.findByClassIds(classIds, pageable);
+        // 构建查询条件
+        Specification<EvaluationMaterial> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
             
-        log.info("Found {} materials", materials.getTotalElements());
-        return materials;
+            // 只查询状态为 QUESTIONED 的材料
+            predicates.add(cb.equal(root.get("status"), "QUESTIONED"));
+            
+            // 按院系和中队筛选
+            predicates.add(cb.equal(root.get("department"), department));
+            predicates.add(cb.equal(root.get("squad"), squad));
+            
+            // 如果有关键字，添加标题搜索条件
+            if (keyword != null && !keyword.isEmpty()) {
+                predicates.add(cb.like(root.get("title"), "%" + keyword + "%"));
+            }
+            
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        
+        return materialRepository.findAll(spec, pageable);
     }
     
     public void reviewMaterial(ReviewRequest request) {

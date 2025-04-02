@@ -31,4 +31,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Modifying
     @Query(value = "DELETE FROM user_roles WHERE user_id = :userId", nativeQuery = true)
     void deleteUserRoles(@Param("userId") Long userId);
+
+    @Query("SELECT u FROM User u JOIN u.roles r " +
+           "WHERE u.department = :department " +
+           "AND u.squad = :squad " +
+           "AND r = :role")
+    Optional<User> findByDepartmentAndSquadAndRoles(
+        String department, 
+        String squad, 
+        String role
+    );
 } 

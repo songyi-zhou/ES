@@ -99,6 +99,12 @@
 			<artifactId>poi-ooxml</artifactId>
 			<version>5.2.3</version>
 		</dependency>
+
+		<!-- Spring Data JPA -->
+		<dependency>
+			<groupId>org.springframework.data</groupId>
+			<artifactId>spring-data-jpa</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>

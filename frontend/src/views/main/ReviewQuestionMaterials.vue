@@ -200,6 +200,7 @@ import Sidebar from "@/components/Sidebar.vue"
 import axios from '@/utils/axios'
 import debounce from 'lodash/debounce'
 import { useRouter } from 'vue-router'
+import request from '@/utils/request'
 
 const router = useRouter()
 
@@ -564,18 +565,23 @@ onMounted(() => {
 const submitReport = async () => {
   try {
     submitting.value = true
-    const response = await axios.post('/api/question-materials/report', {
-      materialIds: selectedForReport.value.map(m => m.id),
-      note: reportForm.value.note
+    const response = await request.post('/api/question-materials/report', {
+      materialIds: [selectedMaterials.value[0].id],  // 修改这里，确保是数组格式
+      note: reportForm.value.note || "请审核这些存在疑问的材料"  // 添加默认值
+    }, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      baseURL: 'http://localhost:8080'
     })
     
     if (response.data.success) {
-      ElMessage.success('材料已成功上报')
+      ElMessage.success(response.data.message || '材料已成功上报')
       reportDialogVisible.value = false
-      await fetchQuestionMaterials() // 刷新列表
+      await fetchQuestionMaterials()
     }
   } catch (error) {
-    ElMessage.error('上报失败：' + error.message)
+    ElMessage.error('上报失败：' + (error.response?.data?.message || error.message))
   } finally {
     submitting.value = false
   }

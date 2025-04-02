@@ -518,9 +518,8 @@ const fetchMaterials = async () => {
       },
       baseURL: 'http://localhost:8080'
     });
-    if (response.data.success) {
-      materials.value = response.data.data;
-    }
+    // 直接使用返回的数据，因为后端已经返回了数组
+    materials.value = response.data;
   } catch (error) {
     console.error('获取材料列表失败:', error);
     ElMessage.error('获取材料列表失败');

@@ -67,51 +67,7 @@ INSERT INTO roles (role_name, role_level, description) VALUES
 ('ROLE_COUNSELOR', 3, '导员'),
 ('ROLE_ADMIN', 4, '系统管理员');
 
--- 创建示例用户数据（密码需要使用BCrypt加密后的值替换）
-INSERT INTO users (user_id, password, name, gender, department, major, class_name, phone, email) VALUES
-('admin001', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTql21ZyG2', '管理员', '男', '信息工程学院', NULL, NULL, '13800138000', 'admin@example.com'),
-('2024001', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTql21ZyG2', '张三', '男', '信息工程学院', '计算机科学与技术', '计科2401', '13900139000', 'zhangsan@example.com'),
-('2024002', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTql21ZyG2', '李四', '男', '信息工程学院', '计算机科学与技术', '计科2401', '13900139001', 'lisi@example.com'),
-('2024003', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTql21ZyG2', '王五', '女', '信息工程学院', '计算机科学与技术', '计科2401', '13900139002', 'wangwu@example.com'),
-('T2024001', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTql21ZyG2', '李导员', '女', '信息工程学院', '计算机科学与技术', NULL, '13700137000', 'licounselor@example.com');
 
--- 修改插入语句
-INSERT INTO user_roles (user_id, role) 
-SELECT u.id, r.role_name
-FROM users u, roles r 
-WHERE u.user_id = 'admin001' AND r.role_name = 'ROLE_ADMIN';
-
-INSERT INTO user_roles (user_id, role)
-SELECT u.id, r.role_name
-FROM users u, roles r
-WHERE u.user_id = '2024001' AND r.role_name = 'ROLE_STUDENT';
-
-INSERT INTO user_roles (user_id, role)
-SELECT u.id, r.role_name
-FROM users u, roles r
-WHERE u.user_id = '2024002' AND r.role_name = 'ROLE_GROUP_MEMBER';
-
-INSERT INTO user_roles (user_id, role)
-SELECT u.id, r.role_name
-FROM users u, roles r
-WHERE u.user_id = '2024003' AND r.role_name = 'ROLE_GROUP_LEADER';
-
-INSERT INTO user_roles (user_id, role)
-SELECT u.id, r.role_name
-FROM users u, roles r
-WHERE u.user_id = 'T2024001' AND r.role_name = 'ROLE_COUNSELOR';
-
-ALTER TABLE users ADD COLUMN role_level INT DEFAULT 0;
-
--- 更新用户的角色等级（添加 WHERE 条件）
-UPDATE users u 
-JOIN user_roles ur ON u.id = ur.user_id 
-JOIN roles r ON ur.role = r.role_name 
-SET u.role_level = r.role_level
-WHERE u.id IN (
-    SELECT DISTINCT user_id 
-    FROM user_roles
-);
 
 -- 创建班级表
 CREATE TABLE IF NOT EXISTS classes (
@@ -154,11 +110,13 @@ CREATE TABLE IF NOT EXISTS evaluation_materials (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     class_id VARCHAR(50) NOT NULL,
     reported_at TIMESTAMP,
+    department VARCHAR(255) NOT NULL,
+    squad VARCHAR(255) NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (reviewer_id) REFERENCES users(id),
     FOREIGN KEY (class_id) REFERENCES classes(id),
     INDEX idx_class_id (class_id),
-    squad VARCHAR(50) COMMENT '中队'
+    INDEX idx_status_reported_at (status, reported_at)
 );
 
 -- 创建材料附件表
@@ -173,24 +131,6 @@ CREATE TABLE IF NOT EXISTS evaluation_attachments (
     FOREIGN KEY (material_id) REFERENCES evaluation_materials(id) ON DELETE CASCADE
 );
 
--- 插入测试数据
-INSERT INTO classes (id, name, department, major, grade) 
-VALUES 
-('CS2101', '计算机科学与技术1班', '计算机学院', '计算机科学与技术', '2021'),
-('CS2102', '计算机科学与技术2班', '计算机学院', '计算机科学与技术', '2021');
-
--- 注意：需要替换实际的用户ID
-INSERT INTO class_group_members (user_id, class_id) 
-VALUES 
-(1, 'CS2101'),  -- 替换1为实际的综测小组成员ID
-(1, 'CS2102');  -- 替换1为实际的综测小组成员ID
-
--- 注意：需要替换实际的学生ID
-INSERT INTO evaluation_materials 
-(user_id, evaluation_type, title, description, status, class_id) 
-VALUES 
-(2, 'academic', '测试材料1', '描述1', 'PENDING', 'CS2101'),  -- 替换2为实际的学生ID
-(2, 'academic', '测试材料2', '描述2', 'PENDING', 'CS2102');  -- 替换2为实际的学生ID
 
 -- 规章制度表
 CREATE TABLE evaluation_rules (
@@ -224,7 +164,7 @@ MODIFY COLUMN title VARCHAR(255) NOT NULL COMMENT '规章标题',
 CHANGE COLUMN created_by uploaded_by BIGINT NOT NULL COMMENT '上传人ID',
 CHANGE COLUMN created_at uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间';
 
-CREATE TABLE grade_group_leader (
+CREATE TABLE squad_group_leader (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id BIGINT NOT NULL,
     grade_id VARCHAR(50) NOT NULL,  -- 例如：2021、2022等
@@ -234,22 +174,13 @@ CREATE TABLE grade_group_leader (
     squad VARCHAR(50) NOT NULL COMMENT '中队'
 );
 
--- 插入年级负责人数据，使用实际的年级值
-INSERT INTO grade_group_leader (user_id, grade_id) 
-VALUES (12, '2021');  -- 对应 classes 表中的 grade 字段值
 
-CREATE TABLE instructor_squad (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    instructor_id BIGINT NOT NULL,
-    department VARCHAR(50) NOT NULL,  -- 学院
-    grade VARCHAR(4) NOT NULL,        -- 年级，如 2024
-    UNIQUE KEY uk_instructor_squad (instructor_id, department, grade),
-    squad VARCHAR(50) NOT NULL COMMENT '中队'
-);
+-- 先删除外键约束（如果有的话）
+ALTER TABLE instructor_squad 
+DROP FOREIGN KEY IF EXISTS FK_instructor_squad_instructor;
 
--- 添加索引
-CREATE INDEX idx_instructor_squad ON instructor_squad(instructor_id);
-CREATE INDEX idx_squad ON instructor_squad(department, grade);
+-- 删除表
+DROP TABLE IF EXISTS instructor_squad;
 
 -- 材料表索引
 ALTER TABLE evaluation_materials ADD INDEX idx_status_reported_at (status, reported_at);
@@ -272,13 +203,8 @@ CREATE TABLE bonus_rules (
   points DECIMAL(5,2) NOT NULL COMMENT '分值',
   description TEXT COMMENT '描述说明',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  department VARCHAR(50) NOT NULL DEFAULT '',
-  squad VARCHAR(50) NOT NULL DEFAULT ''
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ;
-
--- 添加联合索引以提高查询性能
-CREATE INDEX idx_dept_squad ON bonus_rules(department, squad);
 
 -- 删除 group_members 表
 DROP TABLE IF EXISTS group_members;
@@ -336,3 +262,9 @@ ALTER TABLE instructors ADD INDEX idx_squad_list (squad_list);
 ALTER TABLE group_members ADD COLUMN student_id VARCHAR(20);
 
 --group_members用来存储所有综测小组成员信息
+
+-- 更新现有数据
+UPDATE evaluation_materials em
+JOIN users u ON em.user_id = u.id
+SET em.department = u.department,
+    em.squad = u.squad;

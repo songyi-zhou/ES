@@ -12,12 +12,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.zhou.backend.dto.EvaluationMaterialDTO;
 import org.zhou.backend.entity.EvaluationAttachment;
 import org.zhou.backend.entity.EvaluationMaterial;
+import org.zhou.backend.entity.GroupMember;
 import org.zhou.backend.entity.User;
 import org.zhou.backend.model.request.ReviewRequest;
 import org.zhou.backend.repository.ClassGroupMemberRepository;
@@ -30,6 +32,7 @@ import org.zhou.backend.repository.GroupMemberRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.persistence.criteria.Predicate;
 
 @Service
 @RequiredArgsConstructor
@@ -153,15 +156,28 @@ public class EvaluationService {
 
     public Page<EvaluationMaterial> getReportedMaterialsForInstructor(
             Long instructorId, String status, int page, int size) {
-        log.info("Fetching materials for instructor: {}, status: {}", instructorId, status);
+        
+        // 获取导员信息
+        User instructor = userRepository.findById(instructorId)
+            .orElseThrow(() -> new RuntimeException("导员不存在"));
+        
         Pageable pageable = PageRequest.of(page - 1, size);
-        Page<EvaluationMaterial> materials = evaluationRepository.findByReviewerIdAndStatus(
-            instructorId,
-            status != null ? status : "REPORTED",
-            pageable
-        );
-        log.info("Found {} materials", materials.getTotalElements());
-        return materials;
+        
+        // 使用 Specification 构建查询条件
+        Specification<EvaluationMaterial> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            
+            // 只查询已上报的材料
+            predicates.add(cb.equal(root.get("status"), "REPORTED"));
+            
+            // 按导员所在院系和中队筛选
+            predicates.add(cb.equal(root.get("department"), instructor.getDepartment()));
+            predicates.add(cb.equal(root.get("squad"), instructor.getSquad()));
+            
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        
+        return materialRepository.findAll(spec, pageable);
     }
     
     public void reviewReportedMaterial(ReviewRequest request) {
@@ -196,8 +212,28 @@ public class EvaluationService {
         materialRepository.save(material);
     }
 
-    public List<EvaluationMaterial> getAllMaterials() {
-        return materialRepository.findAll();
+    public List<EvaluationMaterial> getAllMaterials(Long currentUserId) {
+        User currentUser = userRepository.findById(currentUserId)
+            .orElseThrow(() -> new RuntimeException("用户不存在"));
+
+        // 如果是管理员或导员，可以看到所有材料
+        if (currentUser.getRoles().contains("ROLE_ADMIN") || 
+            currentUser.getRoles().contains("ROLE_COUNSELOR")) {
+            return materialRepository.findAll();
+        }
+        
+        // 如果是综测小组成员，只能看到自己负责班级的材料
+        if (currentUser.getRoles().contains("ROLE_GROUP_MEMBER")) {
+            // 从 group_member 表中获取负责的班级
+            GroupMember groupMember = groupMemberRepository.findByUserId(currentUserId)
+                .orElseThrow(() -> new RuntimeException("未找到组员信息"));
+                
+            // 查询该班级的所有材料
+            return materialRepository.findByClassId(groupMember.getClassId());
+        }
+        
+        // 如果是普通学生，只能看到自己的材料
+        return materialRepository.findByUserId(currentUserId);
     }
 
     public EvaluationMaterial createMaterial(EvaluationMaterial material, Long currentUserId) {
@@ -206,17 +242,27 @@ public class EvaluationService {
             .orElseThrow(() -> new RuntimeException("学生不存在"));
             
         // 2. 通过学生的专业和年级找到对应的导员
-        User counselor = userRepository.findInstructorsByDepartmentsAndGrades(
-            Set.of(student.getDepartment()),
-            Set.of(student.getGrade())
-        ).stream()
-            .findFirst()
-            .orElseThrow(() -> new RuntimeException("未找到对应导员"));
+        User counselor = findCounselor(student);
         
         // 3. 设置审核人ID
         material.setReviewerId(counselor.getId());
         material.setStatus("PENDING");  // 设置初始状态为待审核
         
+        // 添加这些字段
+        material.setDepartment(student.getDepartment());
+        material.setSquad(student.getSquad());
+        
         return materialRepository.save(material);
+    }
+
+    private User findCounselor(User student) {
+        // 直接从users表中查询对应院系和中队的导员
+        return userRepository.findByDepartmentAndSquadAndRoles(
+            student.getDepartment(),
+            student.getSquad(),
+            "ROLE_COUNSELOR"
+        ).orElseThrow(() -> new RuntimeException(
+            String.format("未找到%s %s的导员", student.getDepartment(), student.getSquad())
+        ));
     }
 } 

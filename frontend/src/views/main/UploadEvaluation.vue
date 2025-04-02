@@ -107,6 +107,7 @@ import router from "@/router";
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import { UploadFilled } from '@element-plus/icons-vue';
+import axiosInstance from '@/utils/axios';
 
 const formData = ref({
   evaluationType: '',
@@ -182,46 +183,6 @@ const handleRemove = (file) => {
     formData.value.files.splice(index, 1);
   }
 };
-
-// 创建axios实例
-const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  withCredentials: true
-});
-
-// 添加请求拦截器
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// 添加响应拦截器
-axiosInstance.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
-    if (error.response) {
-      console.error('API错误响应:', error.response);
-      if (error.response.status === 401) {
-        localStorage.removeItem('token');
-        router.push('/login');
-      }
-    }
-    return Promise.reject(error);
-  }
-);
 
 // 获取上传历史
 const fetchUploadHistory = async () => {
@@ -379,7 +340,9 @@ const getStatusText = (status) => {
   const statusMap = {
     'PENDING': '待审核',
     'APPROVED': '已通过',
-    'REJECTED': '已驳回'
+    'REJECTED': '已驳回',
+    'QUESTIONED': '已上报',
+    'REPORTED': '已上报至导员'
   };
   return statusMap[status] || '未知状态';
 };

@@ -252,31 +252,25 @@ const submitReview = async () => {
 const fetchQuestionMaterials = async () => {
   try {
     loading.value = true
-    console.log('开始请求数据...')
-    
-    const response = await axios({
-      method: 'get',
-      url: '/api/instructor/reported-materials',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`  // 确保携带token
-      },
+    const response = await axios.get('/api/instructor/reported-materials', {
       params: {
         status: filterStatus.value,
         page: currentPage.value,
         size: pageSize.value
-      }
+      },
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      baseURL: 'http://localhost:8080'
     })
-    
-    console.log('请求成功，响应数据：', response)
     
     if (response.data.success) {
       questionMaterials.value = response.data.data
       total.value = response.data.total
-      console.log('数据已更新:', questionMaterials.value)
     }
   } catch (error) {
-    console.error('请求失败:', error)
-    ElMessage.error(`获取材料列表失败: ${error.message}`)
+    console.error('获取材料列表失败:', error)
+    ElMessage.error('获取材料列表失败')
   } finally {
     loading.value = false
   }
