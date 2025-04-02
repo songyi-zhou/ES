@@ -25,17 +25,17 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.zhou.backend.entity.ClassGroupMember;
 import org.zhou.backend.entity.GroupMember;
 import org.zhou.backend.entity.User;
-import org.zhou.backend.entity.ClassGroupMember;
 import org.zhou.backend.exception.ResourceNotFoundException;
 import org.zhou.backend.model.request.BatchGroupMemberRequest;
-import org.zhou.backend.model.request.GroupMemberRequest;
 import org.zhou.backend.model.request.ClassAssignRequest;
+import org.zhou.backend.model.request.GroupMemberRequest;
 import org.zhou.backend.security.UserPrincipal;
+import org.zhou.backend.service.ClassGroupMemberService;
 import org.zhou.backend.service.GroupMemberService;
 import org.zhou.backend.service.UserService;
-import org.zhou.backend.service.ClassGroupMemberService;
 
 import lombok.RequiredArgsConstructor;
 

@@ -34,4 +34,6 @@ public interface ClassGroupMemberRepository extends JpaRepository<ClassGroupMemb
     List<Map<String, Object>> findAllWithDetailsByLeaderId(@Param("leaderId") Long leaderId);
 
     List<ClassGroupMember> findByClassId(String classId);
+
+    void deleteByUserId(Long userId);
 } 

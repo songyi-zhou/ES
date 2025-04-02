@@ -241,12 +241,24 @@ const fetchStudents = async () => {
 
 const fetchExistingMembers = async () => {
   try {
-    const response = await request.get('/group-members')
-    if (response.data.success) {
-      existingMembers.value = response.data.data.map(member => ({
+    // 获取综测小组成员
+    const membersResponse = await request.get('/instructor/group-members')
+    // 获取综测负责人
+    const leadersResponse = await request.get('/squad-group-leaders')
+    
+    if (membersResponse.data.success && leadersResponse.data.success) {
+      const members = membersResponse.data.data.map(member => ({
         ...member,
         studentId: member.studentId || member.id
       }))
+      
+      const leaders = leadersResponse.data.data.map(leader => ({
+        ...leader,
+        studentId: leader.studentId || leader.id
+      }))
+      
+      // 合并两类人员
+      existingMembers.value = [...members, ...leaders]
       console.log('Processed existing members:', existingMembers.value)
     }
   } catch (error) {

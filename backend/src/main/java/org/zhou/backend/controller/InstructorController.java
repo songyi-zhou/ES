@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,15 +21,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.zhou.backend.entity.EvaluationMaterial;
+import org.zhou.backend.entity.GroupMember;
+import org.zhou.backend.entity.User;
 import org.zhou.backend.model.dto.StudentDTO;
 import org.zhou.backend.model.request.ReviewRequest;
 import org.zhou.backend.model.request.RoleUpdateRequest;
+import org.zhou.backend.repository.GroupMemberRepository;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.EvaluationService;
 import org.zhou.backend.service.InstructorService;
+import org.zhou.backend.service.UserService;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
 
 @RestController
 @RequestMapping("/api/instructor")
@@ -37,6 +41,8 @@ public class InstructorController {
     
     private final EvaluationService evaluationService;
     private final InstructorService instructorService;
+    private final UserService userService;
+    private final GroupMemberRepository groupMemberRepository;
     
     private static final Logger log = LoggerFactory.getLogger(InstructorController.class);
     
@@ -146,6 +152,31 @@ public class InstructorController {
         } catch (Exception e) {
             return ResponseEntity.badRequest()
                 .body(Map.of("message", "批量修改权限失败: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/group-members")
+    @PreAuthorize("hasRole('COUNSELOR')")
+    public ResponseEntity<?> getGroupMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        try {
+            User currentUser = userService.getUserById(userPrincipal.getId());
+            String department = currentUser.getDepartment();
+            
+            log.info("当前辅导员部门: {}", department);
+            
+            List<GroupMember> members = groupMemberRepository.findByDepartment(department);
+            log.info("查询到的小组成员数量: {}", members.size());
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", members
+            ));
+        } catch (Exception e) {
+            log.error("获取小组成员失败", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
         }
     }
 } 

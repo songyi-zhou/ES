@@ -12,7 +12,6 @@ import org.zhou.backend.entity.GroupMember;
 @Repository
 public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> {
     List<GroupMember> findByDepartmentAndGrade(String department, String grade);
-    @Query("SELECT gm FROM GroupMember gm WHERE gm.department = :department")
     List<GroupMember> findByDepartment(String department);
     @Query("SELECT gm FROM GroupMember gm WHERE gm.department = :department AND (gm.classId IS NULL OR gm.classId = '')")
     List<GroupMember> findByDepartmentAndClassIdIsNullOrClassIdEmpty(@Param("department") String department);

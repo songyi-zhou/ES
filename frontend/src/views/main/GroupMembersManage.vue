@@ -152,7 +152,7 @@
           
           <div class="dialog-footer">
             <button class="btn btn-cancel" @click="closeModal">取消</button>
-            <button class="btn btn-primary" @click="submitMember">确定</button>
+            <button class="btn btn-primary" @click="assignClass">确定</button>
           </div>
         </el-dialog>
 

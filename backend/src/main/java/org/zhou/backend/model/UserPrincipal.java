@@ -13,6 +13,7 @@ public class UserPrincipal implements UserDetails {
     private String username;
     private String password;
     private Collection<? extends GrantedAuthority> authorities;
+    private String userId;
     
     @Override
     public boolean isAccountNonExpired() { return true; }
@@ -25,4 +26,8 @@ public class UserPrincipal implements UserDetails {
     
     @Override
     public boolean isEnabled() { return true; }
+
+    public String getUserId() {
+        return this.userId;
+    }
 } 

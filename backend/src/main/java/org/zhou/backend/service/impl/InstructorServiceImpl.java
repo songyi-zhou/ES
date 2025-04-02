@@ -25,6 +25,7 @@ import org.zhou.backend.repository.RoleRepository;
 import org.zhou.backend.repository.SquadGroupLeaderRepository;
 import org.zhou.backend.repository.StudentRepository;
 import org.zhou.backend.repository.UserRepository;
+import org.zhou.backend.repository.ClassGroupMemberRepository;
 import org.zhou.backend.service.InstructorService;
 
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,7 @@ public class InstructorServiceImpl implements InstructorService {
     private final RoleRepository roleRepository;
     private final SquadGroupLeaderRepository squadGroupLeaderRepository;
     private final GroupMemberRepository groupMemberRepository;
+    private final ClassGroupMemberRepository classGroupMemberRepository;
     private static final Logger log = LoggerFactory.getLogger(InstructorServiceImpl.class);
 
     @Override
@@ -88,6 +90,7 @@ public class InstructorServiceImpl implements InstructorService {
         // 清理旧角色相关数据
         if (!"groupmember".equals(newRole.toLowerCase())) {
             groupMemberRepository.deleteByUserId(user.getId());
+            classGroupMemberRepository.deleteByUserId(user.getId());
         }
         if (!"groupleader".equals(newRole.toLowerCase())) {
             squadGroupLeaderRepository.deleteByStudentId(user.getUserId());

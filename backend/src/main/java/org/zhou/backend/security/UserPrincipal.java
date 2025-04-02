@@ -1,21 +1,22 @@
 package org.zhou.backend.security;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.zhou.backend.entity.User;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.stream.Collectors;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
 public class UserPrincipal implements UserDetails {
     private Long id;
-    private String userId;
+    private final String userId;
     private String name;
     private String password;
     private Integer roleLevel;

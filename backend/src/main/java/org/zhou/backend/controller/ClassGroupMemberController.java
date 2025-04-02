@@ -5,7 +5,9 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -21,8 +23,6 @@ import org.zhou.backend.repository.ClassGroupMemberRepository;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.ClassGroupMemberService;
 import org.zhou.backend.service.UserService;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.http.HttpStatus;
 
 import lombok.RequiredArgsConstructor;
 
@@ -38,7 +38,7 @@ public class ClassGroupMemberController {
     private final JdbcTemplate jdbcTemplate;
 
     @GetMapping
-    @PreAuthorize("hasRole('GROUP_LEADER')")
+    @PreAuthorize("hasAnyRole('GROUP_LEADER', 'COUNSELOR')")
     public ResponseEntity<?> getClassGroupMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         log.info("获取综测负责人(ID:{})负责的中队成员列表", userPrincipal.getId());
         
