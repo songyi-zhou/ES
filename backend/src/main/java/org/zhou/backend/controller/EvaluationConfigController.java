@@ -1,5 +1,7 @@
 package org.zhou.backend.controller;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -55,77 +57,163 @@ public class EvaluationConfigController {
                 ));
             }
 
-            // 根据表类型选择不同的处理逻辑
-            String tableName;
-            String insertSql;
-            Object[] params;
+            // 添加日志，查看学生列表
+            log.info("Found {} students in department: {}, squad: {}", 
+                students.size(), department, squad);
+            students.forEach(student -> 
+                log.info("Student: {}, ID: {}", student.getName(), student.getStudentId()));
 
+            // 检查是否已存在相同评测
+            String tableName = "";
             switch (request.getFormType()) {
                 case "MONTHLY_A":
                     tableName = "moral_monthly_evaluation";
+                    String checkSql = """
+                        SELECT COUNT(*) FROM moral_monthly_evaluation 
+                        WHERE academic_year = ? AND semester = ? AND month = ?
+                        """;
+                    int count = jdbcTemplate.queryForObject(checkSql, Integer.class, 
+                        request.getAcademicYear(), request.getSemester(), request.getMonth());
+                    if (count > 0) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "该月度德育测评已存在，请勿重复发布"
+                        ));
+                    }
+                    break;
+                case "TYPE_C":
+                    tableName = "research_competition_evaluation";
+                    break;
+                case "TYPE_D":
+                    tableName = "sports_arts_evaluation";
+                    break;
+                case "SEMESTER_A":
+                    tableName = "moral_semester_evaluation";
+                    break;
+                case "COMPREHENSIVE":
+                    tableName = "comprehensive_result";
+                    break;
+                default:
+                    return ResponseEntity.badRequest().body("未知的表类型");
+            }
+
+            // 日期格式转换
+            DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
+            LocalDateTime declareStartTime = request.getDeclareStartTime() != null ? 
+                LocalDateTime.parse(request.getDeclareStartTime(), formatter) : null;
+            LocalDateTime declareEndTime = request.getDeclareEndTime() != null ? 
+                LocalDateTime.parse(request.getDeclareEndTime(), formatter) : null;
+            LocalDateTime reviewEndTime = request.getReviewEndTime() != null ? 
+                LocalDateTime.parse(request.getReviewEndTime(), formatter) : null;
+            LocalDateTime publicityStartTime = request.getPublicityStartTime() != null ? 
+                LocalDateTime.parse(request.getPublicityStartTime(), formatter) : null;
+            LocalDateTime publicityEndTime = request.getPublicityEndTime() != null ? 
+                LocalDateTime.parse(request.getPublicityEndTime(), formatter) : null;
+
+            // 根据表类型选择不同的处理逻辑
+            String insertSql;
+            switch (request.getFormType()) {
+                case "MONTHLY_A":
                     insertSql = """
                         INSERT INTO moral_monthly_evaluation 
-                        (academic_year, semester, month, description, 
+                        (academic_year, semester, month, description,
+                        student_id, name, squad, department, major,
+                        base_score, total_bonus, total_penalty, raw_score,
                         declare_start_time, declare_end_time, review_end_time,
                         publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, ?, ?, ?, 0)
                         """;
-                    params = new Object[]{
-                        request.getAcademicYear(),
-                        request.getSemester(),
-                        request.getMonth(),
-                        request.getDescription(),
-                        request.getDeclareStartTime(),
-                        request.getDeclareEndTime(),
-                        request.getReviewEndTime(),
-                        request.getPublicityStartTime(),
-                        request.getPublicityEndTime()
-                    };
+                    
+                    log.info("Inserting records for {} students", students.size());
+                    // 为每个学生创建记录
+                    for (Student student : students) {
+                        Object[] params = new Object[]{
+                            request.getAcademicYear(),
+                            request.getSemester(),
+                            request.getMonth(),
+                            request.getDescription(),
+                            student.getStudentId(),
+                            student.getName(),
+                            student.getSquad(),
+                            student.getDepartment(),
+                            student.getMajor(),
+                            request.getBaseScore(),
+                            declareStartTime,
+                            declareEndTime,
+                            reviewEndTime,
+                            publicityStartTime,
+                            publicityEndTime
+                        };
+                        jdbcTemplate.update(insertSql, params);
+                        log.info("Inserted record for student: {}", student.getStudentId());
+                    }
                     break;
 
                 case "TYPE_C":
                     tableName = "research_competition_evaluation";
                     insertSql = """
                         INSERT INTO research_competition_evaluation 
-                        (academic_year, semester, month_count, description,
+                        (academic_year, semester, description,
+                        student_id, name, squad, department, major,
+                        base_score, total_bonus, total_penalty, raw_score,
                         declare_start_time, declare_end_time, review_end_time,
                         publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, ?, ?, ?, 0)
                         """;
-                    params = new Object[]{
-                        request.getAcademicYear(),
-                        request.getSemester(),
-                        request.getMonthCount(),
-                        request.getDescription(),
-                        request.getDeclareStartTime(),
-                        request.getDeclareEndTime(),
-                        request.getReviewEndTime(),
-                        request.getPublicityStartTime(),
-                        request.getPublicityEndTime()
-                    };
+                    
+                    for (Student student : students) {
+                        Object[] params = new Object[]{
+                            request.getAcademicYear(),
+                            request.getSemester(),
+                            request.getMonthCount(),
+                            request.getDescription(),
+                            student.getStudentId(),
+                            student.getName(),
+                            student.getSquad(),
+                            student.getDepartment(),
+                            student.getMajor(),
+                            request.getBaseScore(),
+                            declareStartTime,
+                            declareEndTime,
+                            reviewEndTime,
+                            publicityStartTime,
+                            publicityEndTime
+                        };
+                        jdbcTemplate.update(insertSql, params);
+                    }
                     break;
 
                 case "TYPE_D":
                     tableName = "sports_arts_evaluation";
-                    // 与C类表相同的SQL和参数
                     insertSql = """
                         INSERT INTO sports_arts_evaluation 
-                        (academic_year, semester, month_count, description,
+                        (academic_year, semester, description,
+                        student_id, name, squad, department, major,
+                        base_score, total_bonus, total_penalty, raw_score,
                         declare_start_time, declare_end_time, review_end_time,
                         publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, ?, ?, ?, 0)
                         """;
-                    params = new Object[]{
-                        request.getAcademicYear(),
-                        request.getSemester(),
-                        request.getMonthCount(),
-                        request.getDescription(),
-                        request.getDeclareStartTime(),
-                        request.getDeclareEndTime(),
-                        request.getReviewEndTime(),
-                        request.getPublicityStartTime(),
-                        request.getPublicityEndTime()
-                    };
+                    
+                    for (Student student : students) {
+                        Object[] params = new Object[]{
+                            request.getAcademicYear(),
+                            request.getSemester(),
+                            request.getDescription(),
+                            student.getStudentId(),
+                            student.getName(),
+                            student.getSquad(),
+                            student.getDepartment(),
+                            student.getMajor(),
+                            request.getBaseScore(),
+                            declareStartTime,
+                            declareEndTime,
+                            reviewEndTime,
+                            publicityStartTime,
+                            publicityEndTime
+                        };
+                        jdbcTemplate.update(insertSql, params);
+                    }
                     break;
 
                 case "SEMESTER_A":
@@ -133,16 +221,28 @@ public class EvaluationConfigController {
                     insertSql = """
                         INSERT INTO moral_semester_evaluation 
                         (academic_year, semester, description,
+                        student_id, name, squad, department, major,
+                        base_score, total_bonus, total_penalty, raw_score,
                         publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, 0)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, 0)
                         """;
-                    params = new Object[]{
-                        request.getAcademicYear(),
-                        request.getSemester(),
-                        request.getDescription(),
-                        request.getPublicityStartTime(),
-                        request.getPublicityEndTime()
-                    };
+                    
+                    for (Student student : students) {
+                        Object[] params = new Object[]{
+                            request.getAcademicYear(),
+                            request.getSemester(),
+                            request.getDescription(),
+                            student.getStudentId(),
+                            student.getName(),
+                            student.getSquad(),
+                            student.getDepartment(),
+                            student.getMajor(),
+                            request.getBaseScore(),
+                            publicityStartTime,
+                            publicityEndTime
+                        };
+                        jdbcTemplate.update(insertSql, params);
+                    }
                     break;
 
                 case "COMPREHENSIVE":
@@ -150,35 +250,35 @@ public class EvaluationConfigController {
                     insertSql = """
                         INSERT INTO comprehensive_result 
                         (academic_year, semester, description,
+                        student_id, name, class_name, squad, department, major,
+                        moral_score, academic_score, research_score, 
+                        sports_arts_score, extra_score, total_score, rank,
                         publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, 0)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 
+                                null, null, null, null, 0, null, null,
+                                ?, ?, 0)
                         """;
-                    params = new Object[]{
-                        request.getAcademicYear(),
-                        request.getSemester(),
-                        request.getDescription(),
-                        request.getPublicityStartTime(),
-                        request.getPublicityEndTime()
-                    };
+                    
+                    for (Student student : students) {
+                        Object[] params = new Object[]{
+                            request.getAcademicYear(),
+                            request.getSemester(),
+                            request.getDescription(),
+                            student.getStudentId(),
+                            student.getName(),
+                            student.getClassName(),
+                            student.getSquad(),
+                            student.getDepartment(),
+                            student.getMajor(),
+                            publicityStartTime,
+                            publicityEndTime
+                        };
+                        jdbcTemplate.update(insertSql, params);
+                    }
                     break;
 
                 default:
                     return ResponseEntity.badRequest().body("未知的表类型");
-            }
-
-            // 检查是否已存在相同评测
-            String checkSql = "SELECT COUNT(*) FROM " + tableName + " WHERE academic_year = ? AND semester = ?";
-            int count = jdbcTemplate.queryForObject(checkSql, Integer.class, new Object[]{request.getAcademicYear(), request.getSemester()});
-            if (count > 0) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", String.format("该%s类测评已存在，请勿重复发布", request.getFormType())
-                ));
-            }
-
-            // 批量插入学生数据
-            for (Student student : students) {
-                jdbcTemplate.update(insertSql, params);
             }
 
             // 记录操作日志
@@ -203,13 +303,9 @@ public class EvaluationConfigController {
 
         } catch (Exception e) {
             log.error("发布综测失败", e);
-            String errorMessage = e.getMessage().contains("Duplicate entry") ? 
-                "该测评记录已存在，请勿重复发布" : 
-                "发布综测失败：" + e.getMessage();
-            
             return ResponseEntity.badRequest().body(Map.of(
                 "success", false,
-                "message", errorMessage
+                "message", "发布综测失败：" + e.getMessage()
             ));
         }
     }

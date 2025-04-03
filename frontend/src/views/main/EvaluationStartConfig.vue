@@ -554,58 +554,76 @@ const saveNoticeConfig = async () => {
   }
 }
 
-// 检查是否已存在相同配置的综测
-const checkExistingEvaluation = async () => {
-  try {
-    const response = await request.get('/evaluation-config/check', {
-      params: {
-        academicYear: basicConfig.value.academicYear,
-        semester: basicConfig.value.semester,
-        formType: basicConfig.value.formType,
-        month: basicConfig.value.month // A类表专用
-      }
-    })
-    return response.data.exists
-  } catch (error) {
-    console.error('检查综测配置失败:', error)
-    ElMessage.error('检查综测配置失败')
-    return true // 出错时默认认为存在，防止重复发布
-  }
-}
-
 // 发布综测
 const publishEvaluation = async () => {
-  if (!canPublish.value) {
-    ElMessage.warning('请填写完整所有必填项')
-    return
-  }
-
-  // 检查是否已存在
-  const exists = await checkExistingEvaluation()
-  if (exists) {
-    ElMessage.warning('该综测配置已存在，请勿重复发布')
-    return
-  }
-
   try {
-    const response = await request.post('/api/evaluation-config/publish', {
-      academicYear: basicConfig.value.academicYear,
-      semester: basicConfig.value.semester,
-      formType: basicConfig.value.formType,
-      month: basicConfig.value.formType === 'A' ? basicConfig.value.month : null,
-      monthCount: ['C', 'D'].includes(basicConfig.value.formType) ? basicConfig.value.monthCount : null,
-      description: basicConfig.value.description
+    // 表单验证
+    if (!basicConfig.value.academicYear || !basicConfig.value.semester || !basicConfig.value.formType) {
+      ElMessage.warning('请填写必要的表单信息')
+      return
+    }
+
+    // 根据不同表类型验证必要字段
+    if (basicConfig.value.formType === 'MONTHLY_A' && !basicConfig.value.month) {
+      ElMessage.warning('请选择月份')
+      return
+    }
+
+    if (['TYPE_C', 'TYPE_D'].includes(basicConfig.value.formType) && !basicConfig.value.monthCount) {
+      ElMessage.warning('请填写月数')
+      return
+    }
+
+    // 时间验证
+    if (!['SEMESTER_A', 'COMPREHENSIVE'].includes(basicConfig.value.formType)) {
+      if (!timeConfig.value.declareStartTime || !timeConfig.value.declareEndTime || !timeConfig.value.reviewEndTime) {
+        ElMessage.warning('请填写完整的时间信息')
+        return
+      }
+    }
+
+    if (!timeConfig.value.publicityStartTime || !timeConfig.value.publicityEndTime) {
+      ElMessage.warning('请填写公示时间')
+      return
+    }
+
+    // 发送发布请求
+    const response = await request.post('/evaluation-config/publish', {
+      ...basicConfig.value,
+      ...timeConfig.value,
+      ...scoreConfig.value,
+      ...noticeConfig.value,
+      // 确保日期格式正确
+      declareStartTime: timeConfig.value.declareStartTime ? new Date(timeConfig.value.declareStartTime).toISOString() : null,
+      declareEndTime: timeConfig.value.declareEndTime ? new Date(timeConfig.value.declareEndTime).toISOString() : null,
+      reviewEndTime: timeConfig.value.reviewEndTime ? new Date(timeConfig.value.reviewEndTime).toISOString() : null,
+      publicityStartTime: timeConfig.value.publicityStartTime ? new Date(timeConfig.value.publicityStartTime).toISOString() : null,
+      publicityEndTime: timeConfig.value.publicityEndTime ? new Date(timeConfig.value.publicityEndTime).toISOString() : null
     })
 
     if (response.data.success) {
       ElMessage.success(response.data.message)
-      // 可以在这里添加成功后的其他操作，比如重置表单或跳转页面
+      // 重置表单
+      Object.keys(basicConfig.value).forEach(key => {
+        basicConfig.value[key] = ''
+      })
+      Object.keys(timeConfig.value).forEach(key => {
+        timeConfig.value[key] = ''
+      })
+      Object.keys(scoreConfig.value).forEach(key => {
+        scoreConfig.value[key] = ''
+      })
+      Object.keys(noticeConfig.value).forEach(key => {
+        noticeConfig.value[key] = ''
+      })
+      // 刷新日志
+      refreshLogs()
     } else {
       ElMessage.error(response.data.message)
     }
   } catch (error) {
-    console.error('发布综测失败:', error)
-    ElMessage.error(error.response?.data?.message || '发布综测失败，请稍后重试')
+    console.error('发布失败:', error)
+    ElMessage.error(error.response?.data?.message || '发布失败，请稍后重试')
   }
 }
 

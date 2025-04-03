@@ -299,6 +299,7 @@ CREATE TABLE moral_monthly_evaluation (
     publicity_start_time DATETIME COMMENT '公示开始时间',
     publicity_end_time DATETIME COMMENT '公示截止时间',
     status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
+    description TEXT COMMENT '测评说明',
     PRIMARY KEY (academic_year, semester, month, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思想品德月度测评表';
 
@@ -321,6 +322,7 @@ CREATE TABLE academic_evaluation (
     publicity_start_time DATETIME COMMENT '公示开始时间',
     publicity_end_time DATETIME COMMENT '公示截止时间',
     status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
+    description TEXT COMMENT '测评说明',
     PRIMARY KEY (academic_year, semester, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成绩测评表';
 
@@ -350,6 +352,7 @@ CREATE TABLE research_competition_evaluation (
     publicity_start_time DATETIME COMMENT '公示开始时间',
     publicity_end_time DATETIME COMMENT '公示截止时间',
     status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
+    description TEXT COMMENT '测评说明',
     PRIMARY KEY (academic_year, semester, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='科研竞赛测评表';
 
@@ -379,6 +382,7 @@ CREATE TABLE sports_arts_evaluation (
     publicity_start_time DATETIME COMMENT '公示开始时间',
     publicity_end_time DATETIME COMMENT '公示截止时间',
     status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
+    description TEXT COMMENT '测评说明',
     PRIMARY KEY (academic_year, semester, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文体活动测评表';
 
@@ -407,6 +411,7 @@ CREATE TABLE comprehensive_result (
     publicity_start_time DATETIME COMMENT '公示开始时间',
     publicity_end_time DATETIME COMMENT '公示截止时间',
     status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
+    description TEXT COMMENT '测评说明',
     PRIMARY KEY (academic_year, semester, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='综合测评结果表';
 
@@ -458,5 +463,6 @@ CREATE TABLE moral_semester_evaluation (
     publicity_start_time DATETIME COMMENT '公示开始时间',
     publicity_end_time DATETIME COMMENT '公示截止时间',
     status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
+    description TEXT COMMENT '测评说明',
     PRIMARY KEY (academic_year, semester, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思想品德学期测评表';
