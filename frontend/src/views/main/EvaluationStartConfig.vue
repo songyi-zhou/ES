@@ -627,21 +627,6 @@ const publishEvaluation = async () => {
   }
 }
 
-// 确认发布
-const confirmPublish = async () => {
-  try {
-    publishing.value = true
-    // TODO: 调用发布API
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    ElMessage.success('综测已成功发布')
-    previewDialogVisible.value = false
-  } catch (error) {
-    ElMessage.error('发布失败')
-  } finally {
-    publishing.value = false
-  }
-}
 
 // 计算基础分总和
 const calculateTotalBaseScore = computed(() => {

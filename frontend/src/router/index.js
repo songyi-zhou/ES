@@ -26,6 +26,7 @@ import InstructorReviewQuestionMaterials from '@/views/main/InstructorReviewQues
 import GroupMemberSelect from '@/views/main/GroupMemberSelect.vue'
 import InstructorViewResults from '@/views/main/InstructorViewResults.vue'
 import { useUserStore } from '@/stores/user'
+import PenaltyUpload from '@/views/instructor/PenaltyUpload.vue'
 
 const routes = [
     {path: '/', redirect: '/home'},
@@ -177,6 +178,16 @@ const routes = [
           requiresAuth: true,
           requiresAdmin: true,
           title: '用户信息导入'
+        }
+      },
+      {
+        path: '/instructor/penalty-upload',
+        name: 'PenaltyUpload',
+        component: () => import('@/views/instructor/PenaltyUpload.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresInstructor: true,
+          title: '扣分材料上传'
         }
       }
 ]
