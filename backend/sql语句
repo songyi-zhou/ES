@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS evaluation_materials (
     reported_at TIMESTAMP,
     department VARCHAR(255) NOT NULL,
     squad VARCHAR(255) NOT NULL,
+    score DECIMAL(4,1) DEFAULT 0.0 COMMENT '材料加减分值',
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (reviewer_id) REFERENCES users(id),
     FOREIGN KEY (class_id) REFERENCES classes(id),
@@ -268,3 +269,148 @@ UPDATE evaluation_materials em
 JOIN users u ON em.user_id = u.id
 SET em.department = u.department,
     em.squad = u.squad;
+
+-- 删除已存在的表
+DROP TABLE IF EXISTS moral_monthly_evaluation;
+DROP TABLE IF EXISTS academic_evaluation;
+DROP TABLE IF EXISTS research_competition_evaluation;
+DROP TABLE IF EXISTS sports_arts_evaluation;
+
+-- A表（思想品德月度测评表）
+CREATE TABLE moral_monthly_evaluation (
+    academic_year VARCHAR(9) NOT NULL COMMENT '学年',
+    semester TINYINT NOT NULL COMMENT '学期：1或2',
+    month TINYINT NOT NULL COMMENT '月份：1-12',
+    student_id VARCHAR(20) NOT NULL COMMENT '学号',
+    name VARCHAR(50) NOT NULL COMMENT '姓名',
+    squad VARCHAR(20) NOT NULL COMMENT '所属中队',
+    department VARCHAR(50) NOT NULL COMMENT '学院',
+    major VARCHAR(50) NOT NULL COMMENT '专业',
+    base_score DECIMAL(5,2) DEFAULT 100 COMMENT '基础分',
+    total_bonus DECIMAL(5,2) DEFAULT 0 COMMENT '总加分',
+    total_penalty DECIMAL(5,2) DEFAULT 0 COMMENT '总扣分',
+    raw_score DECIMAL(5,2) COMMENT '原始总分',
+    avg_score DECIMAL(5,2) COMMENT '平均分',
+    std_dev DECIMAL(5,2) COMMENT '标准差',
+    final_score DECIMAL(5,2) COMMENT '结果得分',
+    material_ids TEXT COMMENT '相关材料ID，逗号分隔',
+    `rank` INT COMMENT '专业内排名',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (academic_year, semester, month, student_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思想品德月度测评表';
+
+-- B表（成绩测评表）
+CREATE TABLE academic_evaluation (
+    academic_year VARCHAR(9) NOT NULL COMMENT '学年',
+    semester TINYINT NOT NULL COMMENT '学期：1或2',
+    student_id VARCHAR(20) NOT NULL COMMENT '学号',
+    name VARCHAR(50) NOT NULL COMMENT '姓名',
+    squad VARCHAR(20) NOT NULL COMMENT '所属中队',
+    department VARCHAR(50) NOT NULL COMMENT '学院',
+    major VARCHAR(50) NOT NULL COMMENT '专业',
+    raw_score DECIMAL(5,2) COMMENT '原始总分',
+    avg_score DECIMAL(5,2) COMMENT '平均分',
+    std_dev DECIMAL(5,2) COMMENT '标准差',
+    final_score DECIMAL(5,2) COMMENT '结果得分',
+    `rank` INT COMMENT '专业内排名',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (academic_year, semester, student_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成绩测评表';
+
+-- C表（科研竞赛测评表）
+CREATE TABLE research_competition_evaluation (
+    academic_year VARCHAR(9) NOT NULL COMMENT '学年',
+    semester TINYINT NOT NULL COMMENT '学期：1或2',
+    student_id VARCHAR(20) NOT NULL COMMENT '学号',
+    name VARCHAR(50) NOT NULL COMMENT '姓名',
+    squad VARCHAR(20) NOT NULL COMMENT '所属中队',
+    department VARCHAR(50) NOT NULL COMMENT '学院',
+    major VARCHAR(50) NOT NULL COMMENT '专业',
+    base_score DECIMAL(5,2) DEFAULT 100 COMMENT '基础分',
+    total_bonus DECIMAL(5,2) DEFAULT 0 COMMENT '总加分',
+    total_penalty DECIMAL(5,2) DEFAULT 0 COMMENT '总扣分',
+    raw_score DECIMAL(5,2) COMMENT '原始总分',
+    avg_score DECIMAL(5,2) COMMENT '平均分',
+    std_dev DECIMAL(5,2) COMMENT '标准差',
+    final_score DECIMAL(5,2) COMMENT '结果得分',
+    material_ids TEXT COMMENT '相关材料ID，逗号分隔',
+    `rank` INT COMMENT '专业内排名',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (academic_year, semester, student_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='科研竞赛测评表';
+
+-- D表（文体活动测评表）
+CREATE TABLE sports_arts_evaluation (
+    academic_year VARCHAR(9) NOT NULL COMMENT '学年',
+    semester TINYINT NOT NULL COMMENT '学期：1或2',
+    student_id VARCHAR(20) NOT NULL COMMENT '学号',
+    name VARCHAR(50) NOT NULL COMMENT '姓名',
+    squad VARCHAR(20) NOT NULL COMMENT '所属中队',
+    department VARCHAR(50) NOT NULL COMMENT '学院',
+    major VARCHAR(50) NOT NULL COMMENT '专业',
+    base_score DECIMAL(5,2) DEFAULT 100 COMMENT '基础分',
+    total_bonus DECIMAL(5,2) DEFAULT 0 COMMENT '总加分',
+    total_penalty DECIMAL(5,2) DEFAULT 0 COMMENT '总扣分',
+    raw_score DECIMAL(5,2) COMMENT '原始总分',
+    avg_score DECIMAL(5,2) COMMENT '平均分',
+    std_dev DECIMAL(5,2) COMMENT '标准差',
+    final_score DECIMAL(5,2) COMMENT '结果得分',
+    material_ids TEXT COMMENT '相关材料ID，逗号分隔',
+    `rank` INT COMMENT '专业内排名',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (academic_year, semester, student_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文体活动测评表';
+
+-- 删除已存在的表
+DROP TABLE IF EXISTS comprehensive_result;
+
+-- 综合测评结果表
+CREATE TABLE comprehensive_result (
+    academic_year VARCHAR(9) NOT NULL COMMENT '学年',
+    semester TINYINT NOT NULL COMMENT '学期：1或2',
+    student_id VARCHAR(20) NOT NULL COMMENT '学号',
+    name VARCHAR(50) NOT NULL COMMENT '姓名',
+    class_name VARCHAR(50) NOT NULL COMMENT '班级',
+    squad VARCHAR(20) NOT NULL COMMENT '所属中队',
+    department VARCHAR(50) NOT NULL COMMENT '学院',
+    major VARCHAR(50) NOT NULL COMMENT '专业',
+    moral_score DECIMAL(5,2) COMMENT 'A类-思想品德得分',
+    academic_score DECIMAL(5,2) COMMENT 'B类-成绩得分',
+    research_score DECIMAL(5,2) COMMENT 'C类-科研竞赛得分',
+    sports_arts_score DECIMAL(5,2) COMMENT 'D类-文体活动得分',
+    extra_score DECIMAL(5,2) DEFAULT 0 COMMENT 'E类-附加分',
+    total_score DECIMAL(5,2) COMMENT '总得分',
+    `rank` INT COMMENT '专业内排名',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (academic_year, semester, student_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='综合测评结果表';
+
+-- 删除已存在的表
+DROP TABLE IF EXISTS evaluation_config_logs;
+
+-- 综测配置日志表
+CREATE TABLE evaluation_config_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '日志ID',
+    academic_year VARCHAR(9) NOT NULL COMMENT '学年',
+    semester TINYINT NOT NULL COMMENT '学期：1或2',
+    operator_id VARCHAR(20) NOT NULL COMMENT '操作人ID',
+    operator_name VARCHAR(50) NOT NULL COMMENT '操作人姓名',
+    section VARCHAR(20) NOT NULL COMMENT '操作区域：基本信息/时间配置/分数配置/注意事项',
+    operation_type VARCHAR(20) NOT NULL COMMENT '操作类型：创建/修改/删除',
+    description TEXT NOT NULL COMMENT '操作描述',
+    old_value TEXT COMMENT '修改前的值',
+    new_value TEXT COMMENT '修改后的值',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    ip_address VARCHAR(50) COMMENT '操作IP地址',
+    user_agent VARCHAR(200) COMMENT '用户浏览器信息'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='综测配置日志表';
+
+-- 添加索引
+CREATE INDEX idx_evaluation_config_logs_year_semester ON evaluation_config_logs(academic_year, semester);
+CREATE INDEX idx_evaluation_config_logs_operator ON evaluation_config_logs(operator_id);
+CREATE INDEX idx_evaluation_config_logs_created_at ON evaluation_config_logs(created_at);
