@@ -165,7 +165,6 @@ public class EvaluationConfigController {
                         Object[] params = new Object[]{
                             request.getAcademicYear(),
                             request.getSemester(),
-                            request.getMonthCount(),
                             request.getDescription(),
                             student.getStudentId(),
                             student.getName(),
