@@ -39,4 +39,11 @@ public class StudentServiceImpl implements StudentService {
             })
             .collect(Collectors.toList());
     }
+
+   
+
+    @Override
+    public List<Student> findByDepartmentAndSquad(String department, String squad) {
+        return studentRepository.findByDepartmentAndSquad(department, squad);
+    }
 } 

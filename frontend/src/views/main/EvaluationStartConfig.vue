@@ -31,132 +31,82 @@
                   </div>
                 </template>
                 
-                <el-form :model="basicConfig" label-width="140px">
-                  <el-form-item 
-                    label="学年" 
-                    required
-                    :rules="[{ required: true, message: '请选择学年' }]"
-                  >
-                    <select 
-                      v-model="basicConfig.academicYear" 
-                      class="custom-select"
-                      required
-                    >
-                      <option value="" disabled>请选择学年</option>
-                      <option 
-                        v-for="year in academicYears" 
-                        :key="year" 
-                        :value="year"
-                      >
-                        {{ year }}学年
-                      </option>
-                    </select>
-                  </el-form-item>
-                  
-                  <el-form-item 
-                    label="学期" 
-                    required
-                    :rules="[{ required: true, message: '请选择学期' }]"
-                  >
-                    <select 
-                      v-model="basicConfig.semester" 
-                      class="custom-select"
-                      required
-                    >
-                      <option value="" disabled>请选择学期</option>
-                      <option :value="1">第一学期</option>
-                      <option :value="2">第二学期</option>
-                    </select>
-                  </el-form-item>
-
-                  <el-form-item 
-                    label="综测表类型" 
-                    required
-                  >
-                    <el-radio-group v-model="basicConfig.formType">
-                      <el-radio label="A">
-                        <el-tooltip
-                          content="思想品德分测评表"
-                          placement="top"
+                <div class="basic-config">
+                  <div class="form-row">
+                    <label class="required">学年</label>
+                    <div class="input-wrapper">
+                      <select v-model="basicConfig.academicYear" required>
+                        <option value="">请选择学年</option>
+                        <option 
+                          v-for="year in academicYears" 
+                          :key="year.value" 
+                          :value="year.value"
                         >
-                          <span>A类表</span>
-                        </el-tooltip>
-                      </el-radio>
-                      <el-radio label="C">
-                        <el-tooltip
-                          content="科研竞赛分测评表"
-                          placement="top"
-                        >
-                          <span>C类表</span>
-                        </el-tooltip>
-                      </el-radio>
-                      <el-radio label="D">
-                        <el-tooltip
-                          content="文体分测评表"
-                          placement="top"
-                        >
-                          <span>D类表</span>
-                        </el-tooltip>
-                      </el-radio>
-                    </el-radio-group>
-                  </el-form-item>
-
-                  <!-- 当选择A类表时显示月份选择 -->
-                  <el-form-item 
-                    v-if="basicConfig.formType === 'A'"
-                    label="月份" 
-                    required
-                    :rules="[{ required: true, message: '请选择月份' }]"
-                  >
-                    <el-select 
-                      v-model="basicConfig.month" 
-                      placeholder="请选择月份"
-                      style="width: 100%"
-                    >
-                      <el-option
-                        v-for="month in 12"
-                        :key="month"
-                        :label="`${month}月`"
-                        :value="month"
-                      />
-                    </el-select>
-                  </el-form-item>
-
-                  <!-- 当选择C或D类表时显示本学期月份数 -->
-                  <el-form-item 
-                    v-if="basicConfig.formType === 'C' || basicConfig.formType === 'D'"
-                    label="本学期月数" 
-                    required
-                    :rules="[{ required: true, message: '请选择本学期月数' }]"
-                  >
-                    <select 
-                      v-model="basicConfig.monthCount" 
-                      class="custom-select"
-                      required
-                    >
-                      <option value="" disabled>请选择本学期包含几个月</option>
-                      <option 
-                        v-for="count in 6"
-                        :key="count"
-                        :value="count"
-                      >
-                        {{ count }}个月
-                      </option>
-                    </select>
-                    <div class="month-hint">
-                      提示：此项用于计算本学期基础分总和（每月10分 × 月数）
+                          {{ year.label }}
+                        </option>
+                      </select>
                     </div>
-                  </el-form-item>
+                  </div>
 
-                  <el-form-item label="综测说明">
-                    <el-input 
-                      v-model="basicConfig.description" 
-                      type="textarea" 
-                      :rows="3"
-                      placeholder="请输入本次综测的总体说明"
-                    />
-                  </el-form-item>
-                </el-form>
+                  <div class="form-row">
+                    <label class="required">学期</label>
+                    <div class="input-wrapper">
+                      <select v-model="basicConfig.semester" required>
+                        <option value="">请选择学期</option>
+                        <option value="1">第一学期</option>
+                        <option value="2">第二学期</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <label class="required">综测表类型</label>
+                    <div class="input-wrapper">
+                      <select v-model="basicConfig.formType" required>
+                        <option value="">请选择表类型</option>
+                        <option value="MONTHLY_A">A类月表</option>
+                        <option value="TYPE_C">C类表</option>
+                        <option value="TYPE_D">D类表</option>
+                        <option value="SEMESTER_A">A类总表</option>
+                        <option value="COMPREHENSIVE">综合测评结果表</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- 仅A类月表显示月份选择 -->
+                  <div class="form-row" v-if="basicConfig.formType === 'MONTHLY_A'">
+                    <label class="required">月份</label>
+                    <div class="input-wrapper">
+                      <select v-model="basicConfig.month" required>
+                        <option value="">请选择月份</option>
+                        <option v-for="m in 12" :key="m" :value="m">{{ m }}月</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- 仅C类表和D类表显示月数选择 -->
+                  <div class="form-row" v-if="['TYPE_C', 'TYPE_D'].includes(basicConfig.formType)">
+                    <label class="required">本学期月数</label>
+                    <div class="input-wrapper">
+                      <select v-model="basicConfig.monthCount" required>
+                        <option value="">请选择本学期包含几个月</option>
+                        <option v-for="m in 6" :key="m" :value="m">{{ m }}个月</option>
+                      </select>
+                      <div class="tip-text">提示：此项用于计算本学期基础分总和（每月10分 × 月数）</div>
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <label>综测说明</label>
+                    <div class="input-wrapper">
+                      <textarea 
+                        v-model="basicConfig.description" 
+                        placeholder="请输入本次综测的总体说明"
+                        rows="4"
+                      ></textarea>
+                    </div>
+                  </div>
+                </div>
               </el-card>
 
               <!-- 时间配置 -->
@@ -170,68 +120,63 @@
                   </div>
                 </template>
                 
-                <el-form :model="timeConfig" label-width="140px">
-                  <el-form-item 
-                    label="申报开始时间"
-                    required
-                    :rules="[{ required: true, message: '请选择开始时间' }]"
-                  >
-                    <input 
-                      type="datetime-local" 
-                      v-model="timeConfig.startTime"
-                      class="custom-datetime"
-                      required
-                    >
-                  </el-form-item>
-                  <el-form-item 
-                    label="申报结束时间"
-                    required
-                    :rules="[{ required: true, message: '请选择结束时间' }]"
-                  >
-                    <input 
-                      type="datetime-local" 
-                      v-model="timeConfig.endTime"
-                      class="custom-datetime"
-                      required
-                    >
-                  </el-form-item>
-                  <el-form-item 
-                    label="审核截止时间"
-                    required
-                    :rules="[{ required: true, message: '请选择审核截止时间' }]"
-                  >
-                    <input 
-                      type="datetime-local" 
-                      v-model="timeConfig.reviewEndTime"
-                      class="custom-datetime"
-                      required
-                    >
-                  </el-form-item>
-                  <el-form-item 
-                    label="公示开始时间"
-                    required
-                    :rules="[{ required: true, message: '请选择公示开始时间' }]"
-                  >
-                    <input 
-                      type="datetime-local" 
-                      v-model="timeConfig.publicityStartTime"
-                      class="custom-datetime"
-                      required
-                    >
-                  </el-form-item>
-                  <el-form-item 
-                    label="公示结束时间"
-                    required
-                    :rules="[{ required: true, message: '请选择公示结束时间' }]"
-                  >
-                    <input 
-                      type="datetime-local" 
-                      v-model="timeConfig.publicityEndTime"
-                      class="custom-datetime"
-                      required
-                    >
-                  </el-form-item>
-                </el-form>
+                <div class="time-config">
+                  <div class="time-inputs">
+                    <!-- 仅对A类月表、C类表、D类表显示申报和审核时间 -->
+                    <template v-if="showDeclareAndReview">
+                      <div class="time-input-group">
+                        <label>申报开始时间：</label>
+                        <input 
+                          type="datetime-local" 
+                          :value="timeConfig.declareStartTime?.replace(' ', 'T')"
+                          @change="e => handleTimeChange('declareStartTime', e)"
+                          required
+                        />
+                      </div>
+
+                      <div class="time-input-group">
+                        <label>申报结束时间：</label>
+                        <input 
+                          type="datetime-local" 
+                          :value="timeConfig.declareEndTime?.replace(' ', 'T')"
+                          @change="e => handleTimeChange('declareEndTime', e)"
+                          required
+                        />
+                      </div>
+
+                      <div class="time-input-group">
+                        <label>审核截止时间：</label>
+                        <input 
+                          type="datetime-local" 
+                          :value="timeConfig.reviewEndTime?.replace(' ', 'T')"
+                          @change="e => handleTimeChange('reviewEndTime', e)"
+                          required
+                        />
+                      </div>
+                    </template>
+
+                    <!-- 所有表都需要公示时间 -->
+                    <div class="time-input-group">
+                      <label>公示开始时间：</label>
+                      <input 
+                        type="datetime-local" 
+                        :value="timeConfig.publicityStartTime?.replace(' ', 'T')"
+                        @change="e => handleTimeChange('publicityStartTime', e)"
+                        required
+                      />
+                    </div>
+
+                    <div class="time-input-group">
+                      <label>公示截止时间：</label>
+                      <input 
+                        type="datetime-local" 
+                        :value="timeConfig.publicityEndTime?.replace(' ', 'T')"
+                        @change="e => handleTimeChange('publicityEndTime', e)"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
               </el-card>
 
               <!-- 分数配置 -->
@@ -325,32 +270,37 @@
           </div>
 
           <!-- 添加日志部分 -->
-          <div class="log-section">
-            <el-card class="log-card">
-              <template #header>
-                <div class="card-header">
-                  <h3>配置修改日志</h3>
-                  <el-button type="info" @click="refreshLogs">
-                    刷新日志
-                  </el-button>
-                </div>
-              </template>
-              
-              <el-timeline>
-                <el-timeline-item
-                  v-for="(log, index) in configLogs"
-                  :key="index"
-                  :timestamp="log.time"
-                  :type="log.type"
-                >
-                  <div class="log-content">
-                    <span class="log-operator">{{ log.operator }}</span>
-                    <span class="log-section">{{ log.section }}</span>
-                    <p class="log-description">{{ log.description }}</p>
+          <div class="logs-section">
+            <div class="logs-header">
+              <h3>配置修改日志</h3>
+              <el-button type="primary" size="small" @click="refreshLogs">
+                刷新日志
+              </el-button>
+            </div>
+            
+            <el-empty v-if="!logs.length" description="暂无日志" />
+            
+            <el-timeline v-else>
+              <el-timeline-item
+                v-for="log in logs"
+                :key="log.createdAt"
+                :timestamp="log.createdAt"
+                placement="top"
+              >
+                <div class="log-item">
+                  <div class="log-header">
+                    <span class="operator">{{ log.operatorName }}</span>
+                    <el-tag size="small" type="info">{{ log.academicYear }}</el-tag>
+                    <el-tag size="small">第{{ log.semester }}学期</el-tag>
                   </div>
-                </el-timeline-item>
-              </el-timeline>
-            </el-card>
+                  <div class="log-content">
+                    <el-tag size="small" type="success">{{ log.section }}</el-tag>
+                    <el-tag size="small" type="warning">{{ log.operationType }}</el-tag>
+                    <p class="description">{{ log.description }}</p>
+                  </div>
+                </div>
+              </el-timeline-item>
+            </el-timeline>
           </div>
         </div>
 
@@ -368,7 +318,7 @@
             </div>
             <div class="preview-section">
               <h4>时间安排</h4>
-              <p>申报时间：{{ formatDateTime(timeConfig.startTime) }} 至 {{ formatDateTime(timeConfig.endTime) }}</p>
+              <p>申报时间：{{ formatDateTime(timeConfig.declareStartTime) }} 至 {{ formatDateTime(timeConfig.declareEndTime) }}</p>
               <p>审核截止：{{ formatDateTime(timeConfig.reviewEndTime) }}</p>
               <p>公示时间：{{ formatDateTime(timeConfig.publicityStartTime) }} 至 {{ formatDateTime(timeConfig.publicityEndTime) }}</p>
             </div>
@@ -402,11 +352,12 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
+import request from '@/utils/request'
 
 // 保存状态
 const saving = ref({
@@ -419,32 +370,39 @@ const saving = ref({
 const publishing = ref(false)
 const previewDialogVisible = ref(false)
 
+// 配置保存状态
+const basicConfigSaved = ref(false)
+const timeConfigSaved = ref(false)
+
+// 生成未来5个学年的选项
+const currentYear = new Date().getFullYear()
+const academicYears = computed(() => {
+  return Array.from({ length: 3 }, (_, i) => {
+    const year = currentYear -2+ i
+    return {
+      value: `${year}-${year + 1}`,
+      label: `${year}-${year + 1}学年`
+    }
+  })
+})
+
 // 基本信息配置
 const basicConfig = ref({
   academicYear: '',
-  semester: null,
+  semester: '',
   formType: '',
-  month: null,    // A类表选择的月份
-  monthCount: '', // C、D类表选择的月数
+  month: '',
+  monthCount: '',
   description: ''
 })
 
-// 生成最近5个学年的选项
-const currentYear = new Date().getFullYear()
-const academicYears = ref(
-  Array.from({ length: 5 }, (_, i) => {
-    const year = currentYear - i
-    return `${year}-${year + 1}`
-  })
-)
-
 // 时间配置
 const timeConfig = ref({
-  startTime: null,
-  endTime: null,
-  reviewEndTime: null,
-  publicityStartTime: null,
-  publicityEndTime: null
+  declareStartTime: '',
+  declareEndTime: '',
+  reviewEndTime: '',
+  publicityStartTime: '',
+  publicityEndTime: ''
 })
 
 // 分数配置
@@ -457,27 +415,47 @@ const noticeConfig = ref({
   items: ['请认真填写申请材料，确保信息真实准确。']
 })
 
-// 添加日志相关的响应式数据
-const configLogs = ref([
-  {
-    time: new Date().toLocaleString(),
-    operator: '管理员',
-    section: '基本信息',
-    description: '创建了新的综测配置',
-    type: 'primary'
+const logs = ref([])
+
+const refreshLogs = async () => {
+  try {
+    const response = await request.get('/evaluation-config/logs')
+    // 打印返回数据，便于调试
+    console.log('API返回数据:', response)
+    
+    // 确保response.data存在且包含logs数组
+    if (response?.data?.logs) {
+      logs.value = response.data.logs.map(log => ({
+        ...log,
+        createdAt: new Date(log.createdAt).toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        })
+      }))
+      ElMessage.success('日志已刷新')
+    } else {
+      logs.value = []
+      ElMessage.warning('暂无日志数据')
+    }
+  } catch (error) {
+    console.error('获取日志失败:', error)
+    logs.value = []
+    ElMessage.error('刷新失败：' + (error.response?.data || '未知错误'))
   }
-])
+}
 
 // 检查是否可以发布
 const canPublish = computed(() => {
-  return basicConfig.value.name && 
-         basicConfig.value.formType &&
-         timeConfig.value.startTime &&
-         timeConfig.value.endTime &&
-         timeConfig.value.reviewEndTime &&
-         timeConfig.value.publicityStartTime &&
-         timeConfig.value.publicityEndTime &&
-         noticeConfig.value.items.length > 0
+  // 检查配置是否已保存
+  if (!basicConfigSaved.value || !timeConfigSaved.value) {
+    return false
+  }
+  
+  return true
 })
 
 // 添加注意事项
@@ -490,26 +468,32 @@ const removeNoticeItem = (index) => {
   noticeConfig.value.items.splice(index, 1)
 }
 
-// 格式化日期时间
+// 格式化日期时间为 YYYY-MM-DD HH:mm:ss
 const formatDateTime = (date) => {
   if (!date) return ''
-  return new Date(date).toLocaleString()
+  return date.replace('T', ' ')
 }
 
-// 添加刷新日志的方法
-const refreshLogs = async () => {
-  try {
-    // TODO: 调用获取日志API
-    await new Promise(resolve => setTimeout(resolve, 500))
-    ElMessage.success('日志已刷新')
-  } catch (error) {
-    ElMessage.error('刷新失败')
-  }
+// 处理时间变化
+const handleTimeChange = (field, event) => {
+  timeConfig.value[field] = formatDateTime(event.target.value)
+}
+
+// 验证时间
+const validateTimes = () => {
+  const times = timeConfig.value
+  return Boolean(
+    times.declareStartTime &&
+    times.declareEndTime &&
+    times.reviewEndTime &&
+    times.publicityStartTime &&
+    times.publicityEndTime
+  )
 }
 
 // 添加记录日志的方法
 const addConfigLog = (section, description, type = 'primary') => {
-  configLogs.value.unshift({
+  logs.value.unshift({
     time: new Date().toLocaleString(),
     operator: '管理员', // 应该从登录用户信息中获取
     section,
@@ -525,6 +509,7 @@ const saveBasicConfig = async () => {
     await new Promise(resolve => setTimeout(resolve, 1000))
     ElMessage.success('基本信息保存成功')
     addConfigLog('基本信息', '更新了综测基本信息配置')
+    basicConfigSaved.value = true
   } catch (error) {
     ElMessage.error('保存失败')
   } finally {
@@ -537,6 +522,7 @@ const saveTimeConfig = async () => {
     saving.value.time = true
     await new Promise(resolve => setTimeout(resolve, 1000))
     ElMessage.success('时间配置保存成功')
+    timeConfigSaved.value = true
   } catch (error) {
     ElMessage.error('保存失败')
   } finally {
@@ -568,13 +554,59 @@ const saveNoticeConfig = async () => {
   }
 }
 
+// 检查是否已存在相同配置的综测
+const checkExistingEvaluation = async () => {
+  try {
+    const response = await request.get('/evaluation-config/check', {
+      params: {
+        academicYear: basicConfig.value.academicYear,
+        semester: basicConfig.value.semester,
+        formType: basicConfig.value.formType,
+        month: basicConfig.value.month // A类表专用
+      }
+    })
+    return response.data.exists
+  } catch (error) {
+    console.error('检查综测配置失败:', error)
+    ElMessage.error('检查综测配置失败')
+    return true // 出错时默认认为存在，防止重复发布
+  }
+}
+
 // 发布综测
-const publishEvaluation = () => {
+const publishEvaluation = async () => {
   if (!canPublish.value) {
-    ElMessage.warning('请完善所有必要配置')
+    ElMessage.warning('请填写完整所有必填项')
     return
   }
-  previewDialogVisible.value = true
+
+  // 检查是否已存在
+  const exists = await checkExistingEvaluation()
+  if (exists) {
+    ElMessage.warning('该综测配置已存在，请勿重复发布')
+    return
+  }
+
+  try {
+    const response = await request.post('/api/evaluation-config/publish', {
+      academicYear: basicConfig.value.academicYear,
+      semester: basicConfig.value.semester,
+      formType: basicConfig.value.formType,
+      month: basicConfig.value.formType === 'A' ? basicConfig.value.month : null,
+      monthCount: ['C', 'D'].includes(basicConfig.value.formType) ? basicConfig.value.monthCount : null,
+      description: basicConfig.value.description
+    })
+
+    if (response.data.success) {
+      ElMessage.success(response.data.message)
+      // 可以在这里添加成功后的其他操作，比如重置表单或跳转页面
+    } else {
+      ElMessage.error(response.data.message)
+    }
+  } catch (error) {
+    console.error('发布综测失败:', error)
+    ElMessage.error(error.response?.data?.message || '发布综测失败，请稍后重试')
+  }
 }
 
 // 确认发布
@@ -600,6 +632,43 @@ const calculateTotalBaseScore = computed(() => {
   }
   return 10 // A类表每月固定10分
 })
+
+// 表单验证规则
+const rules = {
+  academicYear: [{ required: true, message: '请选择学年' }],
+  semester: [{ required: true, message: '请选择学期' }],
+  formType: [{ required: true, message: '请选择综测表类型' }],
+  month: [{ required: true, message: '请选择月份', trigger: 'change' }],
+  monthCount: [{ required: true, message: '请选择月数', trigger: 'change' }],
+  description: [{ required: true, message: '请输入说明' }],
+  declareStartTime: [{ required: true, validator: validateTimes, trigger: 'change' }],
+  declareEndTime: [{ required: true, validator: validateTimes, trigger: 'change' }],
+  reviewEndTime: [{ required: true, validator: validateTimes, trigger: 'change' }],
+  publicityStartTime: [{ required: true, validator: validateTimes, trigger: 'change' }],
+  publicityEndTime: [{ required: true, validator: validateTimes, trigger: 'change' }]
+}
+
+const formTypes = [
+  { label: 'A类月表', value: 'MONTHLY_A' },
+  { label: 'C类表', value: 'TYPE_C' },
+  { label: 'D类表', value: 'TYPE_D' },
+  { label: 'A类总表', value: 'SEMESTER_A' },
+  { label: '综合测评结果表', value: 'COMPREHENSIVE' }
+]
+
+// 是否需要显示申报和审核时间
+const showDeclareAndReview = computed(() => {
+  return ['MONTHLY_A', 'TYPE_C', 'TYPE_D'].includes(basicConfig.value.formType)
+})
+
+// 监听表类型变化，重置相关字段
+watch(() => basicConfig.value.formType, (newType) => {
+  basicConfig.value.month = ''
+  basicConfig.value.monthCount = ''
+})
+
+// 初始加载
+refreshLogs()
 </script>
 
 <style scoped>
@@ -643,80 +712,47 @@ const calculateTotalBaseScore = computed(() => {
   padding-right: 10px;
 }
 
-.log-section {
-  width: 350px;
-  overflow-y: auto;
+.logs-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 4px;
 }
 
-.log-card {
-  height: 80%;
+.logs-header {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
-.log-card :deep(.el-card__body) {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 15px;
+.log-item {
+  padding: 15px;
+  background: #f5f7fa;
+  border-radius: 4px;
 }
 
-.log-content {
-  padding: 5px 0;
+.log-header {
+  margin-bottom: 10px;
 }
 
-.log-operator {
+.log-header .operator {
   font-weight: bold;
+  margin-right: 10px;
+}
+
+.log-content .el-tag {
   margin-right: 8px;
 }
 
-.log-section {
-  color: #409EFF;
-  font-size: 0.9em;
-}
-
-.log-description {
-  margin: 5px 0;
-  color: #666;
-}
-
-/* 调整时间线样式 */
-:deep(.el-timeline) {
-  padding-top: 10px;
-}
-
-:deep(.el-timeline-item__node) {
-  width: 12px;
-  height: 12px;
-}
-
-:deep(.el-timeline-item__tail) {
-  left: 5px;
-}
-
-:deep(.el-timeline-item__wrapper) {
-  padding-left: 25px;
+.description {
+  margin: 8px 0 0;
+  color: #606266;
 }
 
 :deep(.el-timeline-item__timestamp) {
-  font-size: 0.85em;
-  color: #999;
-}
-
-/* 优化滚动条样式 */
-.main-section::-webkit-scrollbar,
-.log-section::-webkit-scrollbar {
-  width: 6px;
-}
-
-.main-section::-webkit-scrollbar-thumb,
-.log-section::-webkit-scrollbar-thumb {
-  background: #ddd;
-  border-radius: 3px;
-}
-
-.main-section::-webkit-scrollbar-track,
-.log-section::-webkit-scrollbar-track {
-  background: #f5f7fa;
+  color: #909399;
+  font-size: 12px;
 }
 
 .config-sections {
@@ -902,9 +938,126 @@ const calculateTotalBaseScore = computed(() => {
   font-size: 12px;
 }
 
-.month-hint {
-  margin-top: 8px;
-  color: #909399;
+.tip-text {
   font-size: 12px;
+  color: #909399;
+  margin-top: 5px;
+}
+
+.time-config {
+  margin: 20px 0;
+}
+
+.time-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.time-input-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.time-input-group label {
+  width: 120px;
+  text-align: right;
+}
+
+input[type="datetime-local"] {
+  padding: 8px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  width: 250px;
+}
+
+input[type="datetime-local"]:focus {
+  outline: none;
+  border-color: #409eff;
+}
+
+select {
+  padding: 8px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  width: 250px;
+}
+
+select:focus {
+  outline: none;
+  border-color: #409eff;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.required::before {
+  content: '*';
+  color: #f56c6c;
+  margin-right: 4px;
+}
+
+.basic-config {
+  padding: 20px;
+  max-width: 800px;
+}
+
+.form-row {
+  display: flex;
+  margin-bottom: 20px;
+  align-items: flex-start;
+}
+
+.form-row label {
+  width: 120px;
+  text-align: right;
+  padding-right: 12px;
+  line-height: 32px;
+  font-size: 14px;
+  color: #606266;
+  white-space: nowrap;
+}
+
+.input-wrapper {
+  flex: 1;
+  max-width: 400px;
+}
+
+select, textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: white;
+}
+
+select {
+  height: 32px;
+}
+
+select:focus, textarea:focus {
+  outline: none;
+  border-color: #409eff;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.tip-text {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  line-height: 1.4;
 }
 </style> 

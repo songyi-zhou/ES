@@ -290,13 +290,15 @@ CREATE TABLE moral_monthly_evaluation (
     total_bonus DECIMAL(5,2) DEFAULT 0 COMMENT '总加分',
     total_penalty DECIMAL(5,2) DEFAULT 0 COMMENT '总扣分',
     raw_score DECIMAL(5,2) COMMENT '原始总分',
-    avg_score DECIMAL(5,2) COMMENT '平均分',
-    std_dev DECIMAL(5,2) COMMENT '标准差',
-    final_score DECIMAL(5,2) COMMENT '结果得分',
     material_ids TEXT COMMENT '相关材料ID，逗号分隔',
-    `rank` INT COMMENT '专业内排名',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    declare_start_time DATETIME COMMENT '申报开始时间',
+    declare_end_time DATETIME COMMENT '申报结束时间',
+    review_end_time DATETIME COMMENT '审核截止时间',
+    publicity_start_time DATETIME COMMENT '公示开始时间',
+    publicity_end_time DATETIME COMMENT '公示截止时间',
+    status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
     PRIMARY KEY (academic_year, semester, month, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思想品德月度测评表';
 
@@ -316,6 +318,9 @@ CREATE TABLE academic_evaluation (
     `rank` INT COMMENT '专业内排名',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    publicity_start_time DATETIME COMMENT '公示开始时间',
+    publicity_end_time DATETIME COMMENT '公示截止时间',
+    status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
     PRIMARY KEY (academic_year, semester, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成绩测评表';
 
@@ -339,6 +344,12 @@ CREATE TABLE research_competition_evaluation (
     `rank` INT COMMENT '专业内排名',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    declare_start_time DATETIME COMMENT '申报开始时间',
+    declare_end_time DATETIME COMMENT '申报结束时间',
+    review_end_time DATETIME COMMENT '审核截止时间',
+    publicity_start_time DATETIME COMMENT '公示开始时间',
+    publicity_end_time DATETIME COMMENT '公示截止时间',
+    status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
     PRIMARY KEY (academic_year, semester, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='科研竞赛测评表';
 
@@ -362,6 +373,12 @@ CREATE TABLE sports_arts_evaluation (
     `rank` INT COMMENT '专业内排名',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    declare_start_time DATETIME COMMENT '申报开始时间',
+    declare_end_time DATETIME COMMENT '申报结束时间',
+    review_end_time DATETIME COMMENT '审核截止时间',
+    publicity_start_time DATETIME COMMENT '公示开始时间',
+    publicity_end_time DATETIME COMMENT '公示截止时间',
+    status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
     PRIMARY KEY (academic_year, semester, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文体活动测评表';
 
@@ -387,6 +404,9 @@ CREATE TABLE comprehensive_result (
     `rank` INT COMMENT '专业内排名',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    publicity_start_time DATETIME COMMENT '公示开始时间',
+    publicity_end_time DATETIME COMMENT '公示截止时间',
+    status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
     PRIMARY KEY (academic_year, semester, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='综合测评结果表';
 
@@ -414,3 +434,29 @@ CREATE TABLE evaluation_config_logs (
 CREATE INDEX idx_evaluation_config_logs_year_semester ON evaluation_config_logs(academic_year, semester);
 CREATE INDEX idx_evaluation_config_logs_operator ON evaluation_config_logs(operator_id);
 CREATE INDEX idx_evaluation_config_logs_created_at ON evaluation_config_logs(created_at);
+
+-- 创建A类学期评分表
+CREATE TABLE moral_semester_evaluation (
+    academic_year VARCHAR(9) NOT NULL COMMENT '学年',
+    semester TINYINT NOT NULL COMMENT '学期：1或2',
+    student_id VARCHAR(20) NOT NULL COMMENT '学号',
+    name VARCHAR(50) NOT NULL COMMENT '姓名',
+    squad VARCHAR(20) NOT NULL COMMENT '所属中队',
+    department VARCHAR(50) NOT NULL COMMENT '学院',
+    major VARCHAR(50) NOT NULL COMMENT '专业',
+    base_score DECIMAL(5,2) DEFAULT 100 COMMENT '基础分',
+    total_bonus DECIMAL(5,2) DEFAULT 0 COMMENT '总加分',
+    total_penalty DECIMAL(5,2) DEFAULT 0 COMMENT '总扣分',
+    raw_score DECIMAL(5,2) COMMENT '原始总分',
+    avg_score DECIMAL(5,2) COMMENT '平均分',
+    std_dev DECIMAL(5,2) COMMENT '标准差',
+    final_score DECIMAL(5,2) COMMENT '结果得分',
+    material_ids TEXT COMMENT '相关材料ID，逗号分隔',
+    `rank` INT COMMENT '专业内排名',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    publicity_start_time DATETIME COMMENT '公示开始时间',
+    publicity_end_time DATETIME COMMENT '公示截止时间',
+    status TINYINT DEFAULT 0 COMMENT '状态（0：读写，1：只读）',
+    PRIMARY KEY (academic_year, semester, student_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思想品德学期测评表';
