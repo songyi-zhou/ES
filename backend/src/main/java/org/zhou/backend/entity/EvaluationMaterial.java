@@ -73,4 +73,7 @@ public class EvaluationMaterial {
     
     @Column(nullable = false)
     private String squad;
+    
+    @Column(name = "score", columnDefinition = "DECIMAL(5,2)")
+    private Double score;
 } 

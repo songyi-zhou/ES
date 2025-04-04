@@ -117,7 +117,8 @@ CREATE TABLE IF NOT EXISTS evaluation_materials (
     FOREIGN KEY (reviewer_id) REFERENCES users(id),
     FOREIGN KEY (class_id) REFERENCES classes(id),
     INDEX idx_class_id (class_id),
-    INDEX idx_status_reported_at (status, reported_at)
+    INDEX idx_status_reported_at (status, reported_at),
+    score DECIMAL(5,2) AFTER evaluation_type
 );
 
 -- 创建材料附件表

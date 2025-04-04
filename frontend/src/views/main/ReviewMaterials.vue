@@ -230,6 +230,64 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 添加通过审核的对话框 -->
+    <el-dialog
+      v-model="approveDialogVisible"
+      title="通过审核"
+      width="500px"
+    >
+      <div class="approve-form">
+        <div class="form-item">
+          <label class="form-label">加分类型</label>
+          <div class="custom-dropdown">
+            <div class="dropdown-header" @click="toggleTypeDropdown">
+              <span>{{ getEvaluationTypeText(approveForm.evaluationType) }}</span>
+              <i class="dropdown-icon">▼</i>
+            </div>
+            <div class="dropdown-menu" v-if="showTypeDropdown">
+              <div class="dropdown-item" @click="selectEvaluationType('A')">德育测评加分(A)</div>
+              <div class="dropdown-item" @click="selectEvaluationType('C')">科研竞赛加分(C)</div>
+              <div class="dropdown-item" @click="selectEvaluationType('D')">文体活动加分(D)</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-item">
+          <label class="form-label">加分数额</label>
+          <div class="score-input-container">
+            <button class="score-btn" @click="decreaseScore">-</button>
+            <input 
+              type="number" 
+              v-model="approveForm.score" 
+              min="0.5" 
+              max="20" 
+              step="0.5" 
+              class="score-input"
+            />
+            <button class="score-btn" @click="increaseScore">+</button>
+          </div>
+        </div>
+        
+        <div class="form-item">
+          <label class="form-label">备注</label>
+          <textarea
+            v-model="approveForm.comment"
+            class="custom-textarea"
+            rows="3"
+            placeholder="请输入备注信息"
+          ></textarea>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <button class="custom-button" @click="approveDialogVisible = false">取消</button>
+          <button class="custom-button primary" @click="submitApprove" :disabled="submitting">
+            {{ submitting ? '提交中...' : '确认通过' }}
+          </button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -281,6 +339,14 @@ const questionForm = ref({
   description: '',
   materialId: null
 });
+const approveDialogVisible = ref(false);
+const approveForm = ref({
+  evaluationType: 'A',
+  score: 1,
+  comment: '',
+  materialId: null
+});
+const showTypeDropdown = ref(false);
 
 const toggleStatusDropdown = () => {
   showStatusDropdown.value = !showStatusDropdown.value;
@@ -391,25 +457,14 @@ const openRejectDialog = (record: EvaluationMaterial) => {
   rejectDialogVisible.value = true;
 };
 
-const handleReview = async (record: EvaluationMaterial) => {
-  try {
-    submitting.value = true;
-    await axios.post('/evaluation/review-material', {
-      materialId: record.id,
-      status: 'APPROVED',
-      comment: '通过审核'
-    });
-    ElMessage.success('审核通过成功');
-    await fetchMaterials();
-  } catch (error: any) {
-    if (error.response?.status === 403) {
-      ElMessage.error('没有权限执行此操作');
-    } else {
-      ElMessage.error('操作失败：' + (error.response?.data?.message || '未知错误'));
-    }
-  } finally {
-    submitting.value = false;
-  }
+const handleReview = (record: EvaluationMaterial) => {
+  approveForm.value = {
+    evaluationType: 'A',
+    score: 1,
+    comment: '',
+    materialId: record.id
+  };
+  approveDialogVisible.value = true;
 };
 
 const submitReject = async () => {
@@ -507,6 +562,61 @@ const submitQuestion = async () => {
     submitting.value = false
   }
 }
+
+const toggleTypeDropdown = () => {
+  showTypeDropdown.value = !showTypeDropdown.value;
+};
+
+const selectEvaluationType = (type) => {
+  approveForm.value.evaluationType = type;
+  showTypeDropdown.value = false;
+};
+
+const increaseScore = () => {
+  if (approveForm.value.score < 20) {
+    approveForm.value.score = Math.round((approveForm.value.score + 0.5) * 10) / 10;
+  }
+};
+
+const decreaseScore = () => {
+  if (approveForm.value.score > 0.5) {
+    approveForm.value.score = Math.round((approveForm.value.score - 0.5) * 10) / 10;
+  }
+};
+
+const submitApprove = async () => {
+  if (!approveForm.value.evaluationType) {
+    ElMessage.warning('请选择加分类型');
+    return;
+  }
+  
+  if (!approveForm.value.score) {
+    ElMessage.warning('请输入加分数额');
+    return;
+  }
+  
+  try {
+    submitting.value = true;
+    await axios.post('/evaluation/review-material', {
+      materialId: approveForm.value.materialId,
+      status: 'APPROVED',
+      evaluationType: approveForm.value.evaluationType,
+      score: approveForm.value.score,
+      comment: approveForm.value.comment || '通过审核'
+    });
+    ElMessage.success('审核通过成功');
+    approveDialogVisible.value = false;
+    await fetchMaterials();
+  } catch (error) {
+    if (error.response?.status === 403) {
+      ElMessage.error('没有权限执行此操作');
+    } else {
+      ElMessage.error('操作失败：' + (error.response?.data?.message || '未知错误'));
+    }
+  } finally {
+    submitting.value = false;
+  }
+};
 
 const fetchMaterials = async () => {
   try {
@@ -939,5 +1049,117 @@ h2 {
 
 .question-form {
   padding: 20px;
+}
+
+/* 添加审核表单样式 */
+.approve-form {
+  padding: 20px;
+}
+
+.custom-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: #fff;
+}
+
+.dropdown-icon {
+  font-size: 12px;
+  color: #909399;
+  transition: transform 0.3s;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background-color: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  margin-top: 5px;
+}
+
+.dropdown-item {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.dropdown-item:hover {
+  background-color: #f5f7fa;
+}
+
+.score-input-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.score-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f7fa;
+  border: 1px solid #dcdfe6;
+  cursor: pointer;
+  font-size: 18px;
+  user-select: none;
+}
+
+.score-btn:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.score-btn:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.score-input {
+  flex: 1;
+  height: 36px;
+  border: 1px solid #dcdfe6;
+  border-left: none;
+  border-right: none;
+  text-align: center;
+  outline: none;
+  padding: 0 5px;
+}
+
+.custom-button {
+  padding: 8px 20px;
+  border-radius: 4px;
+  border: 1px solid #dcdfe6;
+  background-color: #fff;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.custom-button.primary {
+  background-color: #409eff;
+  border-color: #409eff;
+  color: #fff;
+}
+
+.custom-button.primary:hover {
+  background-color: #66b1ff;
+  border-color: #66b1ff;
+}
+
+.custom-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 </style>

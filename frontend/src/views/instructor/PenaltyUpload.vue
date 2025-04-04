@@ -48,7 +48,7 @@
                   :min="0.5" 
                   :max="20" 
                   :step="0.5"
-                  style="width: 100%">
+                  style="width: 100%">                                          
                 </el-input-number>
               </el-form-item>
             </div>

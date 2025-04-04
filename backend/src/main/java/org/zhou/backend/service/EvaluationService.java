@@ -7,12 +7,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.Set;
+import java.util.Optional;
+import java.util.Date;
+import java.util.Calendar;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -33,6 +38,7 @@ import org.zhou.backend.repository.GroupMemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +51,7 @@ public class EvaluationService {
     private final UserRepository userRepository;
     private final ClassRepository classRepository;
     private final GroupMemberRepository groupMemberRepository;
+    private final JdbcTemplate jdbcTemplate;
     
     @Value("${file.upload.path:${user.home}/evaluation-files}")
     private String uploadPath;
@@ -196,20 +203,127 @@ public class EvaluationService {
         evaluationRepository.save(material);
     }
 
+    @Transactional
     public void reviewMaterialByGroupMember(ReviewRequest request) {
-        EvaluationMaterial material = materialRepository.findById(request.getMaterialId())
-            .orElseThrow(() -> new RuntimeException("材料不存在"));
-            
-        // 验证状态转换的合法性
-        if (!"PENDING".equals(material.getStatus())) {
-            throw new RuntimeException("只能审核待审核的材料");
+        // 获取当前用户
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = authentication.getName();
+        
+        // 获取材料信息
+        Optional<EvaluationMaterial> materialOpt = materialRepository.findById(request.getMaterialId());
+        if (materialOpt.isEmpty()) {
+            throw new IllegalArgumentException("材料不存在");
         }
         
+        EvaluationMaterial material = materialOpt.get();
+        
+        // 检查材料状态
+        if (!"PENDING".equals(material.getStatus())) {
+            throw new IllegalArgumentException("只能审核待审核状态的材料");
+        }
+        
+        // 更新材料状态
         material.setStatus(request.getStatus());
         material.setReviewComment(request.getComment());
         material.setReviewedAt(LocalDateTime.now());
         
+        // 如果是通过状态，则更新加分信息
+        if ("APPROVED".equals(request.getStatus())) {
+            material.setEvaluationType(request.getEvaluationType());
+            material.setScore(request.getScore());
+            
+            // 使用材料所属学生的ID而不是审核者的ID
+            Long studentId = material.getUserId();  // 获取材料所属学生的ID
+            
+            // 根据加分类型更新对应表的总加分
+            updateTotalBonus(studentId, request.getEvaluationType(), request.getScore());
+        }
+        
         materialRepository.save(material);
+    }
+
+    private void updateTotalBonus(Long userId, String evaluationType, Double score) {
+        // 获取当前学年和学期
+        String academicYear = getCurrentAcademicYear();
+        Integer semester = getCurrentSemester();
+        
+        // 通过 userId 查询 users 表获取 student_id
+        String findStudentIdSql = "SELECT user_id FROM users WHERE id = ?";
+        String studentId = jdbcTemplate.queryForObject(findStudentIdSql, String.class, userId);
+        
+        if (studentId == null) {
+            throw new IllegalStateException("未找到对应的学生信息");
+        }
+        
+        String tableName;
+        String updateSql;
+        
+        switch (evaluationType) {
+            case "A":
+                tableName = "moral_monthly_evaluation";
+                break;
+            case "C":
+                tableName = "research_competition_evaluation";
+                break;
+            case "D":
+                tableName = "sports_arts_evaluation";
+                break;
+            default:
+                throw new IllegalArgumentException("无效的评估类型: " + evaluationType);
+        }
+        
+        String monthCondition = "";
+        if ("A".equals(evaluationType)) {
+            Calendar cal = Calendar.getInstance();
+            cal.add(Calendar.MONTH, -1);
+            int lastMonth = cal.get(Calendar.MONTH) + 1;
+            monthCondition = " AND `month` = " + lastMonth;
+        }
+        
+        updateSql = "UPDATE " + tableName + 
+                    " SET total_bonus = total_bonus + ? " +
+                    "WHERE student_id = ? AND academic_year = ? AND semester = ? " +
+                    "AND review_end_time > NOW()" + monthCondition;
+        
+        int updatedRows = jdbcTemplate.update(updateSql, score, studentId, academicYear, semester);
+        
+        if (updatedRows == 0) {
+            // 检查是否是因为 review_end_time 已过期
+            String checkSql = "SELECT COUNT(*) FROM " + tableName + 
+                             " WHERE student_id = ? AND academic_year = ? AND semester = ?";
+            int count = jdbcTemplate.queryForObject(checkSql, Integer.class, studentId, academicYear, semester);
+            
+            if (count > 0) {
+                throw new IllegalStateException("当前不在审核期内，无法进行加分操作");
+            } else {
+                throw new IllegalStateException("未找到学生的测评记录");
+            }
+        }
+    }
+
+    // 获取当前学年
+    private String getCurrentAcademicYear() {
+        Calendar cal = Calendar.getInstance();
+        int year = cal.get(Calendar.YEAR);
+        int month = cal.get(Calendar.MONTH) + 1;
+        
+        if (month >= 9) {
+            return year + "-" + (year + 1);
+        } else {
+            return (year - 1) + "-" + year;
+        }
+    }
+
+    // 获取当前学期
+    private Integer getCurrentSemester() {
+        Calendar cal = Calendar.getInstance();
+        int month = cal.get(Calendar.MONTH) + 1;
+        
+        if (month >= 2 && month <= 8) {
+            return 2; // 第二学期
+        } else {
+            return 1; // 第一学期
+        }
     }
 
     public List<EvaluationMaterial> getAllMaterials(Long currentUserId) {
