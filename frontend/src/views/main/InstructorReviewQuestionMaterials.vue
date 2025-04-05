@@ -96,6 +96,33 @@
                   placeholder="请输入审核意见"
                 />
               </el-form-item>
+              
+              <!-- 只在通过时显示加分选项 -->
+              <template v-if="reviewType === 'APPROVED'">
+                <el-form-item label="加分种类" prop="evaluationType" :rules="[{ required: true, message: '请选择加分种类' }]">
+                  <select 
+                    v-model="reviewForm.evaluationType" 
+                    class="custom-select"
+                    placeholder="请选择加分种类"
+                  >
+                    <option value="" disabled>请选择加分种类</option>
+                    <option value="A">A类 - 思想品德</option>
+                    <option value="C">C类 - 竞赛获奖</option>
+                    <option value="D">D类 - 文体活动</option>
+                  </select>
+                </el-form-item>
+                
+                <el-form-item label="加分分数" prop="score" :rules="[{ required: true, message: '请输入加分分数' }]">
+                  <input 
+                    type="number" 
+                    v-model="reviewForm.score"
+                    class="custom-input"
+                    min="0"
+                    step="0.5"
+                    placeholder="请输入加分分数"
+                  />
+                </el-form-item>
+              </template>
             </el-form>
             <template #footer>
               <span class="dialog-footer">
@@ -211,14 +238,20 @@ const currentMaterial = ref(null)
 const reviewType = ref('')
 const submitting = ref(false)
 const reviewForm = ref({
-  comment: ''
+  comment: '',
+  evaluationType: '',
+  score: null
 })
 
 // 处理审核按钮点击
 const handleReview = (row, type) => {
   currentMaterial.value = row
   reviewType.value = type
-  reviewForm.value.comment = ''
+  reviewForm.value = {
+    comment: '',
+    evaluationType: '',
+    score: null
+  }
   reviewDialogVisible.value = true
 }
 
@@ -229,12 +262,25 @@ const submitReview = async () => {
     return
   }
 
+  if (reviewType.value === 'APPROVED') {
+    if (!reviewForm.value.evaluationType) {
+      ElMessage.warning('请选择加分种类')
+      return
+    }
+    if (!reviewForm.value.score) {
+      ElMessage.warning('请输入加分分数')
+      return
+    }
+  }
+
   try {
     submitting.value = true
-    await axios.post('/api/instructor/review', {
+    await axios.post('/instructor/review', {
       materialId: currentMaterial.value.id,
       status: reviewType.value,
-      comment: reviewForm.value.comment
+      comment: reviewForm.value.comment,
+      evaluationType: reviewForm.value.evaluationType,
+      score: reviewForm.value.score
     })
     
     ElMessage.success(reviewType.value === 'APPROVED' ? '已通过审核' : '已驳回材料')
@@ -574,5 +620,45 @@ const formatFileSize = (size) => {
   text-align: center;
   color: #999;
   padding: 20px;
+}
+
+.custom-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background-color: #fff;
+  font-size: 14px;
+  color: #606266;
+  transition: border-color 0.2s;
+}
+
+.custom-select:hover {
+  border-color: #c0c4cc;
+}
+
+.custom-select:focus {
+  outline: none;
+  border-color: #409eff;
+}
+
+.custom-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background-color: #fff;
+  font-size: 14px;
+  color: #606266;
+  transition: border-color 0.2s;
+}
+
+.custom-input:hover {
+  border-color: #c0c4cc;
+}
+
+.custom-input:focus {
+  outline: none;
+  border-color: #409eff;
 }
 </style> 

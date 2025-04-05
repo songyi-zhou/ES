@@ -198,6 +198,26 @@ public class EvaluationService {
         material.setReviewComment(request.getComment());
         material.setReviewedAt(LocalDateTime.now());
         
+        // 如果审核通过，更新加分相关字段并调用加分函数
+        if ("APPROVED".equals(request.getStatus())) {
+            // 更新材料表中的加分信息
+            material.setEvaluationType(request.getEvaluationType());
+            material.setScore(request.getScore());
+            
+            try {
+                updateTotalBonus(
+                    material.getUserId(),
+                    request.getEvaluationType(),
+                    request.getScore(),
+                    material.getId()
+                );
+            } catch (IllegalStateException e) {
+                throw new RuntimeException(e.getMessage());
+            } catch (Exception e) {
+                throw new RuntimeException("加分操作失败：" + e.getMessage());
+            }
+        }
+        
         evaluationRepository.save(material);
     }
 
