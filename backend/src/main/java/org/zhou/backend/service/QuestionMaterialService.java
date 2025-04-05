@@ -2,7 +2,6 @@ package org.zhou.backend.service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,9 +12,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.zhou.backend.entity.EvaluationMaterial;
@@ -25,12 +24,12 @@ import org.zhou.backend.model.request.ReportRequest;
 import org.zhou.backend.model.request.ReviewRequest;
 import org.zhou.backend.repository.ClassGroupMemberRepository;
 import org.zhou.backend.repository.ClassRepository;
+import org.zhou.backend.repository.EvaluationMaterialRepository;
 import org.zhou.backend.repository.GradeGroupLeaderRepository;
 import org.zhou.backend.repository.QuestionMaterialRepository;
 import org.zhou.backend.repository.UserRepository;
-import org.zhou.backend.repository.EvaluationMaterialRepository;
+
 import jakarta.persistence.criteria.Predicate;
-import org.springframework.data.jpa.domain.Specification;
 
 @Service
 @Transactional
@@ -55,6 +54,9 @@ public class QuestionMaterialService {
     
     @Autowired
     private EvaluationMaterialRepository materialRepository;
+    
+    @Autowired
+    private EvaluationService evaluationService;  // 注入 EvaluationService
     
     public Page<EvaluationMaterial> getQuestionMaterials(
             String department,
@@ -94,6 +96,26 @@ public class QuestionMaterialService {
             
         material.setStatus(request.getStatus());
         material.setReviewComment(request.getComment());
+        
+        // 如果审核通过，更新加分相关字段并调用加分函数
+        if ("APPROVED".equals(request.getStatus())) {
+            // 更新材料表中的加分信息
+            material.setEvaluationType(request.getEvaluationType());
+            material.setScore(request.getScore());
+            
+            try {
+                evaluationService.updateTotalBonus(
+                    material.getUserId(),
+                    request.getEvaluationType(),
+                    request.getScore(),
+                    material.getId()
+                );
+            } catch (IllegalStateException e) {
+                throw new RuntimeException(e.getMessage());
+            } catch (Exception e) {
+                throw new RuntimeException("加分操作失败：" + e.getMessage());
+            }
+        }
         
         questionMaterialRepository.save(material);
     }

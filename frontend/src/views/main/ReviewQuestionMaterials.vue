@@ -122,6 +122,33 @@
                     <el-radio label="REJECTED">驳回</el-radio>
                   </el-radio-group>
                 </el-form-item>
+                
+                <!-- 添加通过时的额外字段 -->
+                <template v-if="reviewForm.status === 'APPROVED'">
+                  <el-form-item label="加分种类">
+                    <select 
+                      v-model="reviewForm.evaluationType" 
+                      class="custom-select"
+                      placeholder="请选择加分种类"
+                    >
+                      <option value="" disabled>请选择加分种类</option>
+                      <option value="A">A类</option>
+                      <option value="C">C类</option>
+                      <option value="D">D类</option>
+                    </select>
+                  </el-form-item>
+                  <el-form-item label="加分分数">
+                    <el-input-number 
+                      v-model="reviewForm.score" 
+                      :min="0" 
+                      :max="100" 
+                      :precision="1"
+                      :step="0.5"
+                      placeholder="请输入加分分数"
+                    />
+                  </el-form-item>
+                </template>
+
                 <el-form-item label="审核意见">
                   <el-input
                     v-model="reviewForm.comment"
@@ -302,7 +329,9 @@ const reviewDialogVisible = ref(false)
 const currentMaterial = ref(null)
 const reviewForm = ref({
   status: '',
-  comment: ''
+  comment: '',
+  evaluationType: '',
+  score: 0
 })
 const submitting = ref(false)
 
@@ -310,7 +339,9 @@ const openReviewDialog = (row) => {
   currentMaterial.value = row
   reviewForm.value = {
     status: '',
-    comment: ''
+    comment: '',
+    evaluationType: '',
+    score: 0
   }
   reviewDialogVisible.value = true
 }
@@ -319,6 +350,17 @@ const submitReview = async () => {
   if (!reviewForm.value.status) {
     ElMessage.warning('请选择审核结果');
     return;
+  }
+
+  if (reviewForm.value.status === 'APPROVED') {
+    if (!reviewForm.value.evaluationType) {
+      ElMessage.warning('请选择加分种类');
+      return;
+    }
+    if (!reviewForm.value.score) {
+      ElMessage.warning('请输入加分分数');
+      return;
+    }
   }
 
   if (!reviewForm.value.comment.trim()) {
@@ -331,7 +373,9 @@ const submitReview = async () => {
     await axios.post('/question-materials/review', {
       materialId: currentMaterial.value.id,
       status: reviewForm.value.status,
-      comment: reviewForm.value.comment
+      comment: reviewForm.value.comment,
+      evaluationType: reviewForm.value.evaluationType,
+      score: reviewForm.value.score
     });
     
     ElMessage.success('审核提交成功');
@@ -884,5 +928,29 @@ const formatDate = (dateString: string) => {
 .instructor-info li {
   color: #409eff;
   margin: 5px 0;
+}
+
+.custom-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background-color: #fff;
+  font-size: 14px;
+  color: #606266;
+  transition: border-color 0.2s;
+}
+
+.custom-select:hover {
+  border-color: #c0c4cc;
+}
+
+.custom-select:focus {
+  outline: none;
+  border-color: #409eff;
+}
+
+.custom-select option {
+  padding: 8px;
 }
 </style> 

@@ -238,7 +238,7 @@ public class EvaluationService {
         materialRepository.save(material);
     }
 
-    private void updateTotalBonus(Long userId, String evaluationType, Double score, Long materialId) {
+    void updateTotalBonus(Long userId, String evaluationType, Double score, Long materialId) {
         // 获取当前学年和学期
         String academicYear = getCurrentAcademicYear();
         Integer semester = getCurrentSemester();
