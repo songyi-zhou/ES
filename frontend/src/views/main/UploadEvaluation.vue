@@ -90,6 +90,22 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <el-table-column prop="score" label="加分数额" width="100" align="center">
+              <template #default="scope">
+                <span v-if="scope.row.status === 'APPROVED' && scope.row.score" class="score">
+                  {{ scope.row.score }}
+                </span>
+                <span v-else class="no-score">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="reviewComment" label="审核意见" min-width="200">
+              <template #default="scope">
+                <span v-if="scope.row.reviewComment" class="review-comment">
+                  {{ scope.row.reviewComment }}
+                </span>
+                <span v-else class="no-comment">暂无审核意见</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="createdAt" label="上传时间" width="180" align="center" />
           </el-table>
           <div v-else class="empty-tip">暂无上传记录</div>
@@ -672,5 +688,24 @@ watch(uploadHistory, (newVal) => {
 
 .select-dropdown::-webkit-scrollbar-track {
   background-color: #f5f7fa;
+}
+
+.review-comment {
+  color: #606266;
+  line-height: 1.4;
+}
+
+.no-comment {
+  color: #909399;
+  font-style: italic;
+}
+
+.score {
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.no-score {
+  color: #909399;
 }
 </style> 

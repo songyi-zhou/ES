@@ -258,7 +258,7 @@ public class EvaluationService {
         materialRepository.save(material);
     }
 
-    void updateTotalBonus(Long userId, String evaluationType, Double score, Long materialId) {
+    public void updateTotalBonus(Long userId, String evaluationType, Double score, Long materialId) {
         // 获取当前学年和学期
         String academicYear = getCurrentAcademicYear();
         Integer semester = getCurrentSemester();
@@ -443,5 +443,9 @@ public class EvaluationService {
         ).orElseThrow(() -> new RuntimeException(
             String.format("未找到%s %s的导员", student.getDepartment(), student.getSquad())
         ));
+    }
+
+    public EvaluationMaterial save(EvaluationMaterial material) {
+        return materialRepository.save(material);
     }
 } 
