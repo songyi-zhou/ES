@@ -359,7 +359,8 @@ const getStatusText = (status) => {
     'REJECTED': '已驳回',
     'QUESTIONED': '已上报',
     'REPORTED': '已上报至导员',
-    'DEDUCTED': '已扣分'
+    'DEDUCTED': '已扣分',
+    'PUNISHED': '已处罚'
   };
   return statusMap[status] || '未知状态';
 };

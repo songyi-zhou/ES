@@ -25,16 +25,24 @@
               
               <!-- 学生选择 -->
               <el-form-item label="选择学生" prop="studentId">
-                <el-select 
-                  v-model="formData.studentId" 
-                  filterable 
-                  placeholder="请选择学生"
+                <el-select
+                  v-model="formData.studentId"
+                  filterable
+                  remote
+                  :remote-method="searchStudents"
+                  :loading="searchLoading"
+                  placeholder="输入姓名/学号搜索"
                   style="width: 100%">
                   <el-option
-                    v-for="student in students"
+                    v-for="student in filteredStudents"
                     :key="student.userId"
-                    :label="`${student.name}`"
+                    :label="`${student.name} (${student.userId}) - ${student.className}`"
                     :value="student.userId">
+                    <div class="student-option">
+                      <span class="student-name">{{student.name}}</span>
+                      <span class="student-id">{{student.userId}}</span>
+                      <span class="student-class">{{student.className}}</span>
+                    </div>
                   </el-option>
                 </el-select>
               </el-form-item>
@@ -121,6 +129,9 @@ const formRef = ref(null);
 const loading = ref(false);
 const students = ref([]);
 const fileList = ref([]);
+const searchLoading = ref(false);
+const filteredStudents = ref([]);
+const allStudents = ref([]);  // 存储所有学生数据
 
 // 表单数据
 const formData = reactive({
@@ -159,27 +170,47 @@ const headers = {
   Authorization: `Bearer ${userStore.token}`
 };
 
-// 获取学生列表
+// 搜索方法
+const searchStudents = async (query) => {
+  if (query === '') {
+    filteredStudents.value = [];
+    return;
+  }
+  
+  searchLoading.value = true;
+  try {
+    // 如果query是数字，优先匹配学号
+    const isNumber = /^\d+$/.test(query);
+    
+    filteredStudents.value = allStudents.value.filter(student => {
+      if (isNumber) {
+        return student.userId.includes(query);
+      }
+      return student.name.includes(query) || 
+             student.userId.includes(query) || 
+             student.className.includes(query);
+    }).slice(0, 20);  // 限制显示前20条结果
+    
+  } finally {
+    searchLoading.value = false;
+  }
+};
+
+// 修改获取学生列表方法
 const fetchStudents = async () => {
   try {
     console.log('开始获取学生列表...');
     const response = await axios.get('/instructor/students');
-    console.log('获取学生列表响应:', response);
     
     if (response && response.data) {
+      allStudents.value = response.data;
       console.log('成功获取学生列表数据:', response.data);
-      students.value = response.data;
     } else {
       console.error('获取学生列表失败: 响应数据为空');
       ElMessage.error('获取学生列表失败');
     }
   } catch (error) {
-    console.error('获取学生列表请求异常:', {
-      message: error.message,
-      response: error.response,
-      status: error.response?.status,
-      data: error.response?.data
-    });
+    console.error('获取学生列表请求异常:', error);
     ElMessage.error('获取学生列表失败，请稍后重试');
   }
 };
@@ -368,5 +399,31 @@ onMounted(() => {
 
 :deep(.el-button) {
   border-radius: 4px;
+}
+
+.student-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.student-name {
+  font-weight: bold;
+  min-width: 60px;
+}
+
+.student-id {
+  color: #666;
+  font-size: 0.9em;
+}
+
+.student-class {
+  color: #909399;
+  font-size: 0.9em;
+  margin-left: auto;
+}
+
+:deep(.el-select-dropdown__item) {
+  padding: 8px 12px;
 }
 </style> 

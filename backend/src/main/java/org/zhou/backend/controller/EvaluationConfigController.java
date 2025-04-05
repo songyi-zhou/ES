@@ -280,6 +280,133 @@ public class EvaluationConfigController {
                     return ResponseEntity.badRequest().body("未知的表类型");
             }
 
+            // 在插入记录的 switch-case 结构后，添加处理扣分记录的代码
+            // 根据表类型获取对应的评测类型
+            String evaluationType;
+            switch (request.getFormType()) {
+                case "MONTHLY_A":
+                    evaluationType = "A";
+                    break;
+                case "TYPE_C":
+                    evaluationType = "C";
+                    break;
+                case "TYPE_D":
+                    evaluationType = "D";
+                    break;
+                default:
+                    evaluationType = null;
+            }
+
+            if (evaluationType != null) {
+                // 查找未处理的扣分记录
+                String findDeductedMaterialsSql = """
+                    SELECT em.*, u.user_id as student_id
+                    FROM evaluation_materials em
+                    JOIN users u ON em.user_id = u.id
+                    WHERE em.evaluation_type = ? 
+                    AND em.status = 'DEDUCTED'
+                    """;
+                
+                List<Map<String, Object>> deductedMaterials = jdbcTemplate.queryForList(
+                    findDeductedMaterialsSql, 
+                    evaluationType
+                );
+
+                if (!deductedMaterials.isEmpty()) {
+                    // 更新对应综测表的扣分记录
+                    String updatePenaltySql = "";
+                    switch (request.getFormType()) {
+                        case "MONTHLY_A":
+                            updatePenaltySql = """
+                                UPDATE moral_monthly_evaluation 
+                                SET total_penalty = COALESCE(total_penalty, 0) + ABS(?)
+                                WHERE student_id = ? 
+                                AND academic_year = ? 
+                                AND semester = ? 
+                                AND month = ?
+                                """;
+                            break;
+                        case "TYPE_C":
+                            updatePenaltySql = """
+                                UPDATE research_competition_evaluation 
+                                SET total_penalty = COALESCE(total_penalty, 0) + ABS(?)
+                                WHERE student_id = ? 
+                                AND academic_year = ? 
+                                AND semester = ?
+                                """;
+                            break;
+                        case "TYPE_D":
+                            updatePenaltySql = """
+                                UPDATE sports_arts_evaluation 
+                                SET total_penalty = COALESCE(total_penalty, 0) + ABS(?)
+                                WHERE student_id = ? 
+                                AND academic_year = ? 
+                                AND semester = ?
+                                """;
+                            break;
+                    }
+
+                    // 更新扣分材料状态的SQL
+                    String updateMaterialStatusSql = """
+                        UPDATE evaluation_materials 
+                        SET status = 'PUNISHED' 
+                        WHERE id = ?
+                        """;
+
+                    // 批量处理扣分记录
+                    for (Map<String, Object> material : deductedMaterials) {
+                        try {
+                            // 直接使用查询结果中的student_id
+                            String studentId = (String) material.get("student_id");  // 从users表的user_id字段获取
+                            
+                            // 更新综测表扣分
+                            Object[] updateParams;
+                            if (request.getFormType().equals("MONTHLY_A")) {
+                                updateParams = new Object[]{
+                                    material.get("score"),
+                                    studentId,  // 使用查询到的student_id
+                                    request.getAcademicYear(),
+                                    request.getSemester(),
+                                    request.getMonth()
+                                };
+                            } else {
+                                updateParams = new Object[]{
+                                    material.get("score"),
+                                    studentId,  // 使用查询到的student_id
+                                    request.getAcademicYear(),
+                                    request.getSemester()
+                                };
+                            }
+                            jdbcTemplate.update(updatePenaltySql, updateParams);
+                            
+                            // 更新扣分材料状态
+                            jdbcTemplate.update(updateMaterialStatusSql, material.get("id"));
+
+                            // 记录日志
+                            logService.saveLog(
+                                EvaluationConfigLog.builder()
+                                    .academicYear(request.getAcademicYear())
+                                    .semester(request.getSemester())
+                                    .operatorId(userPrincipal.getId())
+                                    .operatorName(groupLeader.getName())
+                                    .section("扣分处理")
+                                    .operationType("更新")
+                                    .description(String.format(
+                                        "处理学生 %s 的扣分记录，扣分值：%s",
+                                        studentId,
+                                        material.get("score")
+                                    ))
+                                    .ipAddress(getClientIp(httpRequest))
+                                    .userAgent(httpRequest.getHeader("User-Agent"))
+                                    .build()
+                            );
+                        } catch (Exception e) {
+                            log.error("处理扣分记录失败: {}", e.getMessage());
+                        }
+                    }
+                }
+            }
+
             // 记录操作日志
             logService.saveLog(
                 EvaluationConfigLog.builder()
