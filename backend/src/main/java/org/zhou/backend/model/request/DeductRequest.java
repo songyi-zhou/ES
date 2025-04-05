@@ -1,13 +1,13 @@
 package org.zhou.backend.model.request;
 
-import org.springframework.web.multipart.MultipartFile;
-
 import java.util.List;
+
+import org.springframework.web.multipart.MultipartFile;
 
 public class DeductRequest {
     private String studentId;
     private String title;
-    private String description;
+    private String reviewComment;
     private Long reviewerId;
     private Double score;
     private List<MultipartFile> attachments;
@@ -29,12 +29,12 @@ public class DeductRequest {
         this.title = title;
     }
     
-    public String getDescription() {
-        return description;
+    public String getReviewComment() {
+        return reviewComment;
     }
     
-    public void setDescription(String description) {
-        this.description = description;
+    public void setReviewComment(String reviewComment) {
+        this.reviewComment = reviewComment;
     }
     
     public Long getReviewerId() {

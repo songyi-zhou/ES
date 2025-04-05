@@ -201,7 +201,7 @@ public class InstructorController {
     public ResponseEntity<?> deductScore(
         @RequestParam("studentId") String studentId,
         @RequestParam("title") String title,
-        @RequestParam("description") String description,
+        @RequestParam("reviewComment") String reviewComment,
         @RequestParam("score") Double score,
         @RequestParam("reviewerId") String reviewerId,
         @RequestParam(value = "attachments", required = false) MultipartFile[] attachments
@@ -210,7 +210,7 @@ public class InstructorController {
             DeductRequest request = new DeductRequest();
             request.setStudentId(studentId);
             request.setTitle(title);
-            request.setDescription(description);
+            request.setReviewComment(reviewComment);
             request.setScore(score);
             request.setReviewerId(Long.valueOf(reviewerId));
             request.setAttachments(attachments != null ? Arrays.asList(attachments) : null);
@@ -235,7 +235,7 @@ public class InstructorController {
             material.setStatus("DEDUCTED");
             material.setEvaluationType("A");
             material.setTitle(request.getTitle());
-            material.setDescription(request.getDescription());
+            material.setReviewComment(request.getReviewComment());
             material.setReviewerId(reviewerIdFromDb);
             material.setScore(-request.getScore()); // 设置为负数表示扣分
             material.setCreatedAt(LocalDateTime.now());

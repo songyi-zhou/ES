@@ -92,7 +92,7 @@
             </el-table-column>
             <el-table-column prop="score" label="加分数额" width="100" align="center">
               <template #default="scope">
-                <span v-if="scope.row.status === 'APPROVED' && scope.row.score" class="score">
+                <span v-if="(scope.row.status === 'APPROVED'||scope.row.status === 'DEDUCTED') && scope.row.score" class="score">
                   {{ scope.row.score }}
                 </span>
                 <span v-else class="no-score">-</span>
@@ -358,7 +358,8 @@ const getStatusText = (status) => {
     'APPROVED': '已通过',
     'REJECTED': '已驳回',
     'QUESTIONED': '已上报',
-    'REPORTED': '已上报至导员'
+    'REPORTED': '已上报至导员',
+    'DEDUCTED': '已扣分'
   };
   return statusMap[status] || '未知状态';
 };

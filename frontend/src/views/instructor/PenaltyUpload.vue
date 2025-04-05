@@ -230,7 +230,7 @@ const submitForm = async () => {
         // 确保所有字段名与后端参数名完全匹配
         submitData.append('studentId', formData.studentId);
         submitData.append('title', formData.title);
-        submitData.append('description', formData.reason);
+        submitData.append('reviewComment', formData.reason);
         submitData.append('score', formData.penaltyScore.toString());  // 转换为字符串
         submitData.append('reviewerId', userStore.userId);
         
