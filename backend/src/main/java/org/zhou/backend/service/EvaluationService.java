@@ -4,18 +4,17 @@ import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.util.Set;
-import java.util.Optional;
-import java.util.Date;
 import java.util.Calendar;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -32,13 +31,12 @@ import org.zhou.backend.repository.ClassRepository;
 import org.zhou.backend.repository.EvaluationAttachmentRepository;
 import org.zhou.backend.repository.EvaluationMaterialRepository;
 import org.zhou.backend.repository.EvaluationRepository;
-import org.zhou.backend.repository.UserRepository;
 import org.zhou.backend.repository.GroupMemberRepository;
+import org.zhou.backend.repository.UserRepository;
 
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import jakarta.persistence.criteria.Predicate;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -232,17 +230,15 @@ public class EvaluationService {
             material.setEvaluationType(request.getEvaluationType());
             material.setScore(request.getScore());
             
-            // 使用材料所属学生的ID而不是审核者的ID
-            Long studentId = material.getUserId();  // 获取材料所属学生的ID
-            
-            // 根据加分类型更新对应表的总加分
-            updateTotalBonus(studentId, request.getEvaluationType(), request.getScore());
+            // 传入 materialId
+            updateTotalBonus(material.getUserId(), request.getEvaluationType(), 
+                            request.getScore(), material.getId());
         }
         
         materialRepository.save(material);
     }
 
-    private void updateTotalBonus(Long userId, String evaluationType, Double score) {
+    private void updateTotalBonus(Long userId, String evaluationType, Double score, Long materialId) {
         // 获取当前学年和学期
         String academicYear = getCurrentAcademicYear();
         Integer semester = getCurrentSemester();
@@ -280,12 +276,61 @@ public class EvaluationService {
             monthCondition = " AND `month` = " + lastMonth;
         }
         
+        // 先检查记录是否存在
+        String checkRecordSql = "SELECT COUNT(*) FROM " + tableName + 
+                               " WHERE student_id = ? AND academic_year = ? AND semester = ?" + 
+                               monthCondition;
+        int recordCount = jdbcTemplate.queryForObject(checkRecordSql, Integer.class, 
+                                                    studentId, academicYear, semester);
+        
+        if (recordCount == 0) {
+            // 检查是否是因为月份不对（A类）或其他原因
+            if ("A".equals(evaluationType)) {
+                String checkMonthSql = "SELECT COUNT(*) FROM " + tableName + 
+                                     " WHERE student_id = ? AND academic_year = ? AND semester = ?";
+                int monthCount = jdbcTemplate.queryForObject(checkMonthSql, Integer.class, 
+                                                           studentId, academicYear, semester);
+                
+                if (monthCount > 0) {
+                    throw new IllegalStateException("当前月份不在审核期内");
+                }
+            } else if ("C".equals(evaluationType) || "D".equals(evaluationType)) {
+                String checkOtherSemesterSql = "SELECT COUNT(*) FROM " + tableName + 
+                                             " WHERE student_id = ? AND academic_year = ?";
+                int otherSemesterCount = jdbcTemplate.queryForObject(checkOtherSemesterSql, Integer.class, 
+                                                                   studentId, academicYear);
+                
+                if (otherSemesterCount > 0) {
+                    throw new IllegalStateException("当前学期不在审核期内");
+                }
+            }
+            
+            throw new IllegalStateException("当前类型的综测还未开始，请耐心等待");
+        }
+        
+        // 获取现有的 material_ids
+        String getMaterialIdsSql = "SELECT material_ids FROM " + tableName + 
+                                  " WHERE student_id = ? AND academic_year = ? AND semester = ?" + 
+                                  monthCondition;
+        String existingMaterialIds = jdbcTemplate.queryForObject(getMaterialIdsSql, String.class, 
+                                                               studentId, academicYear, semester);
+        
+        // 构建新的 material_ids
+        String newMaterialIds;
+        if (existingMaterialIds == null || existingMaterialIds.isEmpty()) {
+            newMaterialIds = String.valueOf(materialId);
+        } else {
+            newMaterialIds = existingMaterialIds + "," + materialId;
+        }
+        
+        // 更新 SQL 语句，同时更新 total_bonus 和 material_ids
         updateSql = "UPDATE " + tableName + 
-                    " SET total_bonus = total_bonus + ? " +
+                    " SET total_bonus = total_bonus + ?, material_ids = ? " +
                     "WHERE student_id = ? AND academic_year = ? AND semester = ? " +
                     "AND review_end_time > NOW()" + monthCondition;
         
-        int updatedRows = jdbcTemplate.update(updateSql, score, studentId, academicYear, semester);
+        int updatedRows = jdbcTemplate.update(updateSql, score, newMaterialIds, 
+                                            studentId, academicYear, semester);
         
         if (updatedRows == 0) {
             // 检查是否是因为 review_end_time 已过期
