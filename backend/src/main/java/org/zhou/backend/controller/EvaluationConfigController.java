@@ -323,7 +323,11 @@ public class EvaluationConfigController {
                         case "MONTHLY_A":
                             updatePenaltySql = """
                                 UPDATE moral_monthly_evaluation 
-                                SET total_penalty = COALESCE(total_penalty, 0) + ABS(?)
+                                SET total_penalty = COALESCE(total_penalty, 0) + ABS(?),
+                                    material_ids = CASE 
+                                        WHEN material_ids IS NULL OR material_ids = '' THEN ?
+                                        ELSE CONCAT(material_ids, ',', ?)
+                                    END
                                 WHERE student_id = ? 
                                 AND academic_year = ? 
                                 AND semester = ? 
@@ -333,7 +337,11 @@ public class EvaluationConfigController {
                         case "TYPE_C":
                             updatePenaltySql = """
                                 UPDATE research_competition_evaluation 
-                                SET total_penalty = COALESCE(total_penalty, 0) + ABS(?)
+                                SET total_penalty = COALESCE(total_penalty, 0) + ABS(?),
+                                    material_ids = CASE 
+                                        WHEN material_ids IS NULL OR material_ids = '' THEN ?
+                                        ELSE CONCAT(material_ids, ',', ?)
+                                    END
                                 WHERE student_id = ? 
                                 AND academic_year = ? 
                                 AND semester = ?
@@ -342,7 +350,11 @@ public class EvaluationConfigController {
                         case "TYPE_D":
                             updatePenaltySql = """
                                 UPDATE sports_arts_evaluation 
-                                SET total_penalty = COALESCE(total_penalty, 0) + ABS(?)
+                                SET total_penalty = COALESCE(total_penalty, 0) + ABS(?),
+                                    material_ids = CASE 
+                                        WHEN material_ids IS NULL OR material_ids = '' THEN ?
+                                        ELSE CONCAT(material_ids, ',', ?)
+                                    END
                                 WHERE student_id = ? 
                                 AND academic_year = ? 
                                 AND semester = ?
@@ -360,15 +372,17 @@ public class EvaluationConfigController {
                     // 批量处理扣分记录
                     for (Map<String, Object> material : deductedMaterials) {
                         try {
-                            // 直接使用查询结果中的student_id
-                            String studentId = (String) material.get("student_id");  // 从users表的user_id字段获取
+                            String studentId = (String) material.get("student_id");
+                            String materialId = material.get("id").toString();
                             
                             // 更新综测表扣分
                             Object[] updateParams;
                             if (request.getFormType().equals("MONTHLY_A")) {
                                 updateParams = new Object[]{
                                     material.get("score"),
-                                    studentId,  // 使用查询到的student_id
+                                    materialId,  // 新材料ID（如果原来为空）
+                                    materialId,  // 新材料ID（如果原来不为空）
+                                    studentId,
                                     request.getAcademicYear(),
                                     request.getSemester(),
                                     request.getMonth()
@@ -376,7 +390,9 @@ public class EvaluationConfigController {
                             } else {
                                 updateParams = new Object[]{
                                     material.get("score"),
-                                    studentId,  // 使用查询到的student_id
+                                    materialId,  // 新材料ID（如果原来为空）
+                                    materialId,  // 新材料ID（如果原来不为空）
+                                    studentId,
                                     request.getAcademicYear(),
                                     request.getSemester()
                                 };

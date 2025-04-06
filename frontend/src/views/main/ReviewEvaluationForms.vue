@@ -128,25 +128,62 @@
           </div>
         </div>
 
-        <!-- 查看证明材料弹窗 -->
-        <div v-if="showMaterialsModal" class="modal">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h3>证明材料</h3>
-              <button class="close-btn" @click="showMaterialsModal = false">×</button>
-            </div>
-            <div class="materials-container">
-              <div v-for="material in materials" :key="material.id" class="material-item">
-                <div class="material-info">
-                  {{ material.description }}
+        <!-- 材料查看弹窗 -->
+        <el-dialog
+          v-model="showMaterialsModal"
+          title="证明材料详情"
+          width="80%"
+          :close-on-click-modal="false"
+        >
+          <el-table :data="materials" style="width: 100%">
+            <el-table-column prop="title" label="标题" width="180" />
+            <el-table-column prop="description" label="内容" />
+            <el-table-column prop="score" label="分数" width="80">
+              <template #default="{ row }">
+                <span :class="{ 'text-red-500': row.score < 0 }">{{ row.score }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="row.status === 'PUNISHED' ? 'danger' : 'info'">
+                  {{ row.status === 'PUNISHED' ? '扣分' : '加分' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="created_at" label="提交时间" width="160">
+              <template #default="{ row }">
+                {{ formatDate(row.created_at) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="review_comment" label="审核意见" width="200">
+              <template #default="{ row }">
+                {{ row.review_comment || '暂无审核意见' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="department" label="部门" width="120" />
+            <el-table-column prop="squad" label="班级" width="120" />
+            <el-table-column label="操作" width="120" fixed="right">
+              <template #default="{ row }">
+                <div v-if="row.attachments">
+                  <select 
+                    class="attachment-select" 
+                    @change="handleAttachmentSelect($event, row)"
+                  >
+                    <option value="">附件 ({{ getAttachmentCount(row) }})</option>
+                    <option 
+                      v-for="attachment in parseAttachments(row.attachments)" 
+                      :key="attachment.id"
+                      :value="attachment.file_path"
+                    >
+                      {{ attachment.file_name }}
+                    </option>
+                  </select>
                 </div>
-                <div class="material-preview">
-                  <iframe :src="material.url" width="100%" height="100%"></iframe>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+                <span v-else>无附件</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-dialog>
       </main>
     </div>
   </div>
@@ -202,8 +239,8 @@ const canSubmitReturn = computed(() => {
 
 // 格式化日期
 const formatDate = (dateStr) => {
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', {
+  if (!dateStr) return ''
+  return new Date(dateStr).toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -349,7 +386,7 @@ const batchApprove = async () => {
       classId: filterForm.value.classId
     }
     
-    const response = await request.post('/api/review/batch-approve', requestBody)
+    const response = await request.post('/review/batch-approve', requestBody)
     if (response.data.success) {
       ElMessage.success('批量审核成功')
       // 重新加载数据
@@ -489,17 +526,112 @@ const resetFilter = () => {
 // 查看证明材料
 const viewMaterials = async (form) => {
   try {
-    const response = await fetch(`/api/evaluation-forms/${form.id}/materials`)
-    materials.value = await response.json()
-    showMaterialsModal.value = true
+    if (!filterForm.value.formType) {
+      ElMessage.warning('请先选择表格种类')
+      return
+    }
+    
+    const response = await request.get('/review/materials', {
+      params: {
+        formType: filterForm.value.formType,
+        studentId: form.studentId
+      }
+    })
+    
+    if (response.data.success) {
+      if (response.data.data.length === 0) {
+        ElMessage.warning('该学生暂无证明材料')
+        return
+      }
+      materials.value = response.data.data
+      showMaterialsModal.value = true
+    } else {
+      ElMessage.error(response.data.message || '获取证明材料失败')
+    }
   } catch (error) {
     console.error('获取证明材料失败:', error)
     ElMessage.error('获取证明材料失败，请稍后重试')
   }
 }
 
+// 材料弹窗
+const materials = ref([])
+
+// 解析附件字符串为对象数组
+const parseAttachments = (attachmentsStr) => {
+  if (!attachmentsStr) return []
+  try {
+    return attachmentsStr.split('},{').map(str => {
+      // 处理字符串，确保它是有效的JSON
+      str = str.replace(/^\[{/, '{').replace(/}]$/, '}')
+      return JSON.parse(str)
+    })
+  } catch (error) {
+    console.error('解析附件信息失败:', error)
+    return []
+  }
+}
+
+// 获取附件数量
+const getAttachmentCount = (row) => {
+  const attachments = parseAttachments(row.attachments)
+  return attachments.length
+}
+
+// 处理附件下载
+const downloadAttachment = async (attachment) => {
+  try {
+    const response = await request.get(`/evaluation/download/${attachment.id}`, {
+      responseType: 'blob'
+    })
+    
+    // 创建 Blob 对象
+    const blob = new Blob([response.data], { type: response.headers['content-type'] })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = attachment.file_name
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('下载失败:', error)
+    ElMessage.error('下载失败')
+  }
+}
+
+// 处理附件选择
+const handleAttachmentSelect = async (event, row) => {
+  const filePath = event.target.value
+  if (filePath) {
+    const selectedAttachment = parseAttachments(row.attachments).find(
+      att => att.file_path === filePath
+    )
+    if (selectedAttachment) {
+      await downloadAttachment(selectedAttachment)
+    }
+    // 重置选择
+    event.target.value = ''
+  }
+}
+
+// 点击外部关闭下拉框
 onMounted(() => {
   getMajors()
+  document.addEventListener('click', (e) => {
+    const dropdowns = document.querySelectorAll('.attachment-dropdown')
+    dropdowns.forEach(dropdown => {
+      if (!dropdown.contains(e.target)) {
+        const row = materials.value.find(item => 
+          item.showDropdown && dropdown.contains(document.activeElement)
+        )
+        if (row) {
+          row.showDropdown = false
+        }
+      }
+    })
+  })
 })
 </script>
 
@@ -757,6 +889,31 @@ tr:last-child td {
   max-width: 600px;
 }
 
+.dropdown-menu {
+  position: fixed;
+  background: white;
+  min-width: 160px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  z-index: 3001 !important;
+  margin-top: 4px;
+  border: 1px solid #e4e7ed;
+}
+
+.dropdown-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #606266;
+}
+
+.dropdown-item:hover {
+  background: #f5f7fa;
+  color: #409eff;
+}
+
 .preview-modal {
   max-width: 800px;
   height: 80vh;
@@ -897,5 +1054,66 @@ textarea {
 
 .selected-file:last-child {
   border-bottom: none;
+}
+
+.attachment-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-btn {
+  background: #409eff;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.arrow-down {
+  font-size: 12px;
+}
+
+/* 附件选择器样式 */
+.attachment-select {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid #dcdfe6;
+  background: #409eff;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  min-width: 120px;
+  position: relative;
+  z-index: 9999;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+}
+
+.attachment-select option {
+  background: white;
+  color: #606266;
+  padding: 8px;
+}
+
+.attachment-select:focus {
+  outline: none;
+  border-color: #66b1ff;
+}
+
+/* 移除之前的自定义下拉框相关样式 */
+.attachment-dropdown,
+.dropdown-btn,
+.dropdown-menu,
+.dropdown-item {
+  display: none;
 }
 </style> 

@@ -34,6 +34,64 @@ public class EvaluationStatusService {
         doUpdateStatus();
     }
 
+    @Transactional
+    public void forceUpdateStatus() {
+        log.info("强制触发：开始更新测评表状态和分数...");
+        forceDoUpdateStatus();
+    }
+
+    // 强制更新状态的逻辑
+    private void forceDoUpdateStatus() {
+        // 检查表是否存在并更新状态
+        forceUpdateTableStatus("moral_monthly_evaluation");
+        forceUpdateTableStatus("research_competition_evaluation");
+        forceUpdateTableStatus("sports_arts_evaluation");
+
+        log.info("测评表状态强制更新完成");
+    }
+
+    // 强制更新表状态和分数
+    private void forceUpdateTableStatus(String tableName) {
+        try {
+            // 检查表是否存在
+            String checkTableSql = """
+                SELECT COUNT(*) 
+                FROM information_schema.tables 
+                WHERE table_schema = DATABASE() 
+                AND table_name = ?
+                """;
+            Integer tableExists = jdbcTemplate.queryForObject(checkTableSql, Integer.class, tableName);
+            
+            if (tableExists == null || tableExists == 0) {
+                log.warn("表 {} 不存在，跳过更新", tableName);
+                return;
+            }
+
+            // 检查表中是否有数据
+            String checkDataSql = "SELECT COUNT(*) FROM " + tableName;
+            Integer dataCount = jdbcTemplate.queryForObject(checkDataSql, Integer.class);
+            
+            if (dataCount == null || dataCount == 0) {
+                log.info("表 {} 中没有数据，跳过更新", tableName);
+                return;
+            }
+
+            // 直接更新状态和原始分数
+            String updateSql = String.format("""
+                UPDATE %s 
+                SET status = 1,
+                    raw_score = base_score + COALESCE(total_bonus, 0) - COALESCE(total_penalty, 0)
+                WHERE status = 0
+                """, tableName);
+            
+            int affectedRows = jdbcTemplate.update(updateSql);
+            log.info("强制更新表 {} 状态和原始分数，影响记录数: {}", tableName, affectedRows);
+
+        } catch (Exception e) {
+            log.error("强制更新表 {} 状态时发生错误: {}", tableName, e.getMessage());
+        }
+    }
+
     // 统一的更新状态逻辑
     private void doUpdateStatus() {
         LocalDateTime now = LocalDateTime.now();
