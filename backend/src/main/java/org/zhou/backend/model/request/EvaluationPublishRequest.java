@@ -17,7 +17,7 @@ public class EvaluationPublishRequest {
     private Integer monthCount;    // C、D类表专用
     private String description;
     private Double baseScore;    // 添加基础分字段
-    
+    private String classId;
     private String declareStartTime;
     private String declareEndTime;
     private String reviewEndTime;

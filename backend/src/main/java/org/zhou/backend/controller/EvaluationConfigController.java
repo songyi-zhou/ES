@@ -117,11 +117,11 @@ public class EvaluationConfigController {
                     insertSql = """
                         INSERT INTO moral_monthly_evaluation 
                         (academic_year, semester, month, description,
-                        student_id, name, squad, department, major,
+                        student_id, name, squad, department, major, class_id,
                         base_score, total_bonus, total_penalty, raw_score,
                         declare_start_time, declare_end_time, review_end_time,
                         publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, ?, ?, ?, 0)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, ?, ?, ?, 0)
                         """;
                     
                     log.info("Inserting records for {} students", students.size());
@@ -137,6 +137,7 @@ public class EvaluationConfigController {
                             student.getSquad(),
                             student.getDepartment(),
                             student.getMajor(),
+                            student.getClassId(),
                             request.getBaseScore(),
                             declareStartTime,
                             declareEndTime,
@@ -154,11 +155,11 @@ public class EvaluationConfigController {
                     insertSql = """
                         INSERT INTO research_competition_evaluation 
                         (academic_year, semester, description,
-                        student_id, name, squad, department, major,
+                        student_id, name, squad, department, major, class_id,
                         base_score, total_bonus, total_penalty, raw_score,
                         declare_start_time, declare_end_time, review_end_time,
                         publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, ?, ?, ?, 0)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, ?, ?, ?, 0)
                         """;
                     
                     for (Student student : students) {
@@ -171,6 +172,7 @@ public class EvaluationConfigController {
                             student.getSquad(),
                             student.getDepartment(),
                             student.getMajor(),
+                            student.getClassId(),
                             request.getBaseScore(),
                             declareStartTime,
                             declareEndTime,
@@ -187,11 +189,11 @@ public class EvaluationConfigController {
                     insertSql = """
                         INSERT INTO sports_arts_evaluation 
                         (academic_year, semester, description,
-                        student_id, name, squad, department, major,
+                        student_id, name, squad, department, major, class_id,
                         base_score, total_bonus, total_penalty, raw_score,
                         declare_start_time, declare_end_time, review_end_time,
                         publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, ?, ?, ?, 0)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, ?, ?, ?, 0)
                         """;
                     
                     for (Student student : students) {
@@ -204,6 +206,7 @@ public class EvaluationConfigController {
                             student.getSquad(),
                             student.getDepartment(),
                             student.getMajor(),
+                            student.getClassId(),
                             request.getBaseScore(),
                             declareStartTime,
                             declareEndTime,
@@ -220,10 +223,10 @@ public class EvaluationConfigController {
                     insertSql = """
                         INSERT INTO moral_semester_evaluation 
                         (academic_year, semester, description,
-                        student_id, name, squad, department, major,
+                        student_id, name, squad, department, major, class_id,
                         base_score, total_bonus, total_penalty, raw_score,
                         publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, 0)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, 0)
                         """;
                     
                     for (Student student : students) {
@@ -236,7 +239,7 @@ public class EvaluationConfigController {
                             student.getSquad(),
                             student.getDepartment(),
                             student.getMajor(),
-                            request.getBaseScore(),
+                            student.getClassId(),
                             publicityStartTime,
                             publicityEndTime
                         };
@@ -249,11 +252,11 @@ public class EvaluationConfigController {
                     insertSql = """
                         INSERT INTO comprehensive_result 
                         (academic_year, semester, description,
-                        student_id, name, class_name, squad, department, major,
+                        student_id, name, class_name, squad, department, major, class_id,
                         moral_score, academic_score, research_score, 
                         sports_arts_score, extra_score, total_score, rank,
                         publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
                                 null, null, null, null, 0, null, null,
                                 ?, ?, 0)
                         """;
@@ -269,6 +272,7 @@ public class EvaluationConfigController {
                             student.getSquad(),
                             student.getDepartment(),
                             student.getMajor(),
+                            student.getClassId(),
                             publicityStartTime,
                             publicityEndTime
                         };
