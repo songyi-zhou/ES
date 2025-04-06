@@ -1,15 +1,15 @@
 package org.zhou.backend.service;
 
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.jdbc.core.JdbcTemplate;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -18,10 +18,10 @@ public class EvaluationStatusService {
 
     private final JdbcTemplate jdbcTemplate;
     // 每天凌晨1点
-    // @Scheduled(cron = "0 0 1 * * ?")
+    @Scheduled(cron = "0 0 1 * * ?")
 
     // 每30秒执行一次
-    @Scheduled(cron = "*/30 * * * * ?")
+    // @Scheduled(cron = "*/30 * * * * ?")
     public void updateEvaluationStatus() {
         log.info("定时任务：开始检查并更新测评表状态...");
         doUpdateStatus();
