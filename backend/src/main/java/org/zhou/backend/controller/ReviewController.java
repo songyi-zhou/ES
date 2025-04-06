@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.zhou.backend.model.dto.EvaluationFormDTO;
 import org.zhou.backend.model.dto.ResponseDTO;
-import org.zhou.backend.model.dto.ReviewQueryDTO;
+import org.zhou.backend.dto.ReviewQueryDTO;
 import org.zhou.backend.service.ReviewService;
 
 import lombok.RequiredArgsConstructor;
@@ -52,7 +52,7 @@ public class ReviewController {
 
     @PostMapping("/batch-reject")
     public ResponseEntity<ResponseDTO<String>> batchReject(@RequestBody ReviewQueryDTO query) {
-        reviewService.batchReject(query.getFormType(), query.getMajor(), query.getClassId(), query.getStudentId());
+        reviewService.batchReject(query.getFormType(), query.getMajor(), query.getClassId(), query.getStudentIds(), query.getReason());
         return ResponseEntity.ok(ResponseDTO.success("退回成功"));
     }
 

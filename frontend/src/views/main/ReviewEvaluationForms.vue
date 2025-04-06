@@ -703,15 +703,14 @@ const batchReject = async () => {
       }
     )
 
-    for (const studentId of selectedStudents.value) {
-      await request.post('/review/batch-reject', {
-        formType: filterForm.value.formType,
-        major: filterForm.value.major,
-        classId: filterForm.value.classId,
-        studentId: studentId,
-        reason: reason // 添加退回原因
-      })
-    }
+    // 发送一个请求，包含所有选中的学生ID
+    await request.post('/review/batch-reject', {
+      formType: filterForm.value.formType,
+      major: filterForm.value.major,
+      classId: filterForm.value.classId,
+      studentIds: selectedStudents.value,
+      reason: reason
+    })
 
     ElMessage.success('批量退回成功')
     selectedStudents.value = []
