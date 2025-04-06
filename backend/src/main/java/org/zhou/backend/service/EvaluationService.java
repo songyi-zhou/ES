@@ -347,19 +347,29 @@ public class EvaluationService {
         updateSql = "UPDATE " + tableName + 
                     " SET total_bonus = total_bonus + ?, material_ids = ? " +
                     "WHERE student_id = ? AND academic_year = ? AND semester = ? " +
-                    "AND review_end_time > NOW()" + monthCondition;
+                    "AND status = 0" + monthCondition;
         
         int updatedRows = jdbcTemplate.update(updateSql, score, newMaterialIds, 
                                             studentId, academicYear, semester);
         
         if (updatedRows == 0) {
-            // 检查是否是因为 review_end_time 已过期
-            String checkSql = "SELECT COUNT(*) FROM " + tableName + 
+            // 检查是否是因为状态不是待审核
+            String checkSql = "SELECT status FROM " + tableName + 
                              " WHERE student_id = ? AND academic_year = ? AND semester = ?";
-            int count = jdbcTemplate.queryForObject(checkSql, Integer.class, studentId, academicYear, semester);
+            Integer status = jdbcTemplate.queryForObject(checkSql, Integer.class, studentId, academicYear, semester);
             
-            if (count > 0) {
-                throw new IllegalStateException("当前不在审核期内，无法进行加分操作");
+            if (status != null) {
+                if (status == 1) {
+                    throw new IllegalStateException("表格正在审核中，无法进行加分操作");
+                } else if (status == 2) {
+                    throw new IllegalStateException("表格已审核完成，无法进行加分操作");
+                } else if (status == 3) {
+                    throw new IllegalStateException("表格在公示期，无法进行加分操作");
+                }else if (status == -1) {
+                    throw new IllegalStateException("公示时间结束，无法进行操作");
+                } else {
+                    throw new IllegalStateException("表格状态异常（" + status + "），无法进行加分操作");
+                }
             } else {
                 throw new IllegalStateException("未找到学生的测评记录");
             }
