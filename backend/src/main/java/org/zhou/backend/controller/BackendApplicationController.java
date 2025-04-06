@@ -44,6 +44,7 @@ public class BackendApplicationController {
         }
     }
 
+    //强制更新后门
     @PostMapping("/force-update")
     public ResponseEntity<ResponseDTO<String>> forceUpdateStatus() {
         log.info("接收到强制更新状态请求");
