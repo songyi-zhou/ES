@@ -50,6 +50,12 @@ public class ReviewController {
         return ResponseEntity.ok(ResponseDTO.success("批量审核成功"));
     }
 
+    @PostMapping("/batch-reject")
+    public ResponseEntity<ResponseDTO<String>> batchReject(@RequestBody ReviewQueryDTO query) {
+        reviewService.batchReject(query.getFormType(), query.getMajor(), query.getClassId(), query.getStudentId());
+        return ResponseEntity.ok(ResponseDTO.success("退回成功"));
+    }
+
     @GetMapping("/materials")
     public ResponseEntity<ResponseDTO<List<Map<String, Object>>>> getMaterials(
             @RequestParam String formType,

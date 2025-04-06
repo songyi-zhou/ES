@@ -15,15 +15,20 @@
               <button class="batch-btn approve" @click="batchApprove">
                 <i class="el-icon-check"></i> 整体通过
               </button>
-              <button class="batch-btn reject" @click="batchReject">
-                <i class="el-icon-close"></i> 整体退回
+              <button 
+                class="batch-btn reject" 
+                @click="batchReject" 
+                :disabled="!selectedStudents || selectedStudents.length === 0"
+                :class="{ 'disabled': !selectedStudents || selectedStudents.length === 0 }"
+              >
+                <i class="el-icon-close"></i> 整体退回 ({{ selectedStudents ? selectedStudents.length : 0 }})
               </button>
             </div>
           </div>
         </div>
 
         <!-- 筛选部分 -->
-        <div class="filter-section">
+        <div class="filter-section">  
           <div class="filter-row">
             <div class="form-group">
               <label>表格种类：</label>
@@ -61,32 +66,63 @@
 
         <!-- 文件列表 -->
         <div class="table-container">
-          <table v-if="evaluationForms.length > 0">
-            <thead>
-              <tr>
-                <th>姓名</th>
-                <th>学号</th>
-                <th>基础分</th>
-                <th>总加分</th>
-                <th>总扣分</th>
-                <th>原始总分</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="form in evaluationForms" :key="form.id">
-                <td>{{ form.studentName }}</td>
-                <td>{{ form.studentId }}</td>
-                <td>{{ form.baseScore }}</td>
-                <td>{{ form.totalBonus }}</td>
-                <td>{{ form.totalPenalty }}</td>
-                <td>{{ form.rawScore }}</td>
-                <td class="actions">
-                  <button class="view-btn" @click="viewMaterials(form)">查看证明材料</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <el-table 
+            v-if="evaluationForms.length > 0"
+            :data="evaluationForms" 
+            style="width: 100%"
+            :header-cell-style="{
+              background: '#f5f7fa',
+              color: '#606266',
+              height: '50px',
+              borderRight: '1px solid #ebeef5'
+            }"
+            :cell-style="{
+              borderRight: '1px solid #ebeef5'
+            }"
+            border
+            @selection-change="handleSelectionChange">
+            <el-table-column
+              type="selection"
+              width="55"
+              fixed="left">
+            </el-table-column>
+            <el-table-column 
+              prop="studentName" 
+              label="姓名" 
+              width="220"
+              fixed="left" />
+            <el-table-column 
+              prop="studentId" 
+              label="学号" 
+              width="250"
+              fixed="left" />
+            <el-table-column 
+              prop="baseScore" 
+              label="基础分" 
+              width="220" />
+            <el-table-column 
+              prop="totalBonus" 
+              label="总加分" 
+              width="200" />
+            <el-table-column 
+              prop="totalPenalty" 
+              label="总扣分" 
+              width="200" />
+            <el-table-column 
+              prop="rawScore" 
+              label="原始总分" 
+              width="200" />
+            <el-table-column 
+              label="操作" 
+              width="150"
+              fixed="right">
+              <template #default="{ row }">
+                <div class="actions">
+                  <button class="view-btn" @click="viewMaterials(row)">查看证明材料</button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
           <div v-else class="no-data">
             <i class="el-icon-document"></i>
             <p>暂无数据</p>
@@ -191,7 +227,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 import * as XLSX from 'xlsx' // 需要安装：npm install xlsx
@@ -633,6 +669,60 @@ onMounted(() => {
     })
   })
 })
+
+// 处理表格选择变化
+const selectedStudents = ref([])
+const handleSelectionChange = (selection) => {
+  selectedStudents.value = selection.map(item => item.studentId)
+  console.log('Selected students:', selectedStudents.value)
+}
+
+// 批量退回
+const batchReject = async () => {
+  if (!selectedStudents.value || selectedStudents.value.length === 0) {
+    ElMessage.warning('请先选择要退回的学生')
+    return
+  }
+
+  try {
+    const { value: reason } = await ElMessageBox.prompt(
+      `确定要退回选中的 ${selectedStudents.value.length} 名学生的评测表吗？`,
+      '退回原因',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+        inputType: 'textarea',
+        inputPlaceholder: '请输入退回原因（必填）',
+        inputValidator: (value) => {
+          if (!value || value.trim() === '') {
+            return '退回原因不能为空'
+          }
+          return true
+        }
+      }
+    )
+
+    for (const studentId of selectedStudents.value) {
+      await request.post('/review/batch-reject', {
+        formType: filterForm.value.formType,
+        major: filterForm.value.major,
+        classId: filterForm.value.classId,
+        studentId: studentId,
+        reason: reason // 添加退回原因
+      })
+    }
+
+    ElMessage.success('批量退回成功')
+    selectedStudents.value = []
+    handleSearch()
+  } catch (error) {
+    if (error !== 'cancel') {  // 忽略用户取消的情况
+      console.error('批量退回失败:', error)
+      ElMessage.error(error.response?.data?.message || '批量退回失败')
+    }
+  }
+}
 </script>
 
 <style scoped>
@@ -791,6 +881,16 @@ onMounted(() => {
   opacity: 0.9;
 }
 
+.batch-btn.reject.disabled {
+  background: #fab6b6;
+  cursor: not-allowed;
+}
+
+.batch-btn.reject:disabled {
+  background: #fab6b6;
+  cursor: not-allowed;
+}
+
 .no-data {
   display: flex;
   flex-direction: column;
@@ -814,53 +914,36 @@ onMounted(() => {
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  overflow: auto;
+  margin: 20px;
+  padding: 20px;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
+:deep(.el-table) {
+  width: 100% !important;
 }
 
-th {
-  background: #f5f7fa;
-  color: #606266;
-  font-weight: 500;
-  padding: 12px 16px;
+:deep(.el-table__cell) {
+  padding: 12px 8px;
   text-align: center;
-  border-bottom: 1px solid #ebeef5;
-}
-
-td {
-  padding: 16px;
-  border-bottom: 1px solid #ebeef5;
-  color: #606266;
-  text-align: center;
-}
-
-tr:hover {
-  background-color: #f5f7fa;
-}
-
-tr:last-child td {
-  border-bottom: none;
-}
-
-.actions {
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
 .view-btn {
   padding: 6px 12px;
+  min-width: 100px;
+  max-width: 120px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.3s;
   background: #409eff;
   color: white;
-  min-width: 100px;
+  font-size: 14px;
+  height: 32px;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .view-btn:hover {
