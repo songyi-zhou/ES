@@ -11,15 +11,6 @@
               <div class="stats">
                 待审核材料：<span class="count">{{ pendingCount }}</span> 个
               </div>
-              <!-- 添加批量操作按钮 -->
-              <div class="batch-actions" v-if="selectedMaterials.length > 0">
-                <button class="batch-btn approve" @click="batchApprove">
-                  批量通过 ({{ selectedMaterials.length }})
-                </button>
-                <button class="batch-btn report" @click="batchReport">
-                  批量上报 ({{ selectedMaterials.length }})
-                </button>
-              </div>
             </div>
             <div class="filter-section">
               <div class="custom-dropdown">
@@ -51,14 +42,18 @@
               v-else
               :data="filteredQuestionMaterials"
               style="width: 100%"
-              @selection-change="handleSelectionChange"
             >
-              <el-table-column type="selection" width="55" />
-              
               <el-table-column prop="updatedAt" label="提交时间" width="180" />
               <el-table-column prop="userId" label="学号" width="120" />
               <el-table-column prop="title" label="材料名称" width="150" />
               <el-table-column prop="evaluationType" label="申请类别" width="120" />
+              <el-table-column prop="status" label="材料状态" min-width="100" align="center">
+                <template #default="scope">
+                  <span class="status-tag" :class="getStatusClass(scope.row.status)">
+                    {{ getStatusText(scope.row.status) }}
+                  </span>
+                </template>
+              </el-table-column>
               <el-table-column prop="reviewComment" label="疑问描述" min-width="200">
                 <template #default="{ row }">
                   <div class="description-cell">{{ row.reviewComment }}</div>
@@ -127,16 +122,6 @@
                 </template>
               </el-table-column>
             </el-table>
-
-            <div class="pagination">
-              <el-pagination
-                v-model:current-page="currentPage"
-                v-model:page-size="pageSize"
-                :total="total"
-                :page-sizes="[10, 20, 30, 50]"
-                layout="total, sizes, prev, pager, next"
-              />
-            </div>
           </div>
 
           <!-- 审核对话框 -->
@@ -213,12 +198,37 @@
             v-model="previewDialogVisible"
             title="材料预览"
             width="800px"
+            :close-on-click-modal="false"
           >
             <div class="preview-content">
-              <div class="material-preview">
-                <img v-if="currentMaterial?.materialType === 'image'" :src="currentMaterial.materialUrl" style="max-width: 100%; max-height: 100%;" />
-                <iframe v-else-if="currentMaterial?.materialType === 'pdf'" :src="currentMaterial.materialUrl" style="width: 100%; height: 100%;" />
-                <div v-else>暂不支持预览该类型的材料</div>
+              <div v-if="currentMaterial?.attachments && currentMaterial.attachments.length > 0" class="material-preview">
+                <template v-for="attachment in currentMaterial.attachments" :key="attachment.id">
+                  <div class="attachment-item">
+                    <div class="attachment-info">
+                      <span class="file-name">{{ attachment.fileName }}</span>
+                      <div class="attachment-actions">
+                        <el-button 
+                          type="primary" 
+                          size="small" 
+                          @click="previewAttachment(attachment)"
+                          v-if="isPreviewable(attachment)"
+                        >
+                          预览
+                        </el-button>
+                        <el-button 
+                          type="info" 
+                          size="small" 
+                          @click="downloadAttachment(attachment)"
+                        >
+                          下载
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+              <div v-else class="no-attachments">
+                暂无附件
               </div>
             </div>
           </el-dialog>
@@ -375,26 +385,63 @@ const reviewForm = ref({
 })
 const submitting = ref(false)
 
-const handleReview = (row) => {
-  currentMaterial.value = row;
-  reviewForm.value = {
-    status: '',
-    comment: '',
-    evaluationType: '',
-    score: 0
-  };
-  reviewDialogVisible.value = true;
+const handleReview = async (row) => {
+  if (row.status === 'CORRECTED') {
+    try {
+      submitting.value = true;
+      await axios.post('/question-materials/review', {
+        materialId: row.id,
+        status: 'APPROVED',
+        comment: '确认修改无误，予以通过',
+        evaluationType: row.evaluationType, // 使用原有的评估类型
+        score: row.score // 使用原有的分数
+      });
+      
+      ElMessage.success('审核通过成功');
+      await fetchQuestionMaterials();
+    } catch (error) {
+      console.error('审核失败:', error);
+      ElMessage.error('审核失败：' + (error.response?.data?.message || '未知错误'));
+    } finally {
+      submitting.value = false;
+    }
+  } else {
+    // 原有的逻辑
+    currentMaterial.value = row;
+    reviewForm.value = {
+      status: '',
+      comment: '',
+      evaluationType: '',
+      score: 0
+    };
+    reviewDialogVisible.value = true;
+  }
 };
 
 const openRejectDialog = (row) => {
-  currentMaterial.value = row;
-  reviewForm.value = {
-    status: 'REJECTED',
-    comment: '',
-    evaluationType: '',
-    score: 0
-  };
-  reviewDialogVisible.value = true;
+  if (row.status === 'CORRECTED') {
+    ElMessageBox.prompt('请输入退回原因', '退回确认', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputPlaceholder: '请输入退回原因'
+    }).then(({ value }) => {
+      if (!value.trim()) {
+        ElMessage.warning('请输入退回原因');
+        return;
+      }
+      handleReject(row, value);
+    }).catch(() => {});
+  } else {
+    currentMaterial.value = row;
+    reviewForm.value = {
+      status: 'REJECTED',
+      comment: '',
+      evaluationType: '',
+      score: 0
+    };
+    reviewDialogVisible.value = true;
+  }
 };
 
 const handleViewDetails = (row) => {
@@ -458,103 +505,64 @@ const submitReview = async () => {
 // 材料预览相关
 const previewDialogVisible = ref(false)
 
-const viewMaterial = async (row) => {
-  if (!row.attachments || row.attachments.length === 0) {
-    ElMessage.warning('没有可查看的材料')
-    return
-  }
+const isPreviewable = (attachment) => {
+  const previewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'pdf'];
+  const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
+  return previewableTypes.includes(fileExtension);
+};
 
-  // 多个附件时显示选择列表
-  if (row.attachments.length > 1) {
-    ElMessageBox.alert(
-      `<div class="attachment-list">
-        ${row.attachments.map((att, index) => `
-          <div class="attachment-item" style="margin: 10px 0;">
-            <span>${att.fileName}</span>
-            <div>
-              <el-button type="primary" size="small" @click="handlePreview(${index}, row.attachments)">
-                预览
-              </el-button>
-              <el-button type="info" size="small" @click="handleDownload(${index}, row.attachments)">
-                下载
-              </el-button>
-            </div>
-          </div>
-        `).join('')}
-      </div>`,
-      '选择要查看的附件',
-      {
-        dangerouslyUseHTMLString: true,
-        confirmButtonText: '关闭'
-      }
-    )
-    return
-  }
-
-  // 单个附件直接处理
-  handlePreview(0, row.attachments)
-}
-
-const handlePreview = async (index, attachments) => {
-  const attachment = attachments[index]
-  const fileType = attachment.fileName.split('.').pop()?.toLowerCase()
+const previewAttachment = async (attachment) => {
+  const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
   
-  if (['jpg', 'jpeg', 'png', 'gif'].includes(fileType)) {
-    try {
-      const response = await axios.get(`/evaluation/preview/${attachment.id}`, {
-        responseType: 'blob'
-      })
-      
-      const url = URL.createObjectURL(response.data)
+  try {
+    const response = await axios.get(`/evaluation/preview/${attachment.id}`, {
+      responseType: 'blob'
+    });
+    
+    const blob = new Blob([response.data], {
+      type: fileExtension === 'pdf' ? 'application/pdf' : `image/${fileExtension}`
+    });
+    const url = URL.createObjectURL(blob);
+    
+    if (fileExtension === 'pdf') {
+      // 在新窗口中打开PDF
+      window.open(url, '_blank');
+    } else {
+      // 图片在当前窗口预览
       currentMaterial.value = {
+        ...currentMaterial.value,
         materialType: 'image',
         materialUrl: url
-      }
-      previewDialogVisible.value = true
-    } catch (error) {
-      ElMessage.error('预览失败')
+      };
     }
-  } else {
-    // 对于不支持预览的文件类型，直接触发下载
-    try {
-      const response = await axios.get(`/evaluation/download/${attachment.id}`, {
-        responseType: 'blob'
-      })
-      
-      const url = URL.createObjectURL(response.data)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = attachment.fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-      ElMessage.success('文件已开始下载')
-    } catch (error) {
-      ElMessage.error('下载失败')
-    }
+  } catch (error) {
+    console.error('预览失败:', error);
+    ElMessage.error('预览失败，请尝试下载查看');
+    // 预览失败时自动触发下载
+    downloadAttachment(attachment);
   }
-}
+};
 
-const handleDownload = async (index, attachments) => {
-  const attachment = attachments[index]
+const downloadAttachment = async (attachment) => {
   try {
     const response = await axios.get(`/evaluation/download/${attachment.id}`, {
       responseType: 'blob'
-    })
+    });
     
-    const url = URL.createObjectURL(response.data)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = attachment.fileName
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = attachment.fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    ElMessage.success('文件已开始下载');
   } catch (error) {
-    ElMessage.error('下载失败')
+    console.error('下载失败:', error);
+    ElMessage.error('下载失败，请稍后重试');
   }
-}
+};
 
 // 状态数据
 const selectedMaterials = ref([])
@@ -562,108 +570,20 @@ const showRejectModal = ref(false)
 const showReportModal = ref(false)
 const rejectReason = ref('')
 const reportNote = ref('')
-const selectedForReport = ref([])
 
 // 计算属性
-const isAllSelected = computed(() => {
-  return questionMaterials.value.length > 0 && 
-         selectedMaterials.value.length === questionMaterials.value.length
-})
+const isAllSelected = computed(() => false)
 
 // 选择相关方法
-const isSelected = (material) => {
-  return selectedMaterials.value.some(m => m.id === material.id)
-}
-
-const toggleSelection = (material) => {
-  const index = selectedMaterials.value.findIndex(m => m.id === material.id)
-  if (index === -1) {
-    selectedMaterials.value.push(material)
-  } else {
-    selectedMaterials.value.splice(index, 1)
-  }
-}
-
-const toggleAllSelection = () => {
-  if (isAllSelected.value) {
-    selectedMaterials.value = []
-  } else {
-    selectedMaterials.value = [...questionMaterials.value]
-  }
-}
-
-// 批量操作方法
-const batchApprove = async () => {
-  try {
-    // 调用批量通过API
-    // await approveMaterials(selectedMaterials.value.map(m => m.id))
-    // 更新状态
-    selectedMaterials.value = []
-  } catch (error) {
-    console.error('批量通过失败:', error)
-  }
-}
-
-// 单个操作方法
-const approveMaterial = async (material) => {
-  try {
-    // 调用通过API
-    // await approveMaterial(material.id)
-    // 更新状态
-  } catch (error) {
-    console.error('通过失败:', error)
-  }
-}
-
-const openRejectModal = (material) => {
-  selectedForReport.value = [material]
-  showRejectModal.value = true
-}
-
-// 弹窗相关方法
-const closeRejectModal = () => {
-  showRejectModal.value = false
-  rejectReason.value = ''
-}
-
-const confirmReject = async () => {
-  if (!rejectReason.value) {
-    alert('请输入驳回原因')
-    return
-  }
-
-  try {
-    // 调用驳回API
-    // await rejectMaterial(selectedForReport.value[0].id, rejectReason.value)
-    closeRejectModal()
-  } catch (error) {
-    console.error('驳回失败:', error)
-  }
-}
+const isSelected = () => false
+const toggleSelection = () => {}
+const toggleAllSelection = () => {}
 
 // 添加新的响应式变量
 const reportDialogVisible = ref(false)
 const reportForm = ref({
   note: ''
 })
-
-// 处理表格选择变化
-const handleSelectionChange = (selection) => {
-  selectedMaterials.value = selection;
-};
-
-const reportMaterial = (row) => {
-  selectedMaterials.value = [row];
-  reportDialogVisible.value = true;
-};
-
-const batchReport = () => {
-  if (selectedMaterials.value.length === 0) {
-    ElMessage.warning('请选择要上报的材料');
-    return;
-  }
-  reportDialogVisible.value = true;
-};
 
 onMounted(() => {
   fetchQuestionMaterials();
@@ -757,19 +677,50 @@ const selectStatus = (status) => {
   handleSearch();
 };
 
-const getStatusText = (status) => {
-  const statusMap = {
-    '': '全部',
-    'QUESTIONED': '待审核',
-    'APPROVED': '已通过',
-    'REJECTED': '已驳回',
-    'CORRECTED': '已改正'
+const getStatusClass = (status) => {
+  const classMap = {
+    'QUESTIONED': 'status-warning',
+    'CORRECTED': 'status-success',
+    'REJECTED': 'status-danger',
+    'APPROVED': 'status-success'
   };
-  return statusMap[status] || '全部';
+  return classMap[status] || 'status-default';
+};
+
+const getStatusText = (status) => {
+  const textMap = {
+    'QUESTIONED': '待审核',
+    'CORRECTED': '已改正',
+    'REJECTED': '已驳回',
+    'APPROVED': '已通过'
+  };
+  return textMap[status] || status;
 };
 
 const handleSearch = () => {
   fetchQuestionMaterials();
+};
+
+// 添加 handleReject 方法
+const handleReject = async (row, comment) => {
+  try {
+    submitting.value = true;
+    await axios.post('/question-materials/review', {
+      materialId: row.id,
+      status: 'UNCORRECT',
+      comment: comment,
+      evaluationType: '',
+      score: 0
+    });
+    
+    ElMessage.success('退回成功');
+    await fetchQuestionMaterials();
+  } catch (error) {
+    console.error('退回失败:', error);
+    ElMessage.error('退回失败：' + (error.response?.data?.message || '未知错误'));
+  } finally {
+    submitting.value = false;
+  }
 };
 </script>
 
@@ -821,28 +772,6 @@ const handleSearch = () => {
 .count {
   font-weight: bold;
   color: #333;
-}
-
-.batch-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.batch-btn {
-  padding: 4px 8px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.batch-btn.approve {
-  background: #67c23a;
-  color: white;
-}
-
-.batch-btn.report {
-  background: #409eff;
-  color: white;
 }
 
 .filter-section {
@@ -970,27 +899,55 @@ const handleSearch = () => {
 .preview-content {
   max-height: 600px;
   overflow-y: auto;
+  padding: 20px;
 }
 
 .material-preview {
-  width: 100%;
-  min-height: 400px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
   background: #f5f7fa;
+  border-radius: 8px;
+  padding: 16px;
+}
 
-  img, iframe {
-    max-width: 100%;
-    max-height: 500px;
-    object-fit: contain;
-  }
+.attachment-item {
+  background: white;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
 
-  iframe {
-    width: 100%;
-    height: 500px;
-    border: none;
-  }
+.attachment-item:last-child {
+  margin-bottom: 0;
+}
+
+.attachment-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.file-name {
+  font-size: 14px;
+  color: #606266;
+  margin-right: 12px;
+}
+
+.attachment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.attachment-actions .el-button {
+  margin: 0;
+}
+
+.no-attachments {
+  text-align: center;
+  padding: 40px;
+  color: #909399;
+  font-size: 14px;
+  background: #f5f7fa;
+  border-radius: 8px;
 }
 
 /* 确保表格内容不会溢出 */
@@ -1161,5 +1118,42 @@ const handleSearch = () => {
 
 .dropdown-item:hover {
   background-color: #f5f7fa;
+}
+
+/* 添加状态样式 */
+.status-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.status-warning {
+  background-color: #fdf6ec;
+  color: #e6a23c;
+}
+
+.status-success {
+  background-color: #f0f9eb;
+  color: #67c23a;
+}
+
+.status-danger {
+  background-color: #fef0f0;
+  color: #f56c6c;
+}
+
+.status-default {
+  background-color: #f4f4f5;
+  color: #909399;
+}
+
+/* 移除批量操作相关样式 */
+.batch-actions {
+  display: none;
+}
+
+.batch-btn {
+  display: none;
 }
 </style> 
