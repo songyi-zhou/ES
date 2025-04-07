@@ -26,6 +26,7 @@
                 <div class="dropdown-item active" @click="selectStatus('PENDING')">待审核</div>
                 <div class="dropdown-item" @click="selectStatus('APPROVED')">已通过</div>
                 <div class="dropdown-item" @click="selectStatus('REJECTED')">已驳回</div>
+                <div class="dropdown-item" @click="selectStatus('UNCORRECT')">不正确加分</div>
               </div>
             </div>
             
@@ -73,40 +74,46 @@
                 </span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" min-width="330" align="center">
+            <el-table-column label="操作" width="200" fixed="right">
               <template #default="{ row }">
-                <div class="action-buttons">
-                  <el-button 
-                    type="success" 
-                    size="small" 
-                    @click.stop="handleReview(row)"
-                    :disabled="row.status !== 'PENDING'"
-                  >
-                    通过
-                  </el-button>
-                  <el-button 
-                    type="warning" 
-                    size="small" 
-                    @click.stop="openQuestionDialog(row)"
-                    :disabled="row.status !== 'PENDING'"
-                  > 
-                    提出疑问
-                  </el-button>
-                  <el-button 
-                    type="danger" 
-                    size="small" 
-                    @click.stop="openRejectDialog(row)"
-                    :disabled="row.status !== 'PENDING'"
-                  >
-                    驳回
-                  </el-button>
-                  <el-button 
-                    type="info" 
-                    size="small" 
-                    @click.stop="handleViewDetails(row)"
-                  >
-                    详情
-                  </el-button>
+                <div class="actions">
+                  <template v-if="row.status === 'UNCORRECT'">
+                    <button class="correct-btn" @click="openCorrectDialog(row)">改正</button>
+                    <button class="view-btn" @click="viewDetails(row)">详情</button>
+                  </template>
+                  <template v-else>
+                    <el-button 
+                      type="success" 
+                      size="small" 
+                      @click.stop="handleReview(row)"
+                      :disabled="row.status !== 'PENDING'"
+                    >
+                      通过
+                    </el-button>
+                    <el-button 
+                      type="warning" 
+                      size="small" 
+                      @click.stop="openQuestionDialog(row)"
+                      :disabled="row.status !== 'PENDING'"
+                    > 
+                      提出疑问
+                    </el-button>
+                    <el-button 
+                      type="danger" 
+                      size="small" 
+                      @click.stop="openRejectDialog(row)"
+                      :disabled="row.status !== 'PENDING'"
+                    >
+                      驳回
+                    </el-button>
+                    <el-button 
+                      type="info" 
+                      size="small" 
+                      @click.stop="handleViewDetails(row)"
+                    >
+                      详情
+                    </el-button>
+                  </template>
                 </div>
               </template>
             </el-table-column>
@@ -288,6 +295,63 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 添加改正对话框 -->
+    <el-dialog
+      v-model="showCorrectDialog"
+      title="材料改正"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <div class="correct-form">
+        <div class="form-item">
+          <label class="form-label">加分类型</label>
+          <div class="custom-dropdown">
+            <div class="dropdown-header" @click="toggleCorrectTypeDropdown">
+              <span>{{ getEvaluationTypeText(correctForm.evaluationType) }}</span>
+              <i class="dropdown-icon">▼</i>
+            </div>
+            <div class="dropdown-menu" v-if="showCorrectTypeDropdown">
+              <div class="dropdown-item" @click="selectCorrectType('A')">德育测评加分(A)</div>
+              <div class="dropdown-item" @click="selectCorrectType('C')">科研竞赛加分(C)</div>
+              <div class="dropdown-item" @click="selectCorrectType('D')">文体活动加分(D)</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-item">
+          <label class="form-label">加分数额</label>
+          <div class="score-input-container">
+            <button class="score-btn" @click="() => correctForm.score = Math.max(0.5, correctForm.score - 0.5)">-</button>
+            <input 
+              type="number" 
+              v-model="correctForm.score" 
+              min="0.5" 
+              max="10" 
+              step="0.5" 
+              class="score-input"
+            />
+            <button class="score-btn" @click="() => correctForm.score = Math.min(10, correctForm.score + 0.5)">+</button>
+          </div>
+        </div>
+        <div class="form-item">
+          <label class="form-label">改正意见</label>
+          <textarea
+            v-model="correctForm.reviewComment"
+            class="custom-textarea"
+            rows="4"
+            placeholder="请输入改正意见"
+          ></textarea>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <button class="custom-button" @click="showCorrectDialog = false">取消</button>
+          <button class="custom-button primary" @click="submitCorrection" :disabled="submitting">
+            {{ submitting ? '提交中...' : '确认' }}
+          </button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -347,6 +411,21 @@ const approveForm = ref({
   materialId: null
 });
 const showTypeDropdown = ref(false);
+const showCorrectDialog = ref(false);
+const correctForm = ref({
+  evaluationType: 'A',
+  score: 0,
+  reviewComment: ''
+});
+const showCorrectTypeDropdown = ref(false);
+
+const evaluationTypes = [
+  { value: 'academic', label: '学术成果' },
+  { value: 'practice', label: '社会实践' },
+  { value: 'volunteer', label: '志愿服务' },
+  { value: 'work', label: '学生工作' },
+  { value: 'other', label: '其他' }
+];
 
 const toggleStatusDropdown = () => {
   showStatusDropdown.value = !showStatusDropdown.value;
@@ -416,7 +495,10 @@ const getStatusText = (status: string) => {
     'APPROVED': '已通过',
     'REJECTED': '已驳回',
     'QUESTIONED': '已提出疑问',
-    'Reported': '已上报至导员'
+    'REPORTED': '已上报至导员',
+    'DEDUCTED': '已记录',
+    'PUNISHED': '已处分',
+    'UNCORRECT': '不正确加分'
   };
   return textMap[status] || status;
 };
@@ -636,6 +718,58 @@ const fetchMaterials = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+const openCorrectDialog = (row) => {
+  selectedMaterial.value = row;
+  correctForm.value = {
+    evaluationType: 'A',
+    score: 0.5,
+    reviewComment: ''
+  };
+  showCorrectDialog.value = true;
+};
+
+const submitCorrection = async () => {
+  try {
+    if (!correctForm.value.evaluationType) {
+      ElMessage.warning('请选择加分类型');
+      return;
+    }
+    if (correctForm.value.score <= 0) {
+      ElMessage.warning('加分数额必须大于0');
+      return;
+    }
+    if (!correctForm.value.reviewComment.trim()) {
+      ElMessage.warning('请输入改正意见');
+      return;
+    }
+
+    const response = await request.post('/evaluation/correct', {
+      materialId: selectedMaterial.value.id,
+      evaluationType: correctForm.value.evaluationType,
+      score: correctForm.value.score,
+      reviewComment: correctForm.value.reviewComment
+    });
+
+    if (response.data.success) {
+      ElMessage.success('改正成功');
+      showCorrectDialog.value = false;
+      fetchMaterials();
+    }
+  } catch (error) {
+    console.error('改正失败:', error);
+    ElMessage.error(error.response?.data?.message || '改正失败');
+  }
+};
+
+const selectCorrectType = (type) => {
+  correctForm.value.evaluationType = type;
+  showCorrectTypeDropdown.value = false;
+};
+
+const toggleCorrectTypeDropdown = () => {
+  showCorrectTypeDropdown.value = !showCorrectTypeDropdown.value;
 };
 
 onMounted(() => {
@@ -1161,5 +1295,51 @@ h2 {
 .custom-button:disabled {
   cursor: not-allowed;
   opacity: 0.7;
+}
+
+.correct-btn {
+  padding: 6px 12px;
+  min-width: 60px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: #67c23a;
+  color: white;
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+.correct-btn:hover {
+  background: #85ce61;
+}
+
+.correct-form {
+  padding: 20px;
+}
+
+.form-item {
+  margin-bottom: 20px;
+}
+
+.form-item label {
+  display: block;
+  margin-bottom: 8px;
+  color: #606266;
+  font-weight: 500;
+}
+
+:deep(.el-select) {
+  width: 100%;
+}
+
+:deep(.el-input-number) {
+  width: 100%;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>

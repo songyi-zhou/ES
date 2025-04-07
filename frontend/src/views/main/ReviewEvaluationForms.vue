@@ -11,17 +11,28 @@
               实际表格行数：<span class="count">{{ pendingCount }}</span> 行
             </div>
             <!-- 添加批量操作按钮 -->
-            <div class="batch-operation" v-if="evaluationForms.length > 0">
-              <button class="batch-btn approve" @click="batchApprove">
+            <div class="batch-operation">
+              <button 
+                v-if="evaluationForms.length > 0" 
+                class="batch-btn approve" 
+                @click="batchApprove"
+              >
                 <i class="el-icon-check"></i> 整体通过
               </button>
               <button 
+                v-if="evaluationForms.length > 0"
                 class="batch-btn reject" 
                 @click="batchReject" 
                 :disabled="!selectedStudents || selectedStudents.length === 0"
                 :class="{ 'disabled': !selectedStudents || selectedStudents.length === 0 }"
               >
                 <i class="el-icon-close"></i> 整体退回 ({{ selectedStudents ? selectedStudents.length : 0 }})
+              </button>
+              <button 
+                class="batch-btn publish" 
+                @click="publishEvaluation"
+              >
+                <i class="el-icon-upload2"></i> 公示综测表格
               </button>
             </div>
           </div>
@@ -722,6 +733,37 @@ const batchReject = async () => {
     }
   }
 }
+
+// 修改 publishEvaluation 方法
+const publishEvaluation = async () => {
+  try {
+    const { value: confirm } = await ElMessageBox.confirm(
+      `确定要公示 ${filterForm.value.major || '所有专业'} ${filterForm.value.classId || '所有班级'} 的综测表格吗？`,
+      '公示确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    if (confirm) {
+      const response = await request.post('/review/publish', {
+        major: filterForm.value.major,
+        classId: filterForm.value.classId
+      })
+
+      if (response.data.success) {
+        ElMessage.success('公示成功')
+      }
+    }
+  } catch (error) {
+    if (error !== 'cancel') {  // 忽略用户取消的情况
+      console.error('公示失败:', error)
+      ElMessage.error(error.response?.data?.message || '公示失败')
+    }
+  }
+}
 </script>
 
 <style scoped>
@@ -876,6 +918,11 @@ const batchReject = async () => {
   color: white;
 }
 
+.batch-btn.publish {
+  background: #e6a23c;
+  color: white;
+}
+
 .batch-btn:hover {
   opacity: 0.9;
 }
@@ -887,6 +934,16 @@ const batchReject = async () => {
 
 .batch-btn.reject:disabled {
   background: #fab6b6;
+  cursor: not-allowed;
+}
+
+.batch-btn.publish.disabled {
+  background: #f3d19e;
+  cursor: not-allowed;
+}
+
+.batch-btn.publish:disabled {
+  background: #f3d19e;
   cursor: not-allowed;
 }
 

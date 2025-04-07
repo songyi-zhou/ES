@@ -458,4 +458,26 @@ public class EvaluationService {
     public EvaluationMaterial save(EvaluationMaterial material) {
         return materialRepository.save(material);
     }
+
+    @Transactional
+    public void correctMaterial(Long materialId, String evaluationType, Double score, String reviewComment) {
+        EvaluationMaterial material = materialRepository.findById(materialId)
+            .orElseThrow(() -> new RuntimeException("材料不存在"));
+            
+        // 验证加分数额
+        if (score < 0.0 || score > 5) {
+            throw new RuntimeException("加分数额必须在0.0到5分之间");
+        }
+        
+        // 更新材料状态和信息
+        material.setStatus("CORRECTED");
+        material.setEvaluationType(evaluationType);
+        material.setScore(score);
+        material.setReviewComment(reviewComment);
+        material.setReviewedAt(LocalDateTime.now());
+        
+        materialRepository.save(material);
+        
+        log.info("材料已改正 - ID: {}, 类型: {}, 分数: {}", materialId, evaluationType, score);
+    }
 } 

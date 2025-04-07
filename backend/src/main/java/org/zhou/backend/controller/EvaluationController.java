@@ -15,7 +15,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -247,6 +246,23 @@ public class EvaluationController {
             return ResponseEntity.ok(materials);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        }
+    }
+
+    @PostMapping("/correct")
+    @PreAuthorize("hasRole('GROUP_MEMBER')")
+    public ResponseEntity<?> correctMaterial(@RequestBody Map<String, Object> request) {
+        try {
+            Long materialId = Long.parseLong(request.get("materialId").toString());
+            String evaluationType = request.get("evaluationType").toString();
+            Double score = Double.parseDouble(request.get("score").toString());
+            String reviewComment = request.get("reviewComment").toString();
+            
+            evaluationService.correctMaterial(materialId, evaluationType, score, reviewComment);
+            return ResponseEntity.ok(Map.of("success", true));
+        } catch (Exception e) {
+            log.error("材料改正失败", e);
+            return ResponseEntity.badRequest().body(createErrorResponse("改正失败：" + e.getMessage()));
         }
     }
 } 
