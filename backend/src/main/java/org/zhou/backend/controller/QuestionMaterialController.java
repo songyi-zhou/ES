@@ -1,5 +1,7 @@
 package org.zhou.backend.controller;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -18,14 +20,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.zhou.backend.entity.EvaluationMaterial;
+import org.zhou.backend.entity.User;
 import org.zhou.backend.model.request.ReportRequest;
 import org.zhou.backend.model.request.ReviewRequest;
 import org.zhou.backend.model.response.ApiResponse;
+import org.zhou.backend.repository.UserRepository;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.QuestionMaterialService;
 import org.zhou.backend.util.SecurityUtils;
-import org.zhou.backend.entity.User;
-import org.zhou.backend.repository.UserRepository;
 
 @RestController
 @RequestMapping("/api/question-materials")
@@ -53,10 +55,19 @@ public class QuestionMaterialController {
             User currentUser = userRepository.findById(userPrincipal.getId())
                 .orElseThrow(() -> new RuntimeException("用户不存在"));
             
+            // 如果未指定状态，默认查询 QUESTIONED 和 CORRECTED 两种状态
+            List<String> statuses = new ArrayList<>();
+            if (status != null && !status.isEmpty()) {
+                statuses.add(status);
+            } else {
+                statuses.add("QUESTIONED");
+                statuses.add("CORRECTED");
+            }
+            
             Page<EvaluationMaterial> materials = questionMaterialService.getQuestionMaterials(
                 currentUser.getDepartment(),  // 传入院系
                 currentUser.getSquad(),       // 传入中队
-                status, page - 1, size, keyword);
+                statuses, page - 1, size, keyword);
             
             return ResponseEntity.ok(Map.of(
                 "success", true,

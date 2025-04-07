@@ -22,11 +22,17 @@
               </div>
             </div>
             <div class="filter-section">
-              <el-select v-model="filterStatus" placeholder="审核状态" clearable>
-                <el-option label="待审核" value="QUESTIONED" />
-                <el-option label="已通过" value="APPROVED" />
-                <el-option label="已驳回" value="REJECTED" />
-              </el-select>
+              <div class="custom-dropdown">
+                <div class="dropdown-header" @click="toggleStatusDropdown">
+                  <span>{{ getStatusText(filterStatus) }}</span>
+                  <i class="dropdown-icon">▼</i>
+                </div>
+                <div class="dropdown-menu" v-if="showStatusDropdown">
+                  <div class="dropdown-item" @click="selectStatus('')">全部</div>
+                  <div class="dropdown-item" @click="selectStatus('QUESTIONED')">待审核</div>
+                  <div class="dropdown-item" @click="selectStatus('CORRECTED')">已改正</div>
+                </div>
+              </div>
               <el-input
                 v-model="searchKeyword"
                 placeholder="搜索学生姓名/学号"
@@ -58,32 +64,65 @@
                   <div class="description-cell">{{ row.reviewComment }}</div>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="250" fixed="right">
+              <el-table-column label="操作" width="280" fixed="right">
                 <template #default="{ row }">
                   <div class="action-buttons">
-                    <el-button 
-                      type="primary" 
-                      size="small" 
-                      @click="openReviewDialog(row)"
-                      :disabled="row.status !== 'QUESTIONED'"
-                    >
-                      审核
-                    </el-button>
-                    <el-button 
-                      type="info" 
-                      size="small" 
-                      @click="viewMaterial(row)"
-                    >
-                      查看材料
-                    </el-button>
-                    <el-button 
-                      type="warning" 
-                      size="small" 
-                      @click="reportMaterial(row)"
-                      :disabled="row.status !== 'QUESTIONED'"
-                    >
-                      上报
-                    </el-button>
+                    <template v-if="row.status === 'CORRECTED'">
+                      <el-button 
+                        type="success" 
+                        size="small" 
+                        @click.stop="handleReview(row)"
+                      >
+                        通过
+                      </el-button>
+                      <el-button 
+                        type="danger" 
+                        size="small" 
+                        @click.stop="openRejectDialog(row)"
+                      >
+                        退回
+                      </el-button>
+                      <el-button 
+                        type="info" 
+                        size="small" 
+                        @click.stop="handleViewDetails(row)"
+                      >
+                        详情
+                      </el-button>
+                    </template>
+                    <template v-else>
+                      <el-button 
+                        type="success" 
+                        size="small" 
+                        @click.stop="handleReview(row)"
+                        :disabled="row.status !== 'QUESTIONED'"
+                      >
+                        通过
+                      </el-button>
+                      <el-button 
+                        type="warning" 
+                        size="small" 
+                        @click.stop="openQuestionDialog(row)"
+                        :disabled="row.status !== 'QUESTIONED'"
+                      >
+                        提出疑问
+                      </el-button>
+                      <el-button 
+                        type="danger" 
+                        size="small" 
+                        @click.stop="openRejectDialog(row)"
+                        :disabled="row.status !== 'QUESTIONED'"
+                      >
+                        驳回
+                      </el-button>
+                      <el-button 
+                        type="info" 
+                        size="small" 
+                        @click.stop="handleViewDetails(row)"
+                      >
+                        详情
+                      </el-button>
+                    </template>
                   </div>
                 </template>
               </el-table-column>
@@ -239,6 +278,7 @@ const total = ref(0)
 const filterStatus = ref('')
 const searchKeyword = ref('')
 const pendingCount = ref(0)
+const showStatusDropdown = ref(false)
 
 // 修改数据结构定义
 type QuestionMaterial = {
@@ -335,16 +375,43 @@ const reviewForm = ref({
 })
 const submitting = ref(false)
 
-const openReviewDialog = (row) => {
-  currentMaterial.value = row
+const handleReview = (row) => {
+  currentMaterial.value = row;
   reviewForm.value = {
     status: '',
     comment: '',
     evaluationType: '',
     score: 0
-  }
-  reviewDialogVisible.value = true
-}
+  };
+  reviewDialogVisible.value = true;
+};
+
+const openRejectDialog = (row) => {
+  currentMaterial.value = row;
+  reviewForm.value = {
+    status: 'REJECTED',
+    comment: '',
+    evaluationType: '',
+    score: 0
+  };
+  reviewDialogVisible.value = true;
+};
+
+const handleViewDetails = (row) => {
+  currentMaterial.value = row;
+  previewDialogVisible.value = true;
+};
+
+const openQuestionDialog = (row) => {
+  currentMaterial.value = row;
+  reviewForm.value = {
+    status: 'QUESTIONED',
+    comment: '',
+    evaluationType: '',
+    score: 0
+  };
+  reviewDialogVisible.value = true;
+};
 
 const submitReview = async () => {
   if (!reviewForm.value.status) {
@@ -582,86 +649,80 @@ const reportForm = ref({
 
 // 处理表格选择变化
 const handleSelectionChange = (selection) => {
-  selectedMaterials.value = selection
-}
+  selectedMaterials.value = selection;
+};
 
-// 单个材料上报
 const reportMaterial = (row) => {
-  selectedMaterials.value = [row]
-  reportDialogVisible.value = true
-}
+  selectedMaterials.value = [row];
+  reportDialogVisible.value = true;
+};
 
-// 批量上报
 const batchReport = () => {
   if (selectedMaterials.value.length === 0) {
-    ElMessage.warning('请选择要上报的材料')
-    return
+    ElMessage.warning('请选择要上报的材料');
+    return;
   }
-  reportDialogVisible.value = true
-}
+  reportDialogVisible.value = true;
+};
 
-// 在组件挂载时获取数据
 onMounted(() => {
-  fetchQuestionMaterials()
-})
+  fetchQuestionMaterials();
+});
 
-// 在提交上报后刷新列表
 const submitReport = async () => {
   try {
-    submitting.value = true
+    submitting.value = true;
     const response = await request.post('/api/question-materials/report', {
-      materialIds: [selectedMaterials.value[0].id],  // 修改这里，确保是数组格式
-      note: reportForm.value.note || "请审核这些存在疑问的材料"  // 添加默认值
+      materialIds: [selectedMaterials.value[0].id],
+      note: reportForm.value.note || "请审核这些存在疑问的材料"
     }, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
       baseURL: 'http://localhost:8080'
-    })
+    });
     
     if (response.data.success) {
-      ElMessage.success(response.data.message || '材料已成功上报')
-      reportDialogVisible.value = false
-      await fetchQuestionMaterials()
+      ElMessage.success(response.data.message || '材料已成功上报');
+      reportDialogVisible.value = false;
+      await fetchQuestionMaterials();
     }
   } catch (error) {
-    ElMessage.error('上报失败：' + (error.response?.data?.message || error.message))
+    ElMessage.error('上报失败：' + (error.response?.data?.message || error.message));
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
-}
+};
 
-// 添加请求拦截器
 axios.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('token');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`    }
-    return config
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
   },
   (error) => {
-    return Promise.reject(error)
+    return Promise.reject(error);
   }
-)
+);
 
-// 添加响应拦截器
 axios.interceptors.response.use(
   (response) => {
-    return response
+    return response;
   },
   (error) => {
     if (error.response) {
-      console.error('API错误响应:', error.response)
+      console.error('API错误响应:', error.response);
       if (error.response.status === 401) {
-        localStorage.removeItem('token')
-        router.push('/login')
+        localStorage.removeItem('token');
+        router.push('/login');
       }
     }
-    return Promise.reject(error)
+    return Promise.reject(error);
   }
-)
+);
 
-// 添加评估类型文本转换函数
 const getEvaluationTypeText = (type: string) => {
   const typeMap: Record<string, string> = {
     'academic': '学术成果',
@@ -673,7 +734,6 @@ const getEvaluationTypeText = (type: string) => {
   return typeMap[type] || type;
 };
 
-// 添加日期格式化函数
 const formatDate = (dateString: string) => {
   if (!dateString) return '-';
   return new Date(dateString).toLocaleString('zh-CN', {
@@ -685,6 +745,31 @@ const formatDate = (dateString: string) => {
     second: '2-digit',
     hour12: false
   });
+};
+
+const toggleStatusDropdown = () => {
+  showStatusDropdown.value = !showStatusDropdown.value;
+};
+
+const selectStatus = (status) => {
+  filterStatus.value = status;
+  showStatusDropdown.value = false;
+  handleSearch();
+};
+
+const getStatusText = (status) => {
+  const statusMap = {
+    '': '全部',
+    'QUESTIONED': '待审核',
+    'APPROVED': '已通过',
+    'REJECTED': '已驳回',
+    'CORRECTED': '已改正'
+  };
+  return statusMap[status] || '全部';
+};
+
+const handleSearch = () => {
+  fetchQuestionMaterials();
 };
 </script>
 
@@ -785,6 +870,82 @@ const formatDate = (dateString: string) => {
 .action-buttons {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.action-buttons .el-button {
+  margin: 0;
+  padding: 6px 12px;
+  height: 32px;
+  font-size: 13px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.action-buttons .el-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.action-buttons .el-button + .el-button {
+  margin-left: 8px;
+}
+
+/* 成功按钮样式 */
+.action-buttons .el-button--success {
+  background: #67c23a;
+  border-color: #67c23a;
+}
+
+.action-buttons .el-button--success:hover {
+  background: #85ce61;
+  border-color: #85ce61;
+}
+
+/* 危险按钮样式 */
+.action-buttons .el-button--danger {
+  background: #f56c6c;
+  border-color: #f56c6c;
+}
+
+.action-buttons .el-button--danger:hover {
+  background: #f78989;
+  border-color: #f78989;
+}
+
+/* 信息按钮样式 */
+.action-buttons .el-button--info {
+  background: #909399;
+  border-color: #909399;
+}
+
+.action-buttons .el-button--info:hover {
+  background: #a6a9ad;
+  border-color: #a6a9ad;
+}
+
+/* 警告按钮样式 */
+.action-buttons .el-button--warning {
+  background: #e6a23c;
+  border-color: #e6a23c;
+}
+
+.action-buttons .el-button--warning:hover {
+  background: #ebb563;
+  border-color: #ebb563;
+}
+
+/* 禁用状态样式 */
+.action-buttons .el-button.is-disabled {
+  background: #f5f7fa;
+  border-color: #e4e7ed;
+  color: #c0c4cc;
+  cursor: not-allowed;
+}
+
+.action-buttons .el-button.is-disabled:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .pagination {
@@ -952,5 +1113,53 @@ const formatDate = (dateString: string) => {
 
 .custom-select option {
   padding: 8px;
+}
+
+/* 添加自定义下拉框样式 */
+.custom-dropdown {
+  position: relative;
+  width: 200px;
+}
+
+.dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  cursor: pointer;
+  background: white;
+}
+
+.dropdown-header:hover {
+  border-color: #c0c4cc;
+}
+
+.dropdown-icon {
+  font-size: 12px;
+  color: #909399;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background: white;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  margin-top: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
+  z-index: 100;
+}
+
+.dropdown-item {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.dropdown-item:hover {
+  background-color: #f5f7fa;
 }
 </style> 

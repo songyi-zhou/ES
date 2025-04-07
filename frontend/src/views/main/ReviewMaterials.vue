@@ -79,7 +79,13 @@
                 <div class="actions">
                   <template v-if="row.status === 'UNCORRECT'">
                     <button class="correct-btn" @click="openCorrectDialog(row)">改正</button>
-                    <button class="view-btn" @click="viewDetails(row)">详情</button>
+                    <el-button 
+                      type="info" 
+                      size="small" 
+                      @click.stop="handleViewDetails(row)"
+                    >
+                      详情
+                    </el-button>
                   </template>
                   <template v-else>
                     <el-button 
@@ -1298,20 +1304,48 @@ h2 {
 }
 
 .correct-btn {
-  padding: 6px 12px;
-  min-width: 60px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.3s;
-  background: #67c23a;
+  padding: 4px 10px;
+  height: 28px;
+  font-size: 12px;
+  border-radius: 3px;
+  background-color: #67c23a;
   color: white;
-  font-size: 14px;
-  margin-right: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 52px;
 }
 
 .correct-btn:hover {
-  background: #85ce61;
+  background-color: #85ce61;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.view-btn {
+  padding: 4px 10px;
+  height: 28px;
+  font-size: 12px;
+  border-radius: 3px;
+  background-color: #909399;
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 52px;
+  margin-left: 4px;
+}
+
+.view-btn:hover {
+  background-color: #a6a9ad;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
 }
 
 .correct-form {

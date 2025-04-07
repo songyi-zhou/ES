@@ -61,27 +61,38 @@ public class QuestionMaterialService {
     public Page<EvaluationMaterial> getQuestionMaterials(
             String department,
             String squad,
-            String status,
+            List<String> statuses,
             int page,
             int size,
             String keyword) {
         
         Pageable pageable = PageRequest.of(page, size);
         
-        // 构建查询条件
         Specification<EvaluationMaterial> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             
-            // 只查询状态为 QUESTIONED 的材料
-            predicates.add(cb.equal(root.get("status"), "QUESTIONED"));
+            // 添加院系条件
+            if (department != null && !department.isEmpty()) {
+                predicates.add(cb.equal(root.get("department"), department));
+            }
             
-            // 按院系和中队筛选
-            predicates.add(cb.equal(root.get("department"), department));
-            predicates.add(cb.equal(root.get("squad"), squad));
+            // 添加中队条件
+            if (squad != null && !squad.isEmpty()) {
+                predicates.add(cb.equal(root.get("squad"), squad));
+            }
             
-            // 如果有关键字，添加标题搜索条件
-            if (keyword != null && !keyword.isEmpty()) {
-                predicates.add(cb.like(root.get("title"), "%" + keyword + "%"));
+            // 添加状态条件
+            if (statuses != null && !statuses.isEmpty()) {
+                predicates.add(root.get("status").in(statuses));
+            }
+            
+            // 添加关键词搜索条件
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                String likePattern = "%" + keyword.trim() + "%";
+                predicates.add(cb.or(
+                    cb.like(root.get("title"), likePattern),
+                    cb.like(root.get("description"), likePattern)
+                ));
             }
             
             return cb.and(predicates.toArray(new Predicate[0]));
