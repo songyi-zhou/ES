@@ -71,13 +71,18 @@
                   <div class="description-cell">{{ row.reviewComment }}</div>
                 </template>
               </el-table-column>
+              <el-table-column v-if="filterStatus === 'CORRECTED'" prop="score" label="分数" width="100" align="center">
+                <template #default="scope">
+                  <span>{{ scope.row.score }}</span>
+                </template>
+              </el-table-column>
               <el-table-column label="操作" width="280" fixed="right">
                 <template #default="{ row }">
                   <div class="action-buttons">
                     <template v-if="row.status === 'CORRECTED'">
-                      <el-button 
+                    <el-button 
                         type="success" 
-                        size="small" 
+                      size="small" 
                         @click.stop="handleReview(row)"
                       >
                         通过
@@ -88,10 +93,10 @@
                         @click.stop="openRejectDialog(row)"
                       >
                         退回
-                      </el-button>
-                      <el-button 
-                        type="info" 
-                        size="small" 
+                    </el-button>
+                    <el-button 
+                      type="info" 
+                      size="small" 
                         @click.stop="handleViewDetails(row)"
                       >
                         详情
@@ -105,15 +110,15 @@
                         :disabled="row.status !== 'QUESTIONED'"
                       >
                         通过
-                      </el-button>
-                      <el-button 
-                        type="warning" 
-                        size="small" 
+                    </el-button>
+                    <el-button 
+                      type="warning" 
+                      size="small" 
                         @click.stop="openQuestionDialog(row)"
-                        :disabled="row.status !== 'QUESTIONED'"
-                      >
+                      :disabled="row.status !== 'QUESTIONED'"
+                    >
                         提出疑问
-                      </el-button>
+                    </el-button>
                       <el-button 
                         type="danger" 
                         size="small" 
@@ -420,11 +425,11 @@ const handleReview = async (row) => {
   } else {
     // 原有的逻辑
     currentMaterial.value = row;
-    reviewForm.value = {
-      status: '',
-      comment: '',
-      evaluationType: '',
-      score: 0
+  reviewForm.value = {
+    status: '',
+    comment: '',
+    evaluationType: '',
+    score: 0
     };
     reviewDialogVisible.value = true;
   }
@@ -526,9 +531,9 @@ const isPreviewable = (attachment) => {
 const previewAttachment = async (attachment) => {
   const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
   
-  try {
-    const response = await axios.get(`/evaluation/preview/${attachment.id}`, {
-      responseType: 'blob'
+    try {
+      const response = await axios.get(`/evaluation/preview/${attachment.id}`, {
+        responseType: 'blob'
     });
     
     const blob = new Blob([response.data], {
@@ -546,8 +551,8 @@ const previewAttachment = async (attachment) => {
         materialType: 'image',
         materialUrl: url
       };
-    }
-  } catch (error) {
+      }
+    } catch (error) {
     console.error('预览失败:', error);
     ElMessage.error('预览失败，请尝试下载查看');
     // 预览失败时自动触发下载

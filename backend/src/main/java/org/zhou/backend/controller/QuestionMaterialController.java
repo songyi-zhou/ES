@@ -82,6 +82,37 @@ public class QuestionMaterialController {
         }
     }
 
+    
+    @PostMapping("/review")
+    public ResponseEntity<?> reviewQuestionMaterial(@RequestBody ReviewRequest request) {
+        try {
+            questionMaterialService.reviewMaterial(request);
+            return ResponseEntity.ok(Map.of("success", true));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "审核失败"));
+        }
+    }
+
+    @PostMapping("/report")
+    public ResponseEntity<?> reportToInstructor(@RequestBody ReportRequest request) {
+        try {
+            String userId = SecurityUtils.getCurrentUserId();
+            if (!hasReviewPermission(userId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("没有权限执行此操作");
+            }
+
+            // 获取上报结果（包含导员信息）
+            Map<String, Object> result = questionMaterialService.reportToInstructor(request);
+            
+            return ResponseEntity.ok().body(result);  // 直接返回包含导员信息的结果
+        } catch (Exception e) {
+            log.error("上报材料失败", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(false, "上报失败：" + e.getMessage()));
+        }
+    }
+
     @PostMapping("/finalize-review")
     public ApiResponse<?> finalizeReview() {
         try {
