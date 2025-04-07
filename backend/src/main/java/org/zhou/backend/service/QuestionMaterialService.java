@@ -226,7 +226,7 @@ public class QuestionMaterialService {
         // 构建查询条件
         String sql = """
             SELECT COUNT(*)
-            FROM question_material
+            FROM evaluation_materials
             WHERE department = ?
             AND squad = ?
             AND status IN ('UNCORRECT', 'CORRECTED')
