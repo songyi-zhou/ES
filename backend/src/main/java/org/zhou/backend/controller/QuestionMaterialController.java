@@ -82,33 +82,44 @@ public class QuestionMaterialController {
         }
     }
 
-    @PostMapping("/review")
-    public ResponseEntity<?> reviewQuestionMaterial(@RequestBody ReviewRequest request) {
-        try {
-            questionMaterialService.reviewMaterial(request);
-            return ResponseEntity.ok(Map.of("success", true));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "审核失败"));
-        }
-    }
-
-    @PostMapping("/report")
-    public ResponseEntity<?> reportToInstructor(@RequestBody ReportRequest request) {
+    @PostMapping("/finalize-review")
+    public ApiResponse<?> finalizeReview() {
         try {
             String userId = SecurityUtils.getCurrentUserId();
             if (!hasReviewPermission(userId)) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body("没有权限执行此操作");
+                return ApiResponse.error("没有权限执行此操作");
             }
 
-            // 获取上报结果（包含导员信息）
-            Map<String, Object> result = questionMaterialService.reportToInstructor(request);
-            
-            return ResponseEntity.ok().body(result);  // 直接返回包含导员信息的结果
+            // 获取用户所属的中队信息
+            Map<String, String> squadInfo = questionMaterialService.getSquadLeaderInfo(userId);
+            if (squadInfo == null || squadInfo.isEmpty()) {
+                return ApiResponse.error("找不到您的中队信息，无法完成操作");
+            }
+
+            // 检查当前中队是否还有未处理的材料
+            boolean hasUnprocessed = questionMaterialService.checkUnprocessedMaterialsBySquad(
+                squadInfo.get("department"), 
+                squadInfo.get("squad")
+            );
+
+            if (hasUnprocessed) {
+                return ApiResponse.error("仍有加分错误材料未处理，请先处理完所有材料");
+            }
+
+            // 没有未处理材料，更新综测表状态
+            int affectedRows = questionMaterialService.updateEvaluationStatusBySquad(
+                squadInfo.get("department"), 
+                squadInfo.get("squad")
+            );
+
+            return ApiResponse.success(Map.of(
+                "success", true,
+                "message", "综测表状态更新成功",
+                "affectedRows", affectedRows
+            ));
         } catch (Exception e) {
-            log.error("上报材料失败", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(false, "上报失败：" + e.getMessage()));
+            log.error("完成审核操作失败", e);
+            return ApiResponse.error("操作失败：" + e.getMessage());
         }
     }
 

@@ -1,6 +1,7 @@
 package org.zhou.backend.service;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -15,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.zhou.backend.entity.EvaluationMaterial;
@@ -57,6 +59,9 @@ public class QuestionMaterialService {
     
     @Autowired
     private EvaluationService evaluationService;  // 注入 EvaluationService
+    
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
     
     public Page<EvaluationMaterial> getQuestionMaterials(
             String department,
@@ -183,5 +188,113 @@ public class QuestionMaterialService {
             "instructors", instructorInfos,
             "updatedMaterials", materials.size()
         );
+    }
+
+
+    /**
+     * 获取用户作为中队长的信息
+     * @param userId 用户ID
+     * @return 包含department和squad的Map
+     */
+    public Map<String, String> getSquadLeaderInfo(String userId) {
+        String sql = """
+            SELECT department, squad
+            FROM squad_group_leader
+            WHERE user_id = ?
+            """;
+        
+        try {
+            return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> {
+                Map<String, String> result = new HashMap<>();
+                result.put("department", rs.getString("department"));
+                result.put("squad", rs.getString("squad"));
+                return result;
+            }, userId);
+        } catch (Exception e) {
+            log.error("获取中队长信息失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 检查指定部门和中队是否有未处理的材料
+     * @param department 部门
+     * @param squad 中队
+     * @return 是否存在未处理材料
+     */
+    public boolean checkUnprocessedMaterialsBySquad(String department, String squad) {
+        // 构建查询条件
+        String sql = """
+            SELECT COUNT(*)
+            FROM question_material
+            WHERE department = ?
+            AND squad = ?
+            AND status IN ('UNCORRECT', 'CORRECTED')
+            """;
+        
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, department, squad);
+        return count != null && count > 0;
+    }
+
+    /**
+     * 更新指定部门和中队的评估状态
+     * @param department 部门
+     * @param squad 中队
+     * @return 更新的记录数
+     */
+    @Transactional
+    public int updateEvaluationStatusBySquad(String department, String squad) {
+        // 获取当前时间
+        String currentTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        
+        // 需要更新的表格列表
+        List<String> tableNames = List.of(
+            "moral_monthly_evaluation", 
+            "research_competition_evaluation", 
+            "sports_arts_evaluation"
+        );
+        
+        int totalAffectedRows = 0;
+        
+        // 循环更新每个表
+        for (String tableName : tableNames) {
+            try {
+                // 检查表是否存在
+                String checkTableSql = """
+                    SELECT COUNT(*) 
+                    FROM information_schema.tables 
+                    WHERE table_schema = DATABASE() 
+                    AND table_name = ?
+                    """;
+                Integer tableExists = jdbcTemplate.queryForObject(checkTableSql, Integer.class, tableName);
+                
+                if (tableExists == null || tableExists == 0) {
+                    log.warn("表 {} 不存在，跳过更新", tableName);
+                    continue;
+                }
+                
+                // 更新综测表状态和原始分数
+                String updateSql = String.format("""
+                    UPDATE %s 
+                    SET status = 1,
+                        raw_score = base_score + COALESCE(total_bonus, 0) - COALESCE(total_penalty, 0)
+                    WHERE department = ? 
+                    AND squad = ?
+                    AND status = 0 
+                    AND review_end_time <= ?
+                    """, tableName);
+                
+                int affectedRows = jdbcTemplate.update(updateSql, department, squad, currentTime);
+                totalAffectedRows += affectedRows;
+                
+                log.info("更新表 {} 状态和原始分数，部门: {}, 中队: {}, 影响记录数: {}", 
+                    tableName, department, squad, affectedRows);
+            } catch (Exception e) {
+                log.error("更新表 {} 状态时发生错误: {}", tableName, e.getMessage());
+                // 继续处理下一个表，不中断事务
+            }
+        }
+        
+        return totalAffectedRows;
     }
 } 

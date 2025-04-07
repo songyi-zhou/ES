@@ -30,6 +30,18 @@
                 clearable
                 class="search-input"
               />
+              <div class="action-buttons">
+              <button 
+                v-if="filterStatus === 'CORRECTED'" 
+                class="custom-button success re-review-btn" 
+                @click="handleReReview"
+                :disabled="submitting"
+              >
+                <i v-if="!submitting" class="check-icon">✓</i>
+                <i v-else class="loading-icon">⟳</i>
+                {{ submitting ? '处理中...' : '审核确认' }}
+              </button>
+            </div>
             </div>
           </div>
 
@@ -722,6 +734,47 @@ const handleReject = async (row, comment) => {
     submitting.value = false;
   }
 };
+
+const handleReReview = async () => {
+  try {
+    ElMessageBox.confirm(
+      '确定要将当前中队所有综测表状态更新为已审核状态吗？\n\n' +
+      '将更新以下表格：\n' +
+      '- 德育测评表(moral_monthly_evaluation)\n' +
+      '- 科研竞赛表(research_competition_evaluation)\n' +
+      '- 文体活动表(sports_arts_evaluation)',
+      '综测表状态更新确认',
+      {
+        confirmButtonText: '确定更新',
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerouslyUseHTMLString: true,
+        customClass: 'confirm-dialog'
+      }
+    ).then(async () => {
+      submitting.value = true;
+      const response = await axios.post('/question-materials/finalize-review');
+      
+      if (response.data.success) {
+        ElMessage({
+          type: 'success',
+          message: `${response.data.message || '综测表状态更新成功'}\n共更新 ${response.data.affectedRows || 0} 条记录`,
+          duration: 5000
+        });
+        fetchQuestionMaterials();
+      } else {
+        ElMessage.warning(response.data.message || '操作失败');
+      }
+      submitting.value = false;
+    }).catch(() => {
+      // 用户取消操作
+    });
+  } catch (error) {
+    console.error('再次审核失败:', error);
+    ElMessage.error('操作失败：' + (error.response?.data?.message || '未知错误'));
+    submitting.value = false;
+  }
+};
 </script>
 
 <style scoped>
@@ -827,7 +880,7 @@ const handleReject = async (row, comment) => {
 }
 
 .action-buttons .el-button--success:hover {
-  background: #85ce61;
+  background-color: #85ce61;
   border-color: #85ce61;
 }
 
@@ -1155,5 +1208,107 @@ const handleReject = async (row, comment) => {
 
 .batch-btn {
   display: none;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.custom-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  outline: none;
+}
+
+.custom-button.primary {
+  background-color: #409eff;
+  color: white;
+}
+
+.custom-button.primary:hover {
+  background-color: #66b1ff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.custom-button.success {
+  background-color: #67c23a;
+  color: white;
+}
+
+.custom-button.success:hover {
+  background-color: #85ce61;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.re-review-btn {
+  min-width: 110px;
+  font-weight: 500;
+}
+
+.re-review-btn:disabled {
+  background-color: #b3d8a4;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.refresh-icon, .check-icon {
+  font-size: 14px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .header-actions {
+    flex-wrap: wrap;
+  }
+  
+  .action-buttons {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.confirm-dialog {
+  width: 450px;
+}
+
+:deep(.confirm-dialog .el-message-box__content) {
+  text-align: left;
+  white-space: pre-line;
+  line-height: 1.6;
+}
+
+:deep(.confirm-dialog .el-message-box__message p) {
+  margin: 5px 0;
 }
 </style> 

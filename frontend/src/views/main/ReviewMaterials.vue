@@ -23,7 +23,8 @@
               </div>
               <div class="dropdown-menu" v-if="showStatusDropdown">
                 <div class="dropdown-item" @click="selectStatus('')">全部</div>
-                <div class="dropdown-item active" @click="selectStatus('PENDING')">待审核</div>
+                <div class="dropdown-item" @click="selectStatus('PENDING_ALL')">待处理</div>
+                <div class="dropdown-item" @click="selectStatus('PENDING')">待审核</div>
                 <div class="dropdown-item" @click="selectStatus('APPROVED')">已通过</div>
                 <div class="dropdown-item" @click="selectStatus('REJECTED')">已驳回</div>
                 <div class="dropdown-item" @click="selectStatus('UNCORRECT')">不正确加分</div>
@@ -395,7 +396,7 @@ interface EvaluationMaterial {
 const materials = ref<EvaluationMaterial[]>([]);
 const loading = ref(true);
 const searchKeyword = ref('');
-const filterStatus = ref('PENDING');
+const filterStatus = ref('PENDING_ALL');
 const showStatusDropdown = ref(false);
 const detailsDialogVisible = ref(false);
 const rejectDialogVisible = ref(false);
@@ -455,9 +456,15 @@ const filteredMaterials = computed(() => {
       ? item.title.toLowerCase().includes(searchKeyword.value.toLowerCase())
       : true;
     
-    const matchesStatus = filterStatus.value 
-      ? item.status === filterStatus.value
-      : true;
+    let matchesStatus = true;
+    if (filterStatus.value) {
+      if (filterStatus.value === 'PENDING_ALL') {
+        // 待处理：包括PENDING和UNCORRECT
+        matchesStatus = item.status === 'PENDING' || item.status === 'UNCORRECT';
+      } else {
+        matchesStatus = item.status === filterStatus.value;
+      }
+    }
     
     return matchesKeyword && matchesStatus;
   });
@@ -497,6 +504,7 @@ const getStatusType = (status: string) => {
 
 const getStatusText = (status: string) => {
   const textMap: Record<string, string> = {
+    'PENDING_ALL': '待处理',
     'PENDING': '待审核',
     'APPROVED': '已通过',
     'REJECTED': '已驳回',
@@ -779,7 +787,7 @@ const toggleCorrectTypeDropdown = () => {
 };
 
 onMounted(() => {
-  selectStatus('PENDING');
+  selectStatus('PENDING_ALL');
   fetchMaterials();
 });
 </script>
