@@ -32,14 +32,13 @@
               />
               <div class="action-buttons">
               <button 
-                v-if="filterStatus === 'CORRECTED'" 
                 class="custom-button success re-review-btn" 
                 @click="handleReReview"
                 :disabled="submitting"
               >
                 <i v-if="!submitting" class="check-icon">✓</i>
                 <i v-else class="loading-icon">⟳</i>
-                {{ submitting ? '处理中...' : '审核确认' }}
+                {{ submitting ? '处理中...' : '修正加分错误后制表' }}
               </button>
             </div>
             </div>
@@ -425,11 +424,11 @@ const handleReview = async (row) => {
   } else {
     // 原有的逻辑
     currentMaterial.value = row;
-  reviewForm.value = {
-    status: '',
-    comment: '',
-    evaluationType: '',
-    score: 0
+    reviewForm.value = {
+      status: '',
+      comment: '',
+      evaluationType: '',
+      score: 0
     };
     reviewDialogVisible.value = true;
   }
@@ -760,10 +759,21 @@ const handleReReview = async () => {
       submitting.value = true;
       const response = await axios.post('/question-materials/finalize-review');
       
+      console.log('finalize-review API响应:', response.data);
+      
       if (response.data.success) {
+        let affectedRows = 0;
+        
+        // 处理可能嵌套的数据结构
+        if (response.data.data && response.data.data.affectedRows) {
+          affectedRows = response.data.data.affectedRows;
+        } else if (response.data.affectedRows) {
+          affectedRows = response.data.affectedRows;
+        }
+        
         ElMessage({
           type: 'success',
-          message: `${response.data.message || '综测表状态更新成功'}\n共更新 ${response.data.affectedRows || 0} 条记录`,
+          message: `${response.data.message || '综测表状态更新成功'}\n共更新 ${affectedRows} 条记录`,
           duration: 5000
         });
         fetchQuestionMaterials();

@@ -145,7 +145,7 @@ public class QuestionMaterialController {
 
             return ApiResponse.success(Map.of(
                 "success", true,
-                "message", "综测表状态更新成功",
+                "message", "综测表状态更新成功，共更新 " + affectedRows + " 条记录",
                 "affectedRows", affectedRows
             ));
         } catch (Exception e) {
