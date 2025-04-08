@@ -5,15 +5,18 @@ import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.zhou.backend.dto.ReviewQueryDTO;
 import org.zhou.backend.model.dto.EvaluationFormDTO;
 import org.zhou.backend.model.dto.ResponseDTO;
-import org.zhou.backend.dto.ReviewQueryDTO;
+import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.ReviewService;
 
 import lombok.RequiredArgsConstructor;
@@ -105,5 +108,78 @@ public class ReviewController {
         List<Map<String, Object>> materials = jdbcTemplate.queryForList(sql, userId);
         
         return ResponseEntity.ok(ResponseDTO.success(materials));
+    }
+    
+    @PostMapping("/publish")
+    public ResponseEntity<ResponseDTO<Map<String, Object>>> publishEvaluationForms() {
+        try {
+            // 获取当前用户ID
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String userId = String.valueOf(((UserPrincipal) authentication.getPrincipal()).getId());
+            
+            // 获取用户所属的部门和中队信息
+            String getUserSql = "SELECT department, squad FROM squad_group_leader WHERE user_id = ?";
+            Map<String, Object> userInfo = jdbcTemplate.queryForMap(getUserSql, userId);
+            
+            String department = (String) userInfo.get("department");
+            String squad = (String) userInfo.get("squad");
+            
+            // 检查是否有未完成审核的记录（状态为0或1）
+            String[] tableNames = {"moral_monthly_evaluation", "research_competition_evaluation", "sports_arts_evaluation"};
+            
+            for (String tableName : tableNames) {
+                String checkSql = String.format(
+                    "SELECT COUNT(*) FROM %s WHERE department = ? AND squad = ? AND status IN (0, 1)",
+                    tableName
+                );
+                
+                Integer pendingCount = jdbcTemplate.queryForObject(checkSql, Integer.class, department, squad);
+                
+                if (pendingCount > 0) {
+                    return ResponseEntity.ok(
+                        ResponseDTO.error(
+                            String.format("还有%d条%s记录未完成审核，请先完成审核", 
+                            pendingCount, getTableDisplayName(tableName))
+                        )
+                    );
+                }
+            }
+            
+            // 将状态从2更新为3
+            int totalUpdated = 0;
+            
+            for (String tableName : tableNames) {
+                String updateSql = String.format(
+                    "UPDATE %s SET status = 3 WHERE department = ? AND squad = ? AND status = 2",
+                    tableName
+                );
+                
+                int updated = jdbcTemplate.update(updateSql, department, squad);
+                totalUpdated += updated;
+            }
+            
+            Map<String, Object> result = Map.of(
+                "success", true,
+                "message", "已成功将综测表格设置为公示状态",
+                "updatedCount", totalUpdated
+            );
+            
+            return ResponseEntity.ok(ResponseDTO.success(result));
+        } catch (Exception e) {
+            return ResponseEntity.ok(ResponseDTO.error("公示失败: " + e.getMessage()));
+        }
+    }
+    
+    private String getTableDisplayName(String tableName) {
+        switch (tableName) {
+            case "moral_monthly_evaluation":
+                return "德育测评表";
+            case "research_competition_evaluation":
+                return "科研竞赛表";
+            case "sports_arts_evaluation":
+                return "文体活动表";
+            default:
+                return tableName;
+        }
     }
 }

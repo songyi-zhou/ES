@@ -734,30 +734,40 @@ const batchReject = async () => {
   }
 }
 
-// 修改 publishEvaluation 方法
+const submitting = ref(false)
+
 const publishEvaluation = async () => {
   try {
-    const { value: confirm } = await ElMessageBox.confirm(
-      `确定要公示 ${filterForm.value.major || '所有专业'} ${filterForm.value.classId || '所有班级'} 的综测表格吗？`,
+    await ElMessageBox.confirm(
+      '确定要将您负责中队的综测表格设置为公示状态吗？\n公示前请确保所有表格已完成审核。',
       '公示确认',
       {
-        confirmButtonText: '确定',
+        confirmButtonText: '确定公示',
         cancelButtonText: '取消',
         type: 'warning'
       }
     )
 
-    if (confirm) {
-      const response = await request.post('/review/publish', {
-        major: filterForm.value.major,
-        classId: filterForm.value.classId
-      })
+    // 用户点击确定后的逻辑
+    console.log('确定公示')
+    submitting.value = true
+    const response = await request.post('/review/publish')
 
-      if (response.data.success) {
-        ElMessage.success('公示成功')
+    if (response.data.success) {
+      ElMessage.success(response.data.message || '公示成功')
+      if (response.data.data && response.data.data.updatedCount) {
+        ElMessage({
+          type: 'success',
+          message: `共更新 ${response.data.data.updatedCount} 条记录`,
+          duration: 3000
+        })
       }
+    } else {
+      ElMessage.warning(response.data.message || '公示失败')
     }
+    submitting.value = false
   } catch (error) {
+    submitting.value = false
     if (error !== 'cancel') {  // 忽略用户取消的情况
       console.error('公示失败:', error)
       ElMessage.error(error.response?.data?.message || '公示失败')
