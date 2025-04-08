@@ -54,6 +54,13 @@
           <table>
             <thead>
               <tr>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    v-model="selectAll" 
+                    @change="handleSelectAll"
+                  >
+                </th>
                 <th>班级</th>
                 <th>学号</th>
                 <th>姓名</th>
@@ -61,19 +68,30 @@
                 <th>总加分</th>
                 <th>总扣分</th>
                 <th>原始总分</th>
-                <th>描述</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="result in sortedResults" :key="result.studentId">
-                <td>{{ result.className }}</td>
-                <td>{{ result.studentId }}</td>
+              <tr v-for="result in sortedResults" :key="result.student_id">
+                <td>
+                  <input 
+                    type="checkbox" 
+                    v-model="selectedResults" 
+                    :value="result"
+                  >
+                </td>
+                <td>{{ result.class_id }}</td>
+                <td>{{ result.student_id }}</td>
                 <td>{{ result.name }}</td>
-                <td>{{ result.baseScore }}</td>
-                <td>{{ result.totalBonus }}</td>
-                <td>{{ result.totalPenalty }}</td>
-                <td class="total-score">{{ result.rawScore }}</td>
-                <td>{{ result.description || '暂无描述' }}</td>
+                <td>{{ result.base_score }}</td>
+                <td>{{ result.total_bonus }}</td>
+                <td>{{ result.total_penalty }}</td>
+                <td class="total-score">{{ result.raw_score }}</td>
+                <td>
+                  <button class="view-btn" @click="viewMaterials(result)">
+                    查看证明材料
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -85,19 +103,14 @@
           {{ filterForm.formType ? '暂无公示数据' : '请选择表格种类查看公示数据' }}
         </div>
 
-        <!-- 公示期结束提醒 -->
-        <div class="notice warning" v-if="isPublicityEnded">
-          <i class="warning-icon">⚠️</i>
-          公示期已结束，不再接受问题反馈
-        </div>
-
         <!-- 反馈按钮 -->
         <button 
           class="feedback-btn" 
           @click="showFeedbackModal = true"
-          v-if="!isPublicityEnded"
+          :disabled="selectedResults.length === 0"
+          :class="{ 'disabled-btn': selectedResults.length === 0 }"
         >
-          反馈问题
+          {{ selectedResults.length > 0 ? `反馈问题 (${selectedResults.length}人)` : '反馈问题' }}
         </button>
 
         <!-- 反馈弹窗 -->
@@ -106,6 +119,14 @@
             <div class="modal-header">
               <h3>问题反馈</h3>
               <button class="close-btn" @click="showFeedbackModal = false">×</button>
+            </div>
+            <div class="selected-students" v-if="selectedResults.length > 0">
+              <h4>已选学生 ({{ selectedResults.length }}人):</h4>
+              <div class="student-tags">
+                <span class="student-tag" v-for="student in selectedResults" :key="student.student_id">
+                  {{ student.name }} ({{ student.student_id }})
+                </span>
+              </div>
             </div>
             <div class="form-group">
               <label>问题类型：</label>
@@ -124,17 +145,40 @@
                 placeholder="请详细描述您发现的问题..."
               ></textarea>
             </div>
-            <div class="form-group">
-              <label>联系方式：</label>
-              <input 
-                type="text" 
-                v-model="feedbackForm.contact" 
-                placeholder="请留下您的联系方式（手机号/邮箱）"
-              >
-            </div>
             <div class="modal-actions">
               <button @click="submitFeedback" class="btn-primary">提交反馈</button>
               <button @click="showFeedbackModal = false" class="btn-secondary">取消</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 查看证明材料弹窗 -->
+        <div v-if="showMaterialsModal" class="modal">
+          <div class="modal-content preview-modal">
+            <div class="modal-header">
+              <h3>证明材料</h3>
+              <button class="close-btn" @click="showMaterialsModal = false">×</button>
+            </div>
+            <div class="materials-list">
+              <div v-for="material in currentMaterials" :key="material.id" class="material-item">
+                <div class="material-info">
+                  <h4>{{ material.title }}</h4>
+                  <p>{{ material.description }}</p>
+                  <p class="attachment-count">
+                    附件数量：{{ parseAttachments(material.attachments).length }}
+                  </p>
+                </div>
+                <div class="material-actions">
+                  <button 
+                    v-for="attachment in parseAttachments(material.attachments)"
+                    :key="attachment.id"
+                    class="download-btn" 
+                    @click="downloadMaterial(attachment)"
+                  >
+                    下载：{{ attachment.file_name }}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -175,7 +219,7 @@ const results = ref([])
 
 // 按总分排序的成绩
 const sortedResults = computed(() => {
-  return [...results.value].sort((a, b) => b.rawScore - a.rawScore)
+  return [...results.value].sort((a, b) => b.raw_score - a.raw_score)
 })
 
 // 获取专业列表
@@ -240,6 +284,8 @@ const handleSearch = async () => {
     
     if (response.data.success) {
       results.value = response.data.data || []
+      selectedResults.value = [] // 清空已选学生
+      selectAll.value = false
       if (results.value.length === 0) {
         ElMessage.info('暂无公示数据')
       }
@@ -260,6 +306,8 @@ const resetFilter = () => {
     classId: ''
   }
   results.value = []
+  selectedResults.value = []
+  selectAll.value = false
 }
 
 // 页面加载时获取专业列表
@@ -301,17 +349,137 @@ const feedbackForm = ref({
 // 提交反馈
 const submitFeedback = async () => {
   try {
-    // 这里应该调用后端API提交反馈
-    console.log('提交反馈:', feedbackForm.value)
-    showFeedbackModal.value = false
-    // 重置表单
-    feedbackForm.value = {
-      type: '',
-      description: '',
-      contact: ''
+    if (!feedbackForm.value.type) {
+      ElMessage.warning('请选择问题类型')
+      return
+    }
+    
+    if (!feedbackForm.value.description) {
+      ElMessage.warning('请填写问题描述')
+      return
+    }
+    
+    if (selectedResults.value.length === 0) {
+      ElMessage.warning('请至少选择一条记录')
+      return
+    }
+    
+    // 提交反馈
+    const response = await request.post('/review/batch-feedback', {
+      formType: filterForm.value.formType,
+      problemType: feedbackForm.value.type,
+      description: feedbackForm.value.description,
+      studentIds: selectedResults.value.map(item => item.student_id),
+      classId: selectedResults.value[0].class_id // 使用第一条记录的班级ID
+    })
+    
+    if (response.data.success) {
+      ElMessage.success(response.data.data || '反馈提交成功')
+      showFeedbackModal.value = false
+      // 重置表单
+      feedbackForm.value = {
+        type: '',
+        description: '',
+        contact: ''
+      }
+      // 刷新数据
+      handleSearch()
+    } else {
+      ElMessage.error(response.data.message || '提交反馈失败')
     }
   } catch (error) {
     console.error('提交反馈失败:', error)
+    ElMessage.error('提交反馈失败，请稍后重试')
+  }
+}
+
+// 查看证明材料相关
+const showMaterialsModal = ref(false)
+const currentMaterials = ref([])
+
+// 处理全选
+const selectAll = ref(false)
+const selectedResults = ref([])
+
+const handleSelectAll = () => {
+  if (selectAll.value) {
+    selectedResults.value = [...results.value]
+  } else {
+    selectedResults.value = []
+  }
+}
+
+// 监听选择变化
+watch(selectedResults, (newVal) => {
+  selectAll.value = newVal.length === results.value.length && results.value.length > 0
+})
+
+// 查看证明材料
+const viewMaterials = async (result) => {
+  try {
+    if (!filterForm.value.formType) {
+      ElMessage.warning('请先选择表格种类')
+      return
+    }
+    
+    const response = await request.get('/review/materials', {
+      params: {
+        formType: filterForm.value.formType,
+        studentId: result.student_id
+      }
+    })
+    
+    if (response.data.success) {
+      if (response.data.data.length === 0) {
+        ElMessage.warning('该学生暂无证明材料')
+        return
+      }
+      currentMaterials.value = response.data.data
+      showMaterialsModal.value = true
+    } else {
+      ElMessage.error(response.data.message || '获取证明材料失败')
+    }
+  } catch (error) {
+    console.error('获取证明材料失败:', error)
+    ElMessage.error('获取证明材料失败，请稍后重试')
+  }
+}
+
+// 解析附件字符串为对象数组
+const parseAttachments = (attachmentsStr) => {
+  if (!attachmentsStr) return []
+  try {
+    return attachmentsStr.split('},{').map(str => {
+      // 处理字符串，确保它是有效的JSON
+      str = str.replace(/^\[{/, '{').replace(/}]$/, '}')
+      return JSON.parse(str)
+    })
+  } catch (error) {
+    console.error('解析附件信息失败:', error)
+    return []
+  }
+}
+
+// 下载证明材料
+const downloadMaterial = async (attachment) => {
+  try {
+    const response = await request.get(`/evaluation/download/${attachment.id}`, {
+      responseType: 'blob'
+    })
+    
+    // 创建 Blob 对象
+    const blob = new Blob([response.data], { type: response.headers['content-type'] })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = attachment.file_name
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('下载失败:', error)
+    ElMessage.error('下载失败')
   }
 }
 </script>
@@ -328,7 +496,7 @@ const submitFeedback = async () => {
 .content {
   display: flex;
   flex: 1;
-  overflow: hidden;
+  overflow: hidden; 
 }
 
 .main-content {
@@ -455,7 +623,7 @@ th {
 
 .feedback-btn {
   display: block;
-  width: 120px;
+  width: 150px;
   margin: 20px auto;
   padding: 10px 20px;
   background: #409eff;
@@ -466,8 +634,13 @@ th {
   transition: all 0.3s;
 }
 
-.feedback-btn:hover {
+.feedback-btn:hover:not(.disabled-btn) {
   background: #66b1ff;
+}
+
+.feedback-btn.disabled-btn {
+  background: #c0c4cc;
+  cursor: not-allowed;
 }
 
 /* 弹窗样式 */
@@ -508,6 +681,30 @@ th {
 }
 
 .close-btn:hover {
+  color: #606266;
+}
+
+.selected-students {
+  margin-bottom: 20px;
+}
+
+.selected-students h4 {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #606266;
+}
+
+.student-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.student-tag {
+  background: #f0f2f5;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
   color: #606266;
 }
 
@@ -567,4 +764,86 @@ th {
 .btn-secondary:hover {
   background: #f9f9fa;
 }
-</style> 
+
+.preview-modal {
+  max-width: 800px !important;
+  width: 90% !important;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.materials-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.material-item {
+  width: 100%;
+  padding: 15px;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.material-info {
+  margin-bottom: 15px;
+}
+
+.material-info h4 {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 10px;
+  color: #303133;
+}
+
+.material-info p {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 5px;
+}
+
+.attachment-count {
+  color: #409eff;
+  font-weight: 500;
+}
+
+.material-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.download-btn {
+  padding: 8px 15px;
+  background: #409eff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.download-btn:hover {
+  background: #66b1ff;
+}
+
+.download-btn:disabled {
+  background: #a0cfff;
+  cursor: not-allowed;
+}
+
+.view-btn {
+  padding: 6px 12px;
+  background: #67c23a;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.view-btn:hover {
+  background: #85ce61;
+}
+</style>

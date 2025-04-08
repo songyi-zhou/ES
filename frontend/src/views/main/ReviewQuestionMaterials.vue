@@ -424,11 +424,11 @@ const handleReview = async (row) => {
   } else {
     // 原有的逻辑
     currentMaterial.value = row;
-    reviewForm.value = {
-      status: '',
-      comment: '',
-      evaluationType: '',
-      score: 0
+  reviewForm.value = {
+    status: '',
+    comment: '',
+    evaluationType: '',
+    score: 0
     };
     reviewDialogVisible.value = true;
   }

@@ -151,8 +151,8 @@ public class EvaluationStatusService {
                 UPDATE %s 
                 SET status = 1,
                     raw_score = base_score + COALESCE(total_bonus, 0) - COALESCE(total_penalty, 0)
-                WHERE status = 0 
-                AND review_end_time <= ?
+            WHERE status = 0 
+            AND review_end_time <= ?
                 """, tableName);
             
             int affectedRows = jdbcTemplate.update(updateSql, currentTime);

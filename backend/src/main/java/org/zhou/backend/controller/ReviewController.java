@@ -1,5 +1,6 @@
 package org.zhou.backend.controller;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.zhou.backend.dto.BatchFeedbackDTO;
 import org.zhou.backend.dto.PublishedFormQueryDTO;
 import org.zhou.backend.dto.ReviewQueryDTO;
 import org.zhou.backend.model.dto.EvaluationFormDTO;
@@ -227,5 +229,53 @@ public class ReviewController {
         }
     }
     
+    @PostMapping("/batch-feedback")
+    public ResponseEntity<ResponseDTO<String>> submitBatchFeedback(
+            @RequestBody BatchFeedbackDTO feedback) {
+        try {
+            // 获取表名
+            String tableName = reviewService.getTableName(feedback.getFormType());
+            
+            // 构建备注信息
+            String remark = feedback.getProblemType() + "," + feedback.getDescription();
+            
+            // 创建更新SQL语句
+            StringBuilder sql = new StringBuilder();
+            sql.append("UPDATE ").append(tableName).append(" SET status = 1, remark = ? WHERE 1=1");
+            
+            // 准备参数
+            List<Object> params = new ArrayList<>();
+            params.add(remark);
+            
+            // 如果有学生ID列表，则按学生ID更新
+            if (feedback.getStudentIds() != null && !feedback.getStudentIds().isEmpty()) {
+                sql.append(" AND student_id IN (");
+                for (int i = 0; i < feedback.getStudentIds().size(); i++) {
+                    if (i > 0) {
+                        sql.append(",");
+                    }
+                    sql.append("?");
+                    params.add(feedback.getStudentIds().get(i));
+                }
+                sql.append(")");
+            }
+            
+            // 如果有班级ID，则按班级ID更新
+            if (feedback.getClassId() != null && !feedback.getClassId().isEmpty()) {
+                sql.append(" AND class_id = ?");
+                params.add(feedback.getClassId());
+            }
+            
+            // 执行更新
+            int updatedCount = jdbcTemplate.update(
+                sql.toString(), 
+                params.toArray()
+            );
+            
+            return ResponseEntity.ok(ResponseDTO.success("成功更新 " + updatedCount + " 条记录"));
+        } catch (Exception e) {
+            return ResponseEntity.ok(ResponseDTO.error("提交反馈失败: " + e.getMessage()));
+        }
+    }
 
 }
