@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.zhou.backend.dto.PublishedFormQueryDTO;
 import org.zhou.backend.dto.ReviewQueryDTO;
 import org.zhou.backend.model.dto.EvaluationFormDTO;
 import org.zhou.backend.model.dto.ResponseDTO;
@@ -182,4 +183,49 @@ public class ReviewController {
                 return tableName;
         }
     }
+
+    @PostMapping("/published-forms")
+    public ResponseEntity<ResponseDTO<List<Map<String, Object>>>> getPublishedForms(
+            @RequestBody PublishedFormQueryDTO query) {
+        try {
+            // 获取当前用户ID
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String userId = String.valueOf(((UserPrincipal) authentication.getPrincipal()).getId());
+            
+            // 获取用户所属的部门和中队信息
+            String getUserSql = "SELECT department, squad FROM users WHERE id = ?";
+            Map<String, Object> userInfo = jdbcTemplate.queryForMap(getUserSql, userId);
+            
+            String department = (String) userInfo.get("department");
+            String squad = (String) userInfo.get("squad");
+            
+            // 根据表单类型选择对应的表
+            String tableName = reviewService.getTableName(query.getFormType());
+            
+            // 构建查询SQL
+            String sql = String.format(
+                "SELECT * FROM %s WHERE department = ? AND squad = ? AND status = 3 " +
+                "AND (? IS NULL OR major = ?) " +
+                "AND (? IS NULL OR class_id = ?)",
+                tableName
+            );
+            
+            // 执行查询
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(
+                sql,
+                department,
+                squad,
+                query.getMajor(),
+                query.getMajor(),
+                query.getClassId(),
+                query.getClassId()
+            );
+            
+            return ResponseEntity.ok(ResponseDTO.success(results));
+        } catch (Exception e) {
+            return ResponseEntity.ok(ResponseDTO.error("查询失败: " + e.getMessage()));
+        }
+    }
+    
+
 }

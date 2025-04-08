@@ -29,7 +29,6 @@ public class ClassController {
     private static final Logger log = LoggerFactory.getLogger(ClassController.class);
     
     @GetMapping
-    @PreAuthorize("hasAnyRole('GROUP_LEADER', 'INSTRUCTOR')")
     public ResponseEntity<?> getAllClasses() {
         try {
             List<Map<String, Object>> classes = classRepository.findAll().stream()
@@ -55,7 +54,6 @@ public class ClassController {
     }
 
     @GetMapping("/majors")
-    @PreAuthorize("hasAnyRole('GROUP_LEADER', 'INSTRUCTOR')")
     public ResponseEntity<?> getMajors() {
         try {
             List<String> majors = classService.getDistinctMajors();
@@ -72,7 +70,6 @@ public class ClassController {
     }
 
     @GetMapping("/by-major")
-    @PreAuthorize("hasAnyRole('GROUP_LEADER', 'INSTRUCTOR')")
     public ResponseEntity<?> getClassesByMajor(@RequestParam String major) {
         try {
             log.info("接收到按专业查询班级请求，专业名称: {}", major);

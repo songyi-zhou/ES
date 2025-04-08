@@ -251,4 +251,22 @@ public class ReviewServiceImpl implements ReviewService {
                     formType, major, classId, studentId, updatedForms, totalUpdatedMaterials, totalDeductedScore, rejectedMaterialIds);
         }
     }
+
+    @Override
+    public String getTableName(String formType) {
+        switch (formType) {
+            case "moral_monthly_evaluation":
+                return "moral_monthly_evaluation";
+            case "research_competition_evaluation":
+                return "research_competition_evaluation";
+            case "sports_arts_evaluation":
+                return "sports_arts_evaluation";
+            case "moral_semester_evaluation":
+                return "moral_semester_evaluation";
+            case "comprehensive_result":
+                return "comprehensive_result";
+            default:
+                throw new IllegalArgumentException("无效的表单类型");
+        }
+    }
 } 

@@ -124,6 +124,14 @@
               label="原始总分" 
               width="200" />
             <el-table-column 
+              prop="description" 
+              label="描述" 
+              min-width="200">
+              <template #default="{ row }">
+                <div style="text-align: left; white-space: pre-wrap;">{{ row.description || '暂无描述' }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column 
               label="操作" 
               width="150"
               fixed="right">

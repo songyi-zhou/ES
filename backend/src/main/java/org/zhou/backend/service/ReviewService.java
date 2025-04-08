@@ -8,4 +8,5 @@ public interface ReviewService {
     List<EvaluationFormDTO> getEvaluationForms(String formType, String major, String classId);
     void batchApprove(String formType, String major, String classId);
     void batchReject(String formType, String major, String classId, List<String> studentIds, String reason);
+    public String getTableName(String formType);
 } 
