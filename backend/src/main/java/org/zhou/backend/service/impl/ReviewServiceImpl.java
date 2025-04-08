@@ -32,27 +32,27 @@ public class ReviewServiceImpl implements ReviewService {
 
         switch (formType) {
             case "moral_monthly_evaluation":
-                sql.append("SELECT student_id, name, base_score, total_bonus, total_penalty, raw_score ")
+                sql.append("SELECT student_id, name, base_score, total_bonus, total_penalty, raw_score, remark ")
                    .append("FROM moral_monthly_evaluation ")
                    .append("WHERE status = 1 ");
                 break;
             case "research_competition_evaluation":
-                sql.append("SELECT student_id, name, base_score, total_bonus, total_penalty, raw_score ")
+                sql.append("SELECT student_id, name, base_score, total_bonus, total_penalty, raw_score, remark ")
                    .append("FROM research_competition_evaluation ")
                    .append("WHERE status = 1 ");
                 break;
             case "sports_arts_evaluation":
-                sql.append("SELECT student_id, name, base_score, total_bonus, total_penalty, raw_score ")
+                sql.append("SELECT student_id, name, base_score, total_bonus, total_penalty, raw_score, remark ")
                    .append("FROM sports_arts_evaluation ")
                    .append("WHERE status = 1 ");
                 break;
             case "moral_semester_evaluation":
-                sql.append("SELECT student_id, name, base_score, total_bonus, total_penalty, raw_score ")
+                sql.append("SELECT student_id, name, base_score, total_bonus, total_penalty, raw_score, remark ")
                    .append("FROM moral_semester_evaluation ")
                    .append("WHERE status = 1 ");
                 break;
             case "comprehensive_result":
-                sql.append("SELECT student_id, name, base_score, total_bonus, total_penalty, raw_score ")
+                sql.append("SELECT student_id, name, base_score, total_bonus, total_penalty, raw_score, remark ")
                    .append("FROM comprehensive_result ")
                    .append("WHERE status = 1 ");
                 break;
@@ -80,6 +80,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .totalBonus(rs.getDouble("total_bonus"))
                 .totalPenalty(rs.getDouble("total_penalty"))
                 .rawScore(rs.getDouble("raw_score"))
+                    .remark(rs.getString("remark"))
                 .build()
         );
     }

@@ -12,4 +12,5 @@ public class EvaluationFormDTO {
     private Double totalBonus;
     private Double totalPenalty;
     private Double rawScore;
+    private String remark;
 } 

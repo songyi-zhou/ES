@@ -124,11 +124,11 @@
               label="原始总分" 
               width="200" />
             <el-table-column 
-              prop="description" 
-              label="描述" 
+              prop="remark" 
+              label="反馈" 
               min-width="200">
               <template #default="{ row }">
-                <div style="text-align: left; white-space: pre-wrap;">{{ row.description || '暂无描述' }}</div>
+                <div style="text-align: left; white-space: pre-wrap;">{{ row.remark || '暂无反馈' }}</div>
               </template>
             </el-table-column>
             <el-table-column 
@@ -598,6 +598,7 @@ const viewMaterials = async (form) => {
         ElMessage.warning('该学生暂无证明材料')
         return
       }
+      console.log("get",response.data.data)
       materials.value = response.data.data
       showMaterialsModal.value = true
     } else {

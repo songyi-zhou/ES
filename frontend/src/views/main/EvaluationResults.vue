@@ -6,9 +6,17 @@
       <main class="main-content">
         <div class="page-header">
           <h2>综合测评成绩公示</h2>
-          <div class="countdown">
+          <div class="countdown" v-if="publicityEndTime">
             <i class="el-icon-time"></i>
             <span>公示剩余时间：{{ formatCountdown }}</span>
+          </div>
+          <div class="countdown warning" v-else-if="filterForm.formType">
+            <i class="el-icon-warning"></i>
+            <span>未设置公示截止时间</span>
+          </div>
+          <div class="countdown info" v-else>
+            <i class="el-icon-info"></i>
+            <span>请选择表格种类查看公示时间</span>
           </div>
         </div>
 
@@ -283,9 +291,18 @@ const handleSearch = async () => {
     })
     
     if (response.data.success) {
-      results.value = response.data.data || []
+      // 设置结果数据
+      results.value = response.data.data.forms || []
       selectedResults.value = [] // 清空已选学生
       selectAll.value = false
+      
+      // 设置公示结束时间
+      if (response.data.data.publicityEndTime) {
+        publicityEndTime.value = new Date(response.data.data.publicityEndTime)
+      } else {
+        publicityEndTime.value = null
+      }
+      
       if (results.value.length === 0) {
         ElMessage.info('暂无公示数据')
       }
@@ -306,6 +323,7 @@ const resetFilter = () => {
     classId: ''
   }
   results.value = []
+  publicityEndTime.value = null
   selectedResults.value = []
   selectAll.value = false
 }
@@ -316,12 +334,14 @@ onMounted(() => {
 })
 
 // 公示截止时间
-const endTime = ref(new Date('2024-03-25 23:59:59'))
+const publicityEndTime = ref(null)
 
 // 计算剩余时间
 const formatCountdown = computed(() => {
+  if (!publicityEndTime.value) return '未设置'
+  
   const now = new Date()
-  const diff = endTime.value - now
+  const diff = publicityEndTime.value - now
   
   if (diff <= 0) return '公示已结束'
   
@@ -334,8 +354,9 @@ const formatCountdown = computed(() => {
 
 // 判断是否公示期结束
 const isPublicityEnded = computed(() => {
+  if (!publicityEndTime.value) return false
   const now = new Date()
-  return now > endTime.value
+  return now > publicityEndTime.value
 })
 
 // 反馈相关
@@ -522,6 +543,16 @@ const downloadMaterial = async (attachment) => {
   border-radius: 4px;
   color: #409eff;
   font-weight: 500;
+}
+
+.countdown.warning {
+  background: #fef0f0;
+  color: #f56c6c;
+}
+
+.countdown.info {
+  background: #f4f4f5;
+  color: #909399;
 }
 
 .filter-section {

@@ -1,6 +1,7 @@
 package org.zhou.backend.controller;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -153,7 +154,7 @@ public class ReviewController {
             
             for (String tableName : tableNames) {
                 String updateSql = String.format(
-                    "UPDATE %s SET status = 3 WHERE department = ? AND squad = ? AND status = 2",
+                    "UPDATE %s SET status = 3, remark = '' WHERE department = ? AND squad = ? AND status = 2",
                     tableName
                 );
                 
@@ -187,7 +188,7 @@ public class ReviewController {
     }
 
     @PostMapping("/published-forms")
-    public ResponseEntity<ResponseDTO<List<Map<String, Object>>>> getPublishedForms(
+    public ResponseEntity<ResponseDTO<Map<String, Object>>> getPublishedForms(
             @RequestBody PublishedFormQueryDTO query) {
         try {
             // 获取当前用户ID
@@ -204,6 +205,23 @@ public class ReviewController {
             // 根据表单类型选择对应的表
             String tableName = reviewService.getTableName(query.getFormType());
             
+            // 获取公示结束时间
+            String getPublicityEndTimeSql = "SELECT publicity_end_time FROM " + tableName + 
+                " WHERE department = ? AND squad = ? AND status = 3 LIMIT 1";
+            
+            String publicityEndTime = null;
+            try {
+                Map<String, Object> timeInfo = jdbcTemplate.queryForMap(
+                    getPublicityEndTimeSql, 
+                    department, 
+                    squad
+                );
+                publicityEndTime = String.valueOf(timeInfo.get("publicity_end_time"));
+            } catch (Exception e) {
+                // 如果查询失败，表示没有公示结束时间或没有符合条件的记录
+                publicityEndTime = null;
+            }
+            
             // 构建查询SQL
             String sql = String.format(
                 "SELECT * FROM %s WHERE department = ? AND squad = ? AND status = 3 " +
@@ -213,7 +231,7 @@ public class ReviewController {
             );
             
             // 执行查询
-            List<Map<String, Object>> results = jdbcTemplate.queryForList(
+            List<Map<String, Object>> forms = jdbcTemplate.queryForList(
                 sql,
                 department,
                 squad,
@@ -223,7 +241,12 @@ public class ReviewController {
                 query.getClassId()
             );
             
-            return ResponseEntity.ok(ResponseDTO.success(results));
+            // 构建响应数据
+            Map<String, Object> result = new HashMap<>();
+            result.put("forms", forms);
+            result.put("publicityEndTime", publicityEndTime);
+            
+            return ResponseEntity.ok(ResponseDTO.success(result));
         } catch (Exception e) {
             return ResponseEntity.ok(ResponseDTO.error("查询失败: " + e.getMessage()));
         }
@@ -239,40 +262,49 @@ public class ReviewController {
             // 构建备注信息
             String remark = feedback.getProblemType() + "," + feedback.getDescription();
             
-            // 创建更新SQL语句
-            StringBuilder sql = new StringBuilder();
-            sql.append("UPDATE ").append(tableName).append(" SET status = 1, remark = ? WHERE 1=1");
+            // 1. 先更新选中学生的备注
+            StringBuilder updateRemarkSql = new StringBuilder();
+            updateRemarkSql.append("UPDATE ").append(tableName)
+                .append(" SET remark = ? WHERE student_id IN (");
             
-            // 准备参数
-            List<Object> params = new ArrayList<>();
-            params.add(remark);
-            
-            // 如果有学生ID列表，则按学生ID更新
-            if (feedback.getStudentIds() != null && !feedback.getStudentIds().isEmpty()) {
-                sql.append(" AND student_id IN (");
-                for (int i = 0; i < feedback.getStudentIds().size(); i++) {
-                    if (i > 0) {
-                        sql.append(",");
-                    }
-                    sql.append("?");
-                    params.add(feedback.getStudentIds().get(i));
+            for (int i = 0; i < feedback.getStudentIds().size(); i++) {
+                if (i > 0) {
+                    updateRemarkSql.append(",");
                 }
-                sql.append(")");
+                updateRemarkSql.append("?");
             }
+            updateRemarkSql.append(")");
             
-            // 如果有班级ID，则按班级ID更新
-            if (feedback.getClassId() != null && !feedback.getClassId().isEmpty()) {
-                sql.append(" AND class_id = ?");
-                params.add(feedback.getClassId());
-            }
+            // 准备更新备注的参数
+            List<Object> remarkParams = new ArrayList<>();
+            remarkParams.add(remark);
+            remarkParams.addAll(feedback.getStudentIds());
             
-            // 执行更新
-            int updatedCount = jdbcTemplate.update(
-                sql.toString(), 
-                params.toArray()
+            // 执行更新备注
+            jdbcTemplate.update(updateRemarkSql.toString(), remarkParams.toArray());
+            
+            // 2. 获取第一个学生的班级信息
+            String getClassInfoSql = "SELECT major, class_id FROM " + tableName + 
+                " WHERE student_id = ?";
+            Map<String, Object> classInfo = jdbcTemplate.queryForMap(
+                getClassInfoSql, 
+                feedback.getStudentIds().get(0)
             );
             
-            return ResponseEntity.ok(ResponseDTO.success("成功更新 " + updatedCount + " 条记录"));
+            // 3. 更新整个班级的状态
+            String updateStatusSql = "UPDATE " + tableName + 
+                " SET status = 1 WHERE major = ? AND class_id = ?";
+            
+            int updatedCount = jdbcTemplate.update(
+                updateStatusSql,
+                classInfo.get("major"),
+                classInfo.get("class_id")
+            );
+            
+            return ResponseEntity.ok(ResponseDTO.success(
+                String.format("成功更新备注 %d 条，更新班级状态 %d 条", 
+                feedback.getStudentIds().size(), updatedCount)
+            ));
         } catch (Exception e) {
             return ResponseEntity.ok(ResponseDTO.error("提交反馈失败: " + e.getMessage()));
         }
