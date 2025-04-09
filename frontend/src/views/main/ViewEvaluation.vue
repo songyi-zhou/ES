@@ -15,31 +15,45 @@
               <label>请选择分类：</label>
               <select v-model="selectedCategory">
                 <option value="A">A分</option>
-                <option value="B">B分</option>
                 <option value="C">C分</option>
                 <option value="D">D分</option>
               </select>
             </div>
 
             <div class="filter-item">
-              <label>请选择时段：</label>
-              <select v-model="selectedSemester">
-                <option value="2021-2022-1">2021-2022学年 第一学期</option>
-                <option value="2021-2022-2">2021-2022学年 第二学期</option>
-                <option value="2022-2023-1">2022-2023学年 第一学期</option>
-                <option value="2022-2023-2">2022-2023学年 第二学期</option>
+              <label>学年：</label>
+              <select v-model="selectedYear">
+                <option v-for="year in academicYears" :key="year" :value="year">
+                  {{ year }}学年
+                </option>
               </select>
             </div>
 
             <div class="filter-item">
+              <label>学期：</label>
+              <select v-model="selectedTerm">
+                <option value="1">第一学期</option>
+                <option value="2">第二学期</option>
+              </select>
+            </div>
+
+            <div class="filter-item" v-if="selectedCategory === 'A'">
               <label>月份：</label>
               <select v-model="selectedMonth">
-                <option value="9">9月</option>
-                <option value="10">10月</option>
-                <option value="11">11月</option>
-                <option value="12">12月</option>
-                <option value="1">1月</option>
-                <option value="2">2月</option>
+                <template v-if="selectedTerm === '1'">
+                  <option value="9">9月</option>
+                  <option value="10">10月</option>
+                  <option value="11">11月</option>
+                  <option value="12">12月</option>
+                  <!-- <option value="0">学期总表</option> -->
+                </template>
+                <template v-else-if="selectedTerm === '2'">
+                  <option value="3">3月</option>
+                  <option value="4">4月</option>
+                  <option value="5">5月</option>
+                  <option value="6">6月</option>
+                  <!-- <option value="0">学期总表</option> -->
+                </template>
               </select>
             </div>
           </div>
@@ -135,7 +149,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import TopBar from "@/components/TopBar.vue";
 import Sidebar from "@/components/Sidebar.vue";
 import { useRouter } from 'vue-router';
@@ -143,8 +157,31 @@ import axios from 'axios';
 
 const router = useRouter();
 const selectedCategory = ref('A');
-const selectedSemester = ref('2021-2022-1');
+const selectedYear = ref('');
+const selectedTerm = ref('1');
 const selectedMonth = ref('9');
+
+// 生成学年选项（最近4年）
+const academicYears = ref([]);
+const generateAcademicYears = () => {
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const startYear = currentYear - 4;
+  
+  for (let i = 0; i < 4; i++) {
+    const year = startYear + i;
+    academicYears.value.push(`${year}-${year + 1}`);
+  }
+  
+  // 默认选择最近的学年
+  selectedYear.value = academicYears.value[academicYears.value.length - 1];
+};
+
+// 组合学年和学期
+const combinedSemester = computed(() => {
+  if (!selectedYear.value || !selectedTerm.value) return '';
+  return `${selectedYear.value}-${selectedTerm.value}`;
+});
 
 const monthlyRecords = ref([
   {
@@ -185,18 +222,52 @@ const semesterRecords = ref([
 ]);
 
 // 监听筛选条件变化
-watch([selectedCategory, selectedSemester, selectedMonth], async (newValues) => {
+watch([selectedCategory, selectedYear, selectedTerm, selectedMonth], async (newValues) => {
   await fetchEvaluationData();
 }, { immediate: true });
 
+// 监听分类变化
+watch(selectedCategory, (newCategory) => {
+  if (newCategory === 'A') {
+    // 如果变为A分类，根据当前学期设置月份
+    if (selectedTerm.value === '1') {
+      selectedMonth.value = '9';
+    } else if (selectedTerm.value === '2') {
+      selectedMonth.value = '3';
+    }
+  }
+});
+
+// 监听学期变化，重置月份选择
+watch(selectedTerm, (newTerm) => {
+  if (selectedCategory.value === 'A') {
+    if (newTerm === '1') {
+      selectedMonth.value = '9'; // 第一学期默认选择9月
+    } else if (newTerm === '2') {
+      selectedMonth.value = '3'; // 第二学期默认选择3月
+    }
+  }
+});
+
 const fetchEvaluationData = async () => {
   try {
+    // 如果是A分类但没有选择月份，就设置默认值
+    if (selectedCategory.value === 'A' && !selectedMonth.value) {
+      if (selectedTerm.value === '1') {
+        selectedMonth.value = '9'; // 第一学期默认9月
+      } else if (selectedTerm.value === '2') {
+        selectedMonth.value = '3'; // 第二学期默认3月
+      } else {
+        selectedMonth.value = '0'; // 默认学期总表
+      }
+    }
+    
     // 这里使用实际的API端点
     const response = await axios.get('/api/evaluation/scores', {
       params: {
         category: selectedCategory.value,
-        semester: selectedSemester.value,
-        month: selectedMonth.value
+        semester: combinedSemester.value, // 使用组合的学年学期
+        month: selectedCategory.value === 'A' ? selectedMonth.value : null // 只有A分类时才传月份
       }
     });
 
@@ -213,6 +284,7 @@ const fetchEvaluationData = async () => {
 };
 
 onMounted(() => {
+  generateAcademicYears(); // 生成学年选项
   fetchEvaluationData();
 });
 </script>
