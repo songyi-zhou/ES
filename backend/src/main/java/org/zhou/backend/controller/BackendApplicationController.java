@@ -10,10 +10,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.zhou.backend.model.dto.ResponseDTO;
+import org.zhou.backend.service.EvaluationService;
 import org.zhou.backend.service.EvaluationStatusService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.zhou.backend.service.PublicityEndTimeService;
 
 @SpringBootApplication
 @EnableScheduling  // 添加这行启用定时任务
@@ -23,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class BackendApplicationController {
     private final EvaluationStatusService evaluationStatusService;
+    private final PublicityEndTimeService publicityEndTimeService;
 
     public static void main(String[] args) {
         SpringApplication.run(BackendApplicationController.class, args);
@@ -50,5 +53,18 @@ public class BackendApplicationController {
         log.info("接收到强制更新状态请求");
         evaluationStatusService.forceUpdateStatus();
         return ResponseEntity.ok(ResponseDTO.success("强制更新状态成功"));
+    }
+
+    /**
+     * 手动触发检查公示截止时间
+     */
+    @PostMapping("/check-publicity-end-time")
+    public ResponseEntity<ResponseDTO<String>> checkPublicityEndTime() {
+        try {
+            publicityEndTimeService.manualCheckPublicityEndTime();
+            return ResponseEntity.ok(ResponseDTO.success("手动检查公示截止时间完成"));
+        } catch (Exception e) {
+            return ResponseEntity.ok(ResponseDTO.error("检查失败: " + e.getMessage()));
+        }
     }
 }
