@@ -45,54 +45,53 @@
                   <option value="10">10月</option>
                   <option value="11">11月</option>
                   <option value="12">12月</option>
+                  <option value="1">1月</option>
                   <!-- <option value="0">学期总表</option> -->
                 </template>
                 <template v-else-if="selectedTerm === '2'">
+                  <option value="2">2月</option>
                   <option value="3">3月</option>
                   <option value="4">4月</option>
                   <option value="5">5月</option>
                   <option value="6">6月</option>
+                  <option value="7">7月</option>
                   <!-- <option value="0">学期总表</option> -->
                 </template>
               </select>
             </div>
+            
+            <div class="search-button-container">
+              <button class="search-button" @click="fetchEvaluationData" :disabled="isLoading">
+                <i class="el-icon-search" v-if="!isLoading"></i>
+                <i class="el-icon-loading" v-else></i>
+                {{ isLoading ? '查询中...' : '查询成绩' }}
+              </button>
+            </div>
           </div>
 
           <!-- 月度评分表格 -->
-          <div class="table-container">
+          <div class="table-container" v-if="dataLoaded">
             <table class="monthly-table">
               <thead>
                 <tr>
                   <th>班级</th>
-                  <th>学号</th>
                   <th>姓名</th>
-                  <th>表扬/批评</th>
-                  <th>班会</th>
-                  <th>升旗、早点评</th>
-                  <th>干部</th>
-                  <th>内务</th>
-                  <th>晚自习</th>
-                  <th>晨跑</th>
-                  <th>晚查寝</th>
-                  <th>其他</th>
-                  <th>总分</th>
+                  <th>学号</th>
+                  <th>基础分</th>
+                  <th>总加分</th>
+                  <th>总扣分</th>
+                  <th>原始总分</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="record in monthlyRecords" :key="record.id">
-                  <td>{{ record.className }}</td>
-                  <td>{{ record.studentId }}</td>
+                  <td>{{ record.class_id || record.className }}</td>
                   <td>{{ record.name }}</td>
-                  <td>{{ record.praise }}</td>
-                  <td>{{ record.classmeeting }}</td>
-                  <td>{{ record.flagRaising }}</td>
-                  <td>{{ record.cadre }}</td>
-                  <td>{{ record.internal }}</td>
-                  <td>{{ record.eveningStudy }}</td>
-                  <td>{{ record.morningRun }}</td>
-                  <td>{{ record.eveningCheck }}</td>
-                  <td>{{ record.others }}</td>
-                  <td>{{ record.total }}</td>
+                  <td>{{ record.student_id || record.studentId }}</td>
+                  <td>{{ record.base_score || record.baseScore || '0' }}</td>
+                  <td>{{ record.total_bonus || record.totalBonus || '0' }}</td>
+                  <td>{{ record.total_penalty || record.totalPenalty || '0' }}</td>
+                  <td class="total-score">{{ record.raw_score || record.rawScore || '0' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -100,47 +99,35 @@
 
           <!-- 学期总表 -->
           <h3>学期总表</h3>
-          <div class="table-container">
+          <div class="table-container" v-if="dataLoaded">
             <table class="semester-table">
               <thead>
                 <tr>
-                  <th>学号</th>
-                  <th>姓名</th>
                   <th>班级</th>
-                  <th>A分</th>
-                  <th>A分标准分</th>
-                  <th>C分</th>
-                  <th>C分标准分</th>
-                  <th>D分</th>
-                  <th>D分标准分</th>
-                  <th>附加分</th>
-                  <th>B分</th>
-                  <th>B分标准分</th>
-                  <th>B分排名</th>
-                  <th>总分</th>
-                  <th>总排名</th>
+                  <th>姓名</th>
+                  <th>学号</th>
+                  <th>基础分</th>
+                  <th>总加分</th>
+                  <th>总扣分</th>
+                  <th>原始总分</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="record in semesterRecords" :key="record.id">
-                  <td>{{ record.studentId }}</td>
+                  <td>{{ record.class_name || record.className }}</td>
                   <td>{{ record.name }}</td>
-                  <td>{{ record.className }}</td>
-                  <td>{{ record.scoreA }}</td>
-                  <td>{{ record.scoreAStd }}</td>
-                  <td>{{ record.scoreC }}</td>
-                  <td>{{ record.scoreCStd }}</td>
-                  <td>{{ record.scoreD }}</td>
-                  <td>{{ record.scoreDStd }}</td>
-                  <td>{{ record.scoreExtra }}</td>
-                  <td>{{ record.scoreB }}</td>
-                  <td>{{ record.scoreBStd }}</td>
-                  <td>{{ record.rankB }}</td>
-                  <td>{{ record.scoreTotal }}</td>
-                  <td>{{ record.rankTotal }}</td>
+                  <td>{{ record.student_id || record.studentId }}</td>
+                  <td>{{ record.base_score || record.baseScore || '0' }}</td>
+                  <td>{{ record.total_bonus || record.totalBonus || '0' }}</td>
+                  <td>{{ record.total_penalty || record.totalPenalty || '0' }}</td>
+                  <td class="total-score">{{ record.raw_score || record.rawScore || '0' }}</td>
                 </tr>
               </tbody>
             </table>
+          </div>
+          
+          <div v-if="!dataLoaded" class="notice-box">
+            <p>请选择条件并点击"查询成绩"按钮获取数据</p>
           </div>
         </div>
       </main>
@@ -160,6 +147,9 @@ const selectedCategory = ref('A');
 const selectedYear = ref('');
 const selectedTerm = ref('1');
 const selectedMonth = ref('9');
+const isLoading = ref(false);
+const dataLoaded = ref(false);
+const hasSearched = ref(false);
 
 // 生成学年选项（最近4年）
 const academicYears = ref([]);
@@ -183,48 +173,8 @@ const combinedSemester = computed(() => {
   return `${selectedYear.value}-${selectedTerm.value}`;
 });
 
-const monthlyRecords = ref([
-  {
-    className: '计算机科学与技术2021-0',
-    studentId: '2220210000',
-    name: '张三',
-    praise: '0',
-    classmeeting: '0',
-    flagRaising: '0',
-    cadre: '0',
-    internal: '0',
-    eveningStudy: '0',
-    morningRun: '0',
-    eveningCheck: '0',
-    others: '0',
-    total: '10.0'
-  }
-]);
-
-const semesterRecords = ref([
-  {
-    studentId: '2220210000',
-    name: '张三',
-    className: '计算机科学与技术2021-0',
-    scoreA: '40.2',
-    scoreAStd: '70.26816413',
-    scoreC: '40',
-    scoreCStd: '73.923276',
-    scoreD: '40',
-    scoreDStd: '70.28107366',
-    scoreExtra: '0',
-    scoreB: '4.1926',
-    scoreBStd: '87.32991761',
-    rankB: '6',
-    scoreTotal: '81.05412848',
-    rankTotal: '14'
-  }
-]);
-
-// 监听筛选条件变化
-watch([selectedCategory, selectedYear, selectedTerm, selectedMonth], async (newValues) => {
-  await fetchEvaluationData();
-}, { immediate: true });
+const monthlyRecords = ref([]);
+const semesterRecords = ref([]);
 
 // 监听分类变化
 watch(selectedCategory, (newCategory) => {
@@ -249,43 +199,92 @@ watch(selectedTerm, (newTerm) => {
   }
 });
 
+// 获取评分数据
 const fetchEvaluationData = async () => {
   try {
-    // 如果是A分类但没有选择月份，就设置默认值
-    if (selectedCategory.value === 'A' && !selectedMonth.value) {
-      if (selectedTerm.value === '1') {
-        selectedMonth.value = '9'; // 第一学期默认9月
-      } else if (selectedTerm.value === '2') {
-        selectedMonth.value = '3'; // 第二学期默认3月
-      } else {
-        selectedMonth.value = '0'; // 默认学期总表
-      }
-    }
+    isLoading.value = true;
+    hasSearched.value = true;
+    dataLoaded.value = true;
     
-    // 这里使用实际的API端点
-    const response = await axios.get('/api/evaluation/scores', {
-      params: {
-        category: selectedCategory.value,
-        semester: combinedSemester.value, // 使用组合的学年学期
-        month: selectedCategory.value === 'A' ? selectedMonth.value : null // 只有A分类时才传月份
-      }
+    const [yearStart] = selectedYear.value.split('-');
+    // 构建semester参数，格式：year-year-term
+    const semester = `${yearStart}-${parseInt(yearStart) + 1}-${selectedTerm.value}`;
+    
+    console.log('请求参数:', {
+      category: selectedCategory.value,
+      semester: semester,
+      month: selectedCategory.value === 'A' ? selectedMonth.value : undefined
     });
 
-    // 假设API返回的数据结构符合我们的需求
-    if (response.data.monthlyData) {
-      monthlyRecords.value = response.data.monthlyData;
+    const token = localStorage.getItem('token');
+    console.log('使用的Token:', token ? `${token.substring(0, 20)}...` : 'Token未找到');
+
+    if (!token) {
+      console.error('未找到登录令牌');
+      alert('请先登录后再查询成绩');
+      router.push('/login');
+      return;
     }
-    if (response.data.semesterData) {
-      semesterRecords.value = response.data.semesterData;
+
+    console.log('开始发送请求...');
+    const response = await axios.get(`/api/my-evaluation/scores`, {
+      params: {
+        category: selectedCategory.value,
+        semester: semester,
+        month: selectedCategory.value === 'A' ? selectedMonth.value : undefined
+      },
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    
+    console.log('收到响应:', response.data);
+    
+    if (response.data.success) {
+      console.log('数据处理成功');
+      // 根据后端返回的数据结构更新
+      monthlyRecords.value = response.data.data.monthlyData || [];
+      semesterRecords.value = response.data.data.semesterData || [];
+    } else {
+      console.error('请求成功但返回错误:', response.data.message);
+      alert(response.data.message || '获取数据失败');
     }
   } catch (error) {
-    console.error('获取成绩数据失败:', error);
+    console.error('获取评分数据失败:', error);
+    hasSearched.value = false;
+    dataLoaded.value = false;
+    
+    if (error.response) {
+      console.error('错误详情:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      });
+      
+      if (error.response.status === 401 || error.response.status === 403) {
+        console.log('权限错误，准备跳转到登录页');
+        alert('登录已过期或没有权限，请重新登录');
+        router.push('/login');
+      } else {
+        alert(`请求失败: ${error.response.status} ${error.response.statusText}`);
+      }
+    } else if (error.request) {
+      console.error('请求未收到响应:', error.request);
+      alert('无法连接到服务器，请检查网络连接');
+    } else {
+      console.error('请求配置错误:', error.message);
+      alert(`发生错误: ${error.message || '未知错误'}`);
+    }
+  } finally {
+    console.log('请求结束，重置加载状态');
+    isLoading.value = false;
   }
 };
 
 onMounted(() => {
   generateAcademicYears(); // 生成学年选项
-  fetchEvaluationData();
+  // 移除自动查询
+  // fetchEvaluationData();
 });
 </script>
 
@@ -391,6 +390,35 @@ h2::before {
   box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
 }
 
+.search-button-container {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.search-button {
+  background-color: #409EFF;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 20px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s;
+}
+
+.search-button:hover {
+  background-color: #66b1ff;
+}
+
+.search-button:disabled {
+  background-color: #a0cfff;
+  cursor: not-allowed;
+}
+
 .table-container {
   background: white;
   border-radius: 8px;
@@ -437,6 +465,16 @@ h3 {
   border-left: 4px solid #409EFF;
 }
 
+.notice-box {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 30px;
+  text-align: center;
+  color: #909399;
+  font-size: 16px;
+  margin: 30px 0;
+}
+
 @media (max-width: 768px) {
   .filter-section {
     grid-template-columns: 1fr;
@@ -445,6 +483,11 @@ h3 {
   .table-container {
     margin: 0 -16px;
     border-radius: 0;
+  }
+  
+  .search-button-container {
+    justify-content: center;
+    margin-top: 20px;
   }
 }
 </style> 

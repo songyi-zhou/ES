@@ -29,7 +29,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/review")
 @RequiredArgsConstructor
 public class ReviewController {
-
+    
     private final ReviewService reviewService;
     private final JdbcTemplate jdbcTemplate;
 

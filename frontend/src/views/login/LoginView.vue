@@ -90,8 +90,13 @@ const loginForm = reactive({
   password: ''
 })
 
+const loading = ref(false)
+const errorMessage = ref(null)
+
 const handleLogin = async () => {
   try {
+    loading.value = true;
+    
     const response = await axios.post('/api/auth/login', {
       userId: loginForm.username,
       password: loginForm.password
@@ -104,14 +109,16 @@ const handleLogin = async () => {
     // 使用 userStore
     userStore.setUserInfo({ token, userId, name, roleLevel });
     
-    // 不再需要单独存储token
-    // localStorage.setItem('token', token);
+    // 同时单独存储 token，确保其他使用方式可以找到
+    localStorage.setItem('token', token);
     
     ElMessage.success('登录成功');
     router.push('/home');
   } catch (error) {
     console.error('Login error:', error.response?.data);
-    ElMessage.error(error.response?.data || '登录失败');
+    ElMessage.error(error.response?.data?.message || error.response?.data || '登录失败');
+  } finally {
+    loading.value = false;
   }
 }
 </script>
