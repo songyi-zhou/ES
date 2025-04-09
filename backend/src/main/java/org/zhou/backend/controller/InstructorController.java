@@ -11,6 +11,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
+import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,6 +54,7 @@ import org.zhou.backend.service.EvaluationService;
 import org.zhou.backend.service.InstructorService;
 import org.zhou.backend.service.UserService;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -437,6 +447,220 @@ public class InstructorController {
                     "success", false,
                     "message", "获取评测结果失败: " + e.getMessage()
             ));
+        }
+    }
+
+    @GetMapping("/evaluation/export-excel")
+    @PreAuthorize("hasRole('COUNSELOR')")
+    public void exportEvaluationResultsToExcel(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam(required = false) String tableType,
+            @RequestParam(required = false) String academicYear,
+            @RequestParam(required = false) String term,
+            @RequestParam(required = false) String major,
+            @RequestParam(required = false) String classId,
+            @RequestParam(required = false) String month,
+            HttpServletResponse response
+    ) {
+        try {
+            log.info("导出评测结果Excel，参数: tableType={}, academicYear={}, term={}, major={}, classId={}, month={}",
+                    tableType, academicYear, term, major, classId, month);
+            
+            // 获取当前辅导员信息
+            String findInstructorSql = "SELECT department, squad_list FROM instructors WHERE instructor_id = (select user_id from users where id = ?)";
+            Map<String, Object> instructorInfo = jdbcTemplate.queryForMap(findInstructorSql, userPrincipal.getId());
+            
+            String department = (String) instructorInfo.get("department");
+            String squadList = (String) instructorInfo.get("squad_list");
+            
+            if (department == null || squadList == null) {
+                throw new RuntimeException("未找到该辅导员的管辖信息");
+            }
+            
+            // 解析中队列表（可能是逗号分隔的多个中队）
+            String[] squads = squadList.split(",");
+            
+            // 根据表格类型确定要查询的表名和表格类型名称
+            String tableName;
+            String tableTypeName;
+            switch (tableType) {
+                case "A":
+                    tableName = "moral_monthly_evaluation";
+                    tableTypeName = "德育分表";
+                    break;
+                case "C":
+                    tableName = "research_competition_evaluation";
+                    tableTypeName = "研究竞赛评价";
+                    break;
+                case "D":
+                    tableName = "sports_arts_evaluation";
+                    tableTypeName = "体艺评价";
+                    break;
+                case "ALL":
+                    tableName = "aesthetic_education_evaluation";
+                    tableTypeName = "综合测评总表";
+                    break;
+                default:
+                    throw new RuntimeException("无效的表格类型");
+            }
+            
+            // 构建查询SQL - 使用IN子句处理多个中队
+            StringBuilder sqlBuilder = new StringBuilder();
+            sqlBuilder.append("SELECT e.*, s.name as student_name, s.class_id, c.class_name, s.major ")
+                     .append("FROM ").append(tableName).append(" e ")
+                     .append("JOIN students s ON e.student_id = s.student_id ")
+                     .append("JOIN classes c ON s.class_id = c.id ")
+                     .append("WHERE e.department = ? AND e.squad IN (");
+            
+            // 为每个中队添加一个占位符
+            for (int i = 0; i < squads.length; i++) {
+                if (i > 0) {
+                    sqlBuilder.append(", ");
+                }
+                sqlBuilder.append("?");
+            }
+            sqlBuilder.append(") AND e.status = -1 ");
+            
+            // 添加参数
+            List<Object> params = new ArrayList<>();
+            params.add(department);
+            // 添加中队参数
+            for (String squad : squads) {
+                params.add(squad.trim()); // 去除可能的空格
+            }
+            
+            // 添加筛选条件
+            if (academicYear != null && !academicYear.isEmpty()) {
+                sqlBuilder.append("AND e.academic_year = ? ");
+                params.add(academicYear);
+            }
+            
+            if (term != null && !term.isEmpty()) {
+                sqlBuilder.append("AND e.semester = ? ");
+                params.add(term);
+            }
+            
+            if (major != null && !major.isEmpty()) {
+                sqlBuilder.append("AND s.major = ? ");
+                params.add(major);
+            }
+            
+            if (classId != null && !classId.isEmpty()) {
+                sqlBuilder.append("AND s.class_id = ? ");
+                params.add(classId);
+            }
+            
+            // 如果是德育表且有月份参数
+            if ("A".equals(tableType) && month != null && !month.isEmpty()) {
+                sqlBuilder.append("AND e.month = ? ");
+                params.add(month);
+            }
+            
+            // 执行查询
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(sqlBuilder.toString(), params.toArray());
+            
+            // 创建Excel工作簿和工作表
+            XSSFWorkbook workbook = new XSSFWorkbook();
+            XSSFSheet sheet = workbook.createSheet("评测结果");
+            
+            // 创建表头样式
+            XSSFCellStyle headerStyle = workbook.createCellStyle();
+            headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setBorderBottom(BorderStyle.THIN);
+            headerStyle.setBorderLeft(BorderStyle.THIN);
+            headerStyle.setBorderRight(BorderStyle.THIN);
+            headerStyle.setBorderTop(BorderStyle.THIN);
+            
+            XSSFFont headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+            
+            // 创建表头行
+            Row headerRow = sheet.createRow(0);
+            
+            // 设置表头
+            String[] columns = {"序号", "班级", "姓名", "学号", "原始分", "总加分", "总扣分", "原始总分"};
+            for (int i = 0; i < columns.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(columns[i]);
+                cell.setCellStyle(headerStyle);
+                sheet.setColumnWidth(i, 15 * 256); // 设置列宽
+            }
+            
+            // 填充数据
+            int rowNum = 1;
+            for (Map<String, Object> row : results) {
+                Row dataRow = sheet.createRow(rowNum++);
+                
+                // 序号
+                dataRow.createCell(0).setCellValue(rowNum - 1);
+                
+                // 班级
+                dataRow.createCell(1).setCellValue(row.get("class_id") != null ? row.get("class_id").toString() : "");
+                
+                // 姓名
+                dataRow.createCell(2).setCellValue(row.get("student_name") != null ? row.get("student_name").toString() : "");
+                
+                // 学号
+                dataRow.createCell(3).setCellValue(row.get("student_id") != null ? row.get("student_id").toString() : "");
+                
+                // 原始分
+                Object baseScoreObj = row.get("base_score");
+                double baseScore = baseScoreObj != null ? ((Number) baseScoreObj).doubleValue() : 0;
+                dataRow.createCell(4).setCellValue(baseScore);
+                
+                // 总加分
+                Object totalBonusObj = row.get("total_bonus");
+                double totalBonus = totalBonusObj != null ? ((Number) totalBonusObj).doubleValue() : 0;
+                dataRow.createCell(5).setCellValue(totalBonus);
+                
+                // 总扣分
+                Object totalPenaltyObj = row.get("total_penalty");
+                double totalPenalty = totalPenaltyObj != null ? ((Number) totalPenaltyObj).doubleValue() : 0;
+                dataRow.createCell(6).setCellValue(totalPenalty);
+                
+                // 原始总分
+                double rawScore = baseScore + totalBonus - totalPenalty;
+                dataRow.createCell(7).setCellValue(rawScore);
+            }
+            
+            // 构建文件名
+            String termText = (term != null && !term.isEmpty()) ? (term.equals("1") ? "第一学期" : "第二学期") : "";
+            String majorText = (major != null && !major.isEmpty()) ? major : "全部专业";
+            String monthText = "";
+            if ("A".equals(tableType) && month != null && !month.isEmpty()) {
+                monthText = month + "月";
+            }
+            String fileName = String.format("%s%s%s%s%s评测结果.xlsx", 
+                    academicYear != null ? academicYear : "", 
+                    termText,
+                    majorText,
+                    monthText,
+                    tableTypeName);
+            
+            // 转换文件名为URL编码，确保中文文件名正确显示
+            fileName = java.net.URLEncoder.encode(fileName, "UTF-8").replaceAll("\\+", "%20");
+            
+            // 设置响应头
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
+            response.setCharacterEncoding("UTF-8");
+            
+            // 写入响应
+            workbook.write(response.getOutputStream());
+            workbook.close();
+            
+            log.info("成功导出Excel文件: {}", fileName);
+            
+        } catch (Exception e) {
+            log.error("导出Excel失败", e);
+            try {
+                response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());
+                response.getWriter().write("导出失败: " + e.getMessage());
+            } catch (IOException ex) {
+                log.error("写入错误响应失败", ex);
+            }
         }
     }
 } 

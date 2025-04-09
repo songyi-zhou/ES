@@ -639,9 +639,88 @@ const downloadAttachment = async (attachment) => {
 };
 
 // 导出Excel
-const exportToExcel = () => {
-  // 实现导出Excel的逻辑
-  console.log('导出Excel');
+const exportToExcel = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      errorMessage.value = '用户未登录，请先登录';
+      return;
+    }
+    
+    // 将前端表格类型转换为后端API需要的格式
+    const apiTableType = tableTypeMap[selectedTableType.value] || selectedTableType.value;
+    
+    // 构建URL及参数
+    let url = `${API_URL}/api/instructor/evaluation/export-excel?tableType=${apiTableType}`;
+    
+    // 添加其他查询参数
+    if (selectedYear.value) url += `&academicYear=${selectedYear.value}`;
+    if (selectedTerm.value) url += `&term=${selectedTerm.value}`;
+    if (selectedMajor.value) url += `&major=${selectedMajor.value}`;
+    if (selectedTableType.value !== 'comprehensive' && selectedClass.value) url += `&classId=${selectedClass.value}`;
+    if (apiTableType === 'A' && selectedMonth.value) url += `&month=${selectedMonth.value}`;
+    
+    console.log('导出Excel URL:', url);
+    
+    // 创建一个临时的a标签来触发文件下载
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'evaluation-results.xlsx');
+    
+    // 添加token到请求头
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'blob';
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    
+    // 显示加载状态
+    isLoading.value = true;
+    
+    xhr.onload = function() {
+      if (this.status === 200) {
+        // 创建下载链接
+        const blob = new Blob([this.response], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        
+        // 尝试从响应头获取文件名
+        const disposition = xhr.getResponseHeader('Content-Disposition');
+        let filename = 'evaluation-results.xlsx';
+        if (disposition && disposition.indexOf('attachment') !== -1) {
+          const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+          const matches = filenameRegex.exec(disposition);
+          if (matches != null && matches[1]) { 
+            filename = matches[1].replace(/['"]/g, '');
+          }
+        }
+        a.download = decodeURIComponent(filename);
+        
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        // 处理错误
+        console.error('导出失败', this.response);
+        alert('导出Excel失败');
+      }
+      isLoading.value = false;
+    };
+    
+    xhr.onerror = function() {
+      console.error('导出请求失败');
+      alert('网络错误，导出Excel失败');
+      isLoading.value = false;
+    };
+    
+    xhr.send();
+  } catch (error) {
+    console.error('导出Excel失败:', error);
+    alert('导出Excel失败: ' + (error.message || '未知错误'));
+    isLoading.value = false;
+  }
 };
 </script>
 
