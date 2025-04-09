@@ -56,13 +56,13 @@
             :row-style="{ cursor: 'default' }"
             :resizable="false"
           >
-            <el-table-column prop="createdAt" label="提交时间" min-width="200" align="center">
+            <el-table-column prop="createdAt" label="提交时间" min-width="100" align="center">
               <template #default="scope">
                 {{ formatDate(scope.row.createdAt) }}
               </template>
             </el-table-column>
             <el-table-column prop="userId" label="学号" min-width="100" align="center" />
-            <el-table-column prop="title" label="材料名称" min-width="200" show-overflow-tooltip align="center" />
+            <el-table-column prop="title" label="材料名称" min-width="100" show-overflow-tooltip align="center" />
             <el-table-column prop="evaluationType" label="材料类型" min-width="100" align="center">
               <template #default="scope">
                 {{ getEvaluationTypeText(scope.row.evaluationType) }}
@@ -75,7 +75,7 @@
                 </span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="200" fixed="right">
+            <el-table-column label="操作" width="300" fixed="right">
               <template #default="{ row }">
                 <div class="actions">
                   <template v-if="row.status === 'UNCORRECT'">

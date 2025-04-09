@@ -6,6 +6,7 @@ import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -285,6 +286,156 @@ public class InstructorController {
             return ResponseEntity.badRequest().body(Map.of(
                 "success", false,
                 "message", "扣分失败：" + e.getMessage()
+            ));
+        }
+    }
+
+    @GetMapping("/evaluation/results")
+    @PreAuthorize("hasRole('COUNSELOR')")
+    public ResponseEntity<?> getEvaluationResults(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam(required = false) String tableType,
+            @RequestParam(required = false) String academicYear,
+            @RequestParam(required = false) String term,
+            @RequestParam(required = false) String major,
+            @RequestParam(required = false) String classId,
+            @RequestParam(required = false) String month
+    ) {
+        try {
+            log.info("获取评测结果，参数: tableType={}, academicYear={}, term={}, major={}, classId={}, month={}",
+                    tableType, academicYear, term, major, classId, month);
+            
+            // 获取当前辅导员信息
+            String findInstructorSql = "SELECT department, squad_list FROM instructors WHERE instructor_id = (select user_id from users where id = ?)";
+            Map<String, Object> instructorInfo = jdbcTemplate.queryForMap(findInstructorSql, userPrincipal.getId());
+            
+            String department = (String) instructorInfo.get("department");
+            String squadList = (String) instructorInfo.get("squad_list");
+            
+            if (department == null || squadList == null) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "message", "未找到该辅导员的管辖信息"
+                ));
+            }
+            
+            // 解析中队列表（可能是逗号分隔的多个中队）
+            String[] squads = squadList.split(",");
+            
+            // 根据表格类型确定要查询的表名
+            String tableName;
+            switch (tableType) {
+                case "A":
+                    tableName = "moral_monthly_evaluation";
+                    break;
+                case "C":
+                    tableName = "research_competition_evaluation";
+                    break;
+                case "D":
+                    tableName = "sports_arts_evaluation";
+                    break;
+                case "ALL":
+                    tableName = "aesthetic_education_evaluation";
+                    break;
+                default:
+                    return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "无效的表格类型"
+                    ));
+            }
+            
+            // 构建查询SQL - 使用IN子句处理多个中队
+            StringBuilder sqlBuilder = new StringBuilder();
+            sqlBuilder.append("SELECT e.*, s.name as student_name, s.class_id, c.class_name ")
+                     .append("FROM ").append(tableName).append(" e ")
+                     .append("JOIN students s ON e.student_id = s.student_id ")
+                     .append("JOIN classes c ON s.class_id = c.id ")
+                     .append("WHERE e.department = ? AND e.squad IN (");
+            
+            // 为每个中队添加一个占位符
+            for (int i = 0; i < squads.length; i++) {
+                if (i > 0) {
+                    sqlBuilder.append(", ");
+                }
+                sqlBuilder.append("?");
+            }
+            sqlBuilder.append(") AND e.status = -1 ");
+            
+            // 添加参数
+            List<Object> params = new ArrayList<>();
+            params.add(department);
+            // 添加中队参数
+            for (String squad : squads) {
+                params.add(squad.trim()); // 去除可能的空格
+            }
+            
+            // 添加筛选条件
+            if (academicYear != null && !academicYear.isEmpty()) {
+                sqlBuilder.append("AND e.academic_year = ? ");
+                params.add(academicYear);
+            }
+            
+            if (term != null && !term.isEmpty()) {
+                sqlBuilder.append("AND e.semester = ? ");
+                params.add(term);
+            }
+            
+            if (major != null && !major.isEmpty()) {
+                sqlBuilder.append("AND s.major = ? ");
+                params.add(major);
+            }
+            
+            if (classId != null && !classId.isEmpty()) {
+                sqlBuilder.append("AND s.class_id = ? ");
+                params.add(classId);
+            }
+            
+            // 如果是德育表且有月份参数
+            if ("A".equals(tableType) && month != null && !month.isEmpty()) {
+                sqlBuilder.append("AND e.month = ? ");
+                params.add(month);
+            }
+            
+            log.info("执行SQL: {}", sqlBuilder.toString());
+            log.info("参数: {}", params);
+            
+            // 执行查询
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(sqlBuilder.toString(), params.toArray());
+            
+            // 处理结果数据，计算总分等
+            List<Map<String, Object>> processedResults = new ArrayList<>();
+            for (Map<String, Object> row : results) {
+                Map<String, Object> processedRow = new HashMap<>(row);
+                
+                // 提取基础分、加分、扣分，计算原始总分
+                Object baseScoreObj = row.get("base_score");
+                Object totalBonusObj = row.get("total_bonus");
+                Object totalPenaltyObj = row.get("total_penalty");
+                
+                double baseScore = baseScoreObj != null ? ((Number) baseScoreObj).doubleValue() : 0;
+                double totalBonus = totalBonusObj != null ? ((Number) totalBonusObj).doubleValue() : 0;
+                double totalPenalty = totalPenaltyObj != null ? ((Number) totalPenaltyObj).doubleValue() : 0;
+                double rawScore = baseScore + totalBonus - totalPenalty;
+                
+                processedRow.put("baseScore", baseScore);
+                processedRow.put("totalBonus", totalBonus);
+                processedRow.put("totalPenalty", totalPenalty);
+                processedRow.put("rawScore", rawScore);
+                
+                processedResults.add(processedRow);
+            }
+            
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "data", processedResults,
+                    "total", processedResults.size()
+            ));
+            
+        } catch (Exception e) {
+            log.error("获取评测结果失败", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "获取评测结果失败: " + e.getMessage()
             ));
         }
     }

@@ -92,7 +92,7 @@
             </el-table-column>
             <el-table-column prop="score" label="加分数额" width="100" align="center">
               <template #default="scope">
-                <span v-if="(scope.row.status === 'APPROVED'||scope.row.status === 'DEDUCTED') && scope.row.score" class="score">
+                <span v-if=" scope.row.score" class="score">
                   {{ scope.row.score }}
                 </span>
                 <span v-else class="no-score">-</span>
