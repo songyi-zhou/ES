@@ -204,6 +204,12 @@ const saveSelectedMembers = async () => {
     })
     if (response.data.success) {
       ElMessage.success('选择成功！')
+      // 添加新的提示信息
+      ElMessage({
+        type: 'info',
+        message: '请前往中队干部管理页面手动添加小组成员',
+        duration: 5000  // 显示5秒
+      })
       // 重置选择状态
       selectedStudents.value = []
       // 刷新数据

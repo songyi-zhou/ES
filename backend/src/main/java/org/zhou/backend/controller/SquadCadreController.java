@@ -251,6 +251,15 @@ public class SquadCadreController {
                 ));
             }
             
+            // 在 addCadre 方法中添加职位的验证
+            String position = cadreData.get("position").toString().trim();
+            if (position.isEmpty() || position.length() < 2 || position.length() > 10) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "职位长度不合法，应为2-10个字符"
+                ));
+            }
+            
             // 插入数据（使用从辅导员信息中获取的department和squad）
             String insertSql = "INSERT INTO squad_cadre (department, squad, major, class_id, class_name, student_id, student_name, position, monthly_bonus, uploader_id, uploader_name, create_time, update_time) "
                     + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
@@ -433,10 +442,9 @@ public class SquadCadreController {
                         continue;
                     }
                     
-                    // 验证职位合法性
-                    List<String> validPositions = List.of("中队长", "副中队长", "学习委员", "生活委员", "心理委员", "体育委员", "宣传委员", "文艺委员", "纪律委员", "组织委员");
-                    if (!validPositions.contains(position)) {
-                        errors.add("第" + (i + 1) + "行职位不合法，应为：" + String.join("、", validPositions));
+                    // 验证职位长度
+                    if (position.isEmpty() || position.length() < 2 || position.length() > 10) {
+                        errors.add("第" + (i + 1) + "行职位长度不合法，应为2-10个字符");
                         continue;
                     }
                     

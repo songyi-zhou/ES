@@ -452,6 +452,16 @@ const handleRoleSubmit = async () => {
     })
     
     ElMessage.success('修改权限成功')
+    
+    // 如果是修改为综测小组成员，显示额外提示
+    if (roleForm.value.role === 'groupmember') {
+      ElMessage({
+        type: 'info',
+        message: '请前往中队干部管理页面手动添加小组成员',
+        duration: 5000  // 显示5秒
+      })
+    }
+    
     roleDialogVisible.value = false
     fetchStudents()
   } catch (error) {

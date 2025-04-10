@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.zhou.backend.entity.GroupMember;
@@ -19,13 +20,13 @@ import org.zhou.backend.entity.User;
 import org.zhou.backend.exception.ResourceNotFoundException;
 import org.zhou.backend.model.dto.StudentDTO;
 import org.zhou.backend.model.request.RoleUpdateRequest;
+import org.zhou.backend.repository.ClassGroupMemberRepository;
 import org.zhou.backend.repository.GroupMemberRepository;
 import org.zhou.backend.repository.InstructorRepository;
 import org.zhou.backend.repository.RoleRepository;
 import org.zhou.backend.repository.SquadGroupLeaderRepository;
 import org.zhou.backend.repository.StudentRepository;
 import org.zhou.backend.repository.UserRepository;
-import org.zhou.backend.repository.ClassGroupMemberRepository;
 import org.zhou.backend.service.InstructorService;
 
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class InstructorServiceImpl implements InstructorService {
     private final SquadGroupLeaderRepository squadGroupLeaderRepository;
     private final GroupMemberRepository groupMemberRepository;
     private final ClassGroupMemberRepository classGroupMemberRepository;
+    private final JdbcTemplate jdbcTemplate;
     private static final Logger log = LoggerFactory.getLogger(InstructorServiceImpl.class);
 
     @Override
@@ -75,6 +77,47 @@ public class InstructorServiceImpl implements InstructorService {
         // 更新学生表中的角色
         student.setRole(request.getRole());
         studentRepository.save(student);
+        
+        // 6. 处理中队干部表
+        if ("GROUP_MEMBER".equals(request.getRole())) {
+            // 如果是设置为小组成员，则添加到中队干部表
+            // String checkExistSql = "SELECT COUNT(*) FROM squad_cadre WHERE student_id = ? AND position = ?";
+            // Integer count = jdbcTemplate.queryForObject(checkExistSql, Integer.class, studentId, "综测小组成员");
+            
+            // if (count == null || count == 0) {
+            //     // 获取当前用户（导员）信息
+            //     User instructorUser = userRepository.findByUserId(instructorId)
+            //         .orElseThrow(() -> new ResourceNotFoundException("导员用户不存在: " + instructorId));
+                
+            //     // 插入到中队干部表
+            //     String insertSql = "INSERT INTO squad_cadre (department, squad, major, class_id, class_name, " +
+            //         "student_id, student_name, position, monthly_bonus, uploader_id, uploader_name, create_time, update_time) " +
+            //         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                
+            //     jdbcTemplate.update(insertSql,
+            //         instructor.getDepartment(),
+            //         student.getSquad(),
+            //         student.getMajor(),
+            //         student.getClassId(),
+            //         student.getClassName(),
+            //         student.getStudentId(),
+            //         student.getName(),
+            //         "综测小组成员",
+            //         0.3,  // 固定每月加分为0.3
+            //         instructorUser.getId(),
+            //         instructorUser.getName()
+            //     );
+                
+            //     log.info("Added student {} as group member to squad_cadre with monthly bonus 0.3", studentId);
+            // }
+        } else {
+            // 如果不是小组成员，则从中队干部表中删除
+            String deleteSql = "DELETE FROM squad_cadre WHERE student_id = ? AND position = ?";
+            int rowsAffected = jdbcTemplate.update(deleteSql, studentId, "小组成员");
+            if (rowsAffected > 0) {
+                log.info("Removed student {} from squad_cadre as role changed to {}", studentId, request.getRole());
+            }
+        }
         
         log.info("Updated student {} role to {}", studentId, request.getRole());
     }

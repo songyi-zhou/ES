@@ -127,19 +127,11 @@
                   </el-col>
                   <el-col :span="12">
                     <el-form-item label="职位" prop="position">
-                      <el-select 
-                        v-model="formData.position" 
-                        placeholder="请选择职位"
-                        filterable
+                      <el-input
+                        v-model="formData.position"
+                        placeholder="请输入职位"
                         clearable
-                      >
-                        <el-option
-                          v-for="position in positions"
-                          :key="position"
-                          :label="position"
-                          :value="position"
-                        />
-                      </el-select>
+                      />
                     </el-form-item>
                   </el-col>
                 </el-row>
@@ -272,32 +264,6 @@ const tableHeight = ref('450px')
 // 搜索文本
 const searchText = ref('')
 
-// 职位选项
-const positions = ref([
-  '中队长',
-  '副中队长',
-  '学习委员',
-  '生活委员',
-  '心理委员',
-  '体育委员',
-  '宣传委员',
-  '文艺委员',
-  '纪律委员',
-  '组织委员'
-])
-
-// 过滤后的班级列表
-const filteredClasses = computed(() => {
-  if (!formData.major) return classes.value
-  return classes.value.filter(cls => cls.major === formData.major)
-})
-
-// 过滤后的学生列表
-const filteredStudents = computed(() => {
-  if (!formData.classId) return students.value
-  return students.value.filter(student => student.classId === formData.classId)
-})
-
 // 表单验证规则
 const formRules = reactive({
   major: [
@@ -310,7 +276,8 @@ const formRules = reactive({
     { required: true, message: '请选择学生', trigger: 'change' }
   ],
   position: [
-    { required: true, message: '请选择职位', trigger: 'change' }
+    { required: true, message: '请输入职位', trigger: 'blur' },
+    { min: 2, max: 10, message: '职位长度应在 2 到 10 个字符之间', trigger: 'blur' }
   ],
   monthlyBonus: [
     { required: true, message: '请输入每月加分数额', trigger: 'change' },

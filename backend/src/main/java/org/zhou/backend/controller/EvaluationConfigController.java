@@ -148,6 +148,48 @@ public class EvaluationConfigController {
                         jdbcTemplate.update(insertSql, params);
                         log.info("Inserted record for student: {}", student.getStudentId());
                     }
+                    
+                    // 在完成记录插入后，处理中队干部的每月加分
+                    String updateCadreBonusSql = """
+                        UPDATE moral_monthly_evaluation me
+                        INNER JOIN squad_cadre sc ON me.student_id = sc.student_id
+                        SET me.total_bonus = COALESCE(me.total_bonus, 0) + sc.monthly_bonus
+                        WHERE me.academic_year = ? 
+                        AND me.semester = ? 
+                        AND me.month = ?
+                        AND me.department = ?
+                        AND me.squad = ?
+                    """;
+                    
+                    // 执行更新
+                    jdbcTemplate.update(updateCadreBonusSql,
+                        request.getAcademicYear(),
+                        request.getSemester(),
+                        request.getMonth(),
+                        department,
+                        squad
+                    );
+                    
+                    // 记录加分处理日志
+                    logService.saveLog(
+                        EvaluationConfigLog.builder()
+                            .academicYear(request.getAcademicYear())
+                            .semester(request.getSemester())
+                            .operatorId(userPrincipal.getId())
+                            .operatorName(groupLeader.getName())
+                            .section("加分处理")
+                            .operationType("更新")
+                            .description(String.format(
+                                "处理%s学年第%s学期%s月中队干部加分",
+                                request.getAcademicYear(),
+                                request.getSemester(),
+                                request.getMonth()
+                            ))
+                            .ipAddress(getClientIp(httpRequest))
+                            .userAgent(httpRequest.getHeader("User-Agent"))
+                            .build()
+                    );
+                    
                     break;
 
                 case "TYPE_C":
