@@ -141,7 +141,8 @@ const menuItems = ref([
       { title: '导员疑问材料审核', path: '/evaluation/instructor-review-question-materials', icon: 'el-icon-document-checked' },
       { title: '综测小组选定', path: '/evaluation/group-select', icon: 'el-icon-user-solid' },
       { title: '中队权限管理', path: '/instructor/permissions', icon: 'el-icon-s-data' },
-      { title: '扣分材料上传', path: '/instructor/penalty-upload', icon: 'el-icon-upload' }
+      { title: '扣分材料上传', path: '/instructor/penalty-upload', icon: 'el-icon-upload' },
+      { title: '中队干部管理', path: '/instructor/squad-cadre-manage', icon: 'el-icon-s-data' }
     ]
   }
 ]);

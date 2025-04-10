@@ -473,3 +473,26 @@ CREATE TABLE moral_semester_evaluation (
     class_id VARCHAR(50) COMMENT '班级ID',
     PRIMARY KEY (academic_year, semester, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思想品德学期测评表';
+
+-- 创建中队干部表
+CREATE TABLE squad_cadre (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    department VARCHAR(50) NOT NULL COMMENT '学院/部门',
+    squad VARCHAR(50) NOT NULL COMMENT '中队',
+    major VARCHAR(50) NOT NULL COMMENT '专业',
+    class_id VARCHAR(20) NOT NULL COMMENT '班级ID',
+    class_name VARCHAR(50) NOT NULL COMMENT '班级名称',
+    student_id VARCHAR(20) NOT NULL COMMENT '学号',
+    student_name VARCHAR(50) NOT NULL COMMENT '学生姓名',
+    position VARCHAR(50) NOT NULL COMMENT '职位',
+    monthly_bonus DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT '每月加分数额',
+    uploader_id BIGINT NOT NULL COMMENT '上传人ID',
+    uploader_name VARCHAR(50) NOT NULL COMMENT '上传人姓名',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_department (department),
+    INDEX idx_squad (squad),
+    INDEX idx_class (class_id),
+    INDEX idx_student (student_id),
+    UNIQUE KEY uk_student_position (student_id, position) COMMENT '同一学生不能担任相同职位两次'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='中队干部表';

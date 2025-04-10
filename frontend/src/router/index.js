@@ -189,6 +189,16 @@ const routes = [
           requiresInstructor: true,
           title: '扣分材料上传'
         }
+      },
+      {
+        path: '/instructor/squad-cadre-manage',
+        name: 'SquadCadreManage',
+        component: () => import('@/views/instructor/SquadCadreManage.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresInstructor: true,
+          title: '中队干部管理'
+        }
       }
 ]
 
