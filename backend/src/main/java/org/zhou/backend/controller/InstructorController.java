@@ -11,12 +11,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import jakarta.servlet.http.HttpServletRequest;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
@@ -31,6 +35,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,35 +46,30 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.zhou.backend.entity.AcademicEvaluation;
 import org.zhou.backend.entity.EvaluationAttachment;
 import org.zhou.backend.entity.EvaluationMaterial;
 import org.zhou.backend.entity.GroupMember;
+import org.zhou.backend.entity.ScoreUploadFiles;
+import org.zhou.backend.entity.ScoreUploadHistory;
 import org.zhou.backend.entity.User;
 import org.zhou.backend.model.dto.StudentDTO;
 import org.zhou.backend.model.request.DeductRequest;
 import org.zhou.backend.model.request.ReviewRequest;
 import org.zhou.backend.model.request.RoleUpdateRequest;
+import org.zhou.backend.repository.AcademicEvaluationRepository;
 import org.zhou.backend.repository.EvaluationAttachmentRepository;
 import org.zhou.backend.repository.GroupMemberRepository;
+import org.zhou.backend.repository.ScoreUploadFilesRepository;
+import org.zhou.backend.repository.ScoreUploadHistoryRepository;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.EvaluationService;
+import org.zhou.backend.service.FileStorageService;
 import org.zhou.backend.service.InstructorService;
 import org.zhou.backend.service.UserService;
-import org.zhou.backend.entity.ScoreUploadHistory;
-import org.zhou.backend.entity.ScoreUploadFiles;
-import org.zhou.backend.entity.AcademicEvaluation;
-import org.apache.commons.codec.digest.DigestUtils;
+
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.io.IOUtils;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
-
-import org.zhou.backend.repository.ScoreUploadHistoryRepository;
-import org.zhou.backend.repository.ScoreUploadFilesRepository;
-import org.zhou.backend.repository.AcademicEvaluationRepository;
-import org.zhou.backend.service.FileStorageService;
 
 @RestController
 @RequestMapping("/api/instructor")
@@ -684,59 +684,96 @@ public class InstructorController {
         }
     }
 
+    @GetMapping("/scores/upload-history")
+    @PreAuthorize("hasRole('COUNSELOR')")
+    public ResponseEntity<?> getUploadHistory(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        try {
+            // 获取当前登录的教师ID
+            String instructorId = String.valueOf(userPrincipal.getId());
+            
+            // 查询该教师的所有上传记录
+            List<ScoreUploadHistory> historyList = scoreUploadHistoryRepository.findByInstructorIdOrderByUploadTimeDesc(instructorId);
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", historyList
+            ));
+        } catch (Exception e) {
+            log.error("获取上传历史记录失败", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                        "success", false,
+                        "message", "获取上传历史记录失败：" + e.getMessage()
+                    ));
+        }
+    }
+
     @PostMapping("/scores/upload")
     @ResponseBody
+    @PreAuthorize("hasRole('COUNSELOR')")
+    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> uploadScores(
             @RequestParam("file") MultipartFile file,
             @RequestParam("academicYear") String academicYear,
             @RequestParam("semester") String semester,
-            @RequestParam("major") String major,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         try {
+            if (userPrincipal == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of(
+                            "success", false,
+                            "message", "未登录或登录已过期"
+                        ));
+            }
+
             // 获取当前登录的教师ID
             String instructorId = String.valueOf(userPrincipal.getId());
 
-            // 1. 首先创建上传历史记录
-            ScoreUploadHistory uploadHistory = new ScoreUploadHistory();
-            uploadHistory.setInstructorId(instructorId);
-            uploadHistory.setAcademicYear(academicYear);
-            uploadHistory.setSemester(semester);
-            uploadHistory.setMajor(major);
-            uploadHistory.setStatus(1); // 处理中
-            uploadHistory = scoreUploadHistoryRepository.save(uploadHistory);
-
-            // 2. 保存文件
-            String fileName = fileStorageService.storeFile(file);
-            String filePath = uploadPath + File.separator + fileName;
-
-            // 3. 记录文件信息
-            ScoreUploadFiles fileInfo = new ScoreUploadFiles();
-            fileInfo.setUploadHistoryId(uploadHistory.getId());
-            fileInfo.setFileName(file.getOriginalFilename());
-            fileInfo.setFilePath(filePath);
-            fileInfo.setFileSize(file.getSize());
-            fileInfo.setFileType(fileName.substring(fileName.lastIndexOf(".") + 1));
-            fileInfo.setFileMd5(DigestUtils.md5Hex(IOUtils.toByteArray(file.getInputStream())));
-            scoreUploadFilesRepository.save(fileInfo);
-
-            // 4. 读取Excel文件
+            // 1. 读取Excel文件获取专业信息
             Workbook workbook = WorkbookFactory.create(file.getInputStream());
             Sheet sheet = workbook.getSheetAt(0);
-            int successCount = 0;
-            List<String> errors = new ArrayList<>();
+            Row dataRow = sheet.getRow(3); // 获取第四行（第一条数据）
+            String major = instructorService.getStringCellValue(dataRow.getCell(5)); // 获取专业列的值
 
-            // 从第四行开始读取（跳过两行表头和实际表头）
+            // 2. 先进行重复判定
+            List<String> errors = new ArrayList<>();
+            List<AcademicEvaluation> validRecords = new ArrayList<>();
+            
+            // 先检查所有记录是否有重复
+            for (int i = 3; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                try {
+                    String studentId = instructorService.getStringCellValue(row.getCell(1)); // 学号
+                    String checkDuplicateSql = "SELECT COUNT(*) FROM academic_evaluation WHERE academic_year = ? AND semester = ? AND student_id = ?";
+                    int count = jdbcTemplate.queryForObject(checkDuplicateSql, new Object[]{academicYear, Integer.parseInt(semester), studentId}, Integer.class);
+                    if (count > 0) {
+                        errors.add(String.format("第%d行（学号：%s）：该学期已有成绩记录", i + 1, studentId));
+                    }
+                } catch (Exception e) {
+                    errors.add(String.format("第%d行数据格式错误：%s", i + 1, e.getMessage()));
+                }
+            }
+
+            // 如果有重复记录，直接返回错误
+            if (!errors.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "存在重复记录，请勿重复上传",
+                    "errors", errors
+                ));
+            }
+
+            // 3. 读取并验证所有数据
             for (int i = 3; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
                 try {
                     // 读取每一行的数据
-                    String studentId = instructorService.getStringCellValue(row.getCell(1)); // 学号
-                    String name = instructorService.getStringCellValue(row.getCell(2)); // 姓名
-                    String grade = instructorService.getStringCellValue(row.getCell(3)); // 年级
-                    String department = instructorService.getStringCellValue(row.getCell(4)); // 院系
-                    String majorName = instructorService.getStringCellValue(row.getCell(5)); // 专业
-                    String className = instructorService.getStringCellValue(row.getCell(6)); // 班级
-                    double rawScore = instructorService.getNumericCellValue(row.getCell(7)); // 平均学分绩点
+                    String studentId = instructorService.getStringCellValue(row.getCell(1));
+                    String name = instructorService.getStringCellValue(row.getCell(2));
+                    String grade = instructorService.getStringCellValue(row.getCell(3));
+                    String department = instructorService.getStringCellValue(row.getCell(4));
+                    String className = instructorService.getStringCellValue(row.getCell(6));
+                    double rawScore = instructorService.getNumericCellValue(row.getCell(7));
 
                     // 从students表中获取中队信息
                     String squad = null;
@@ -744,7 +781,6 @@ public class InstructorController {
                         String findSquadSql = "SELECT squad FROM students WHERE student_id = ?";
                         squad = jdbcTemplate.queryForObject(findSquadSql, String.class, studentId);
                     } catch (Exception e) {
-                        // 如果查询不到学生中队信息，记录警告但继续处理
                         log.warn("未找到学生{}的中队信息，将设置为null", studentId);
                     }
 
@@ -755,64 +791,86 @@ public class InstructorController {
                         String.class
                     );
 
-                    // 检查是否存在重复记录
-                    String checkDuplicateSql = "SELECT COUNT(*) FROM academic_evaluation WHERE academic_year = ? AND semester = ? AND student_id = ?";
-                    int count = jdbcTemplate.queryForObject(checkDuplicateSql, new Object[]{academicYear, Integer.parseInt(semester), studentId}, Integer.class);
-                    if (count > 0) {
-                        errors.add("第" + (i + 1) + "行数据处理失败：记录已存在");
-                        continue;
-                    }
-
-                    // 构建并保存学生成绩记录
+                    // 构建学生成绩记录
                     AcademicEvaluation academicEval = new AcademicEvaluation();
                     academicEval.setAcademicYear(academicYear);
                     academicEval.setSemester(Integer.parseInt(semester));
                     academicEval.setStudentId(studentId);
                     academicEval.setName(name);
                     academicEval.setDepartment(department);
-                    academicEval.setMajor(majorName);
+                    academicEval.setMajor(major);
                     academicEval.setRawScore(rawScore);
-                    academicEval.setClassId(classId); // 使用从数据库获取的 class_id
-                    academicEval.setSquad(squad); // 设置中队信息，可能为null
-                    academicEval.setRank(null); // 明确设置 rank 为 null
+                    academicEval.setClassId(classId);
+                    academicEval.setSquad(squad);
+                    academicEval.setRank(null);
                     
                     // 设置公示时间为当前时间
                     LocalDateTime now = LocalDateTime.now();
                     academicEval.setPublicityStartTime(now);
                     academicEval.setPublicityEndTime(now);
-                    academicEval.setStatus(-1); // 设置状态为只读
+                    academicEval.setStatus(-1);
 
-                    academicEvaluationRepository.save(academicEval);
-                    successCount++;
+                    validRecords.add(academicEval);
                 } catch (Exception e) {
-                    errors.add("第" + (i + 1) + "行数据处理失败：" + e.getMessage());
+                    errors.add(String.format("第%d行数据处理失败：%s", i + 1, e.getMessage()));
                 }
             }
 
-            // 5. 更新上传历史状态
-            uploadHistory.setStatus(errors.isEmpty() ? 2 : 3); // 2:成功 3:失败
-            uploadHistory.setAffectedRows(successCount);
+            // 如果有数据错误，直接返回
             if (!errors.isEmpty()) {
-                uploadHistory.setErrorMessage(String.join("\n", errors));
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "数据格式错误，请检查后重试",
+                    "errors", errors
+                ));
             }
+
+            // 4. 创建上传历史记录
+            ScoreUploadHistory uploadHistory = new ScoreUploadHistory();
+            uploadHistory.setInstructorId(instructorId);
+            uploadHistory.setAcademicYear(academicYear);
+            uploadHistory.setSemester(semester);
+            uploadHistory.setMajor(major);
+            uploadHistory.setStatus(1);
+            uploadHistory = scoreUploadHistoryRepository.save(uploadHistory);
+
+            // 5. 保存文件
+            String fileName = fileStorageService.storeFile(file);
+            String filePath = uploadPath + File.separator + fileName;
+
+            // 6. 记录文件信息
+            ScoreUploadFiles fileInfo = new ScoreUploadFiles();
+            fileInfo.setUploadHistoryId(uploadHistory.getId());
+            fileInfo.setFileName(file.getOriginalFilename());
+            fileInfo.setFilePath(filePath);
+            fileInfo.setFileSize(file.getSize());
+            fileInfo.setFileType(fileName.substring(fileName.lastIndexOf(".") + 1));
+            fileInfo.setFileMd5(DigestUtils.md5Hex(IOUtils.toByteArray(file.getInputStream())));
+            scoreUploadFilesRepository.save(fileInfo);
+
+            // 7. 保存所有有效记录
+            for (AcademicEvaluation record : validRecords) {
+                academicEvaluationRepository.save(record);
+            }
+
+            // 8. 更新上传历史状态
+            uploadHistory.setStatus(2); // 成功
+            uploadHistory.setAffectedRows(validRecords.size());
             scoreUploadHistoryRepository.save(uploadHistory);
 
-            // 6. 返回处理结果
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("totalRows", sheet.getLastRowNum());
-            result.put("successCount", successCount);
-            result.put("errors", errors);
-            
-            return ResponseEntity.ok(result);
+            // 9. 返回处理结果
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "totalRows", sheet.getLastRowNum(),
+                "successCount", validRecords.size()
+            ));
 
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new HashMap<String, Object>() {{
-                        put("success", false);
-                        put("message", "文件处理失败：" + e.getMessage());
-                    }});
+            log.error("文件处理失败", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "文件处理失败：" + e.getMessage()
+            ));
         }
     }
 
