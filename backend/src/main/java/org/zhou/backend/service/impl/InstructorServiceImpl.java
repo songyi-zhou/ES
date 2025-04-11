@@ -6,7 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-
+import org.apache.poi.ss.usermodel.Cell;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -268,6 +268,42 @@ public class InstructorServiceImpl implements InstructorService {
                 .orElseThrow(() -> new ResourceNotFoundException("用户不存在: " + studentId));
             
             updateUserRole(user, "groupmember");  // 批量更新为小组成员
+        }
+    }
+
+    // 辅助方法：获取单元格字符串值
+    @Override
+    public String getStringCellValue(Cell cell) {
+        if (cell == null) {
+            return "";
+        }
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                return String.valueOf((long) cell.getNumericCellValue());
+            default:
+                return "";
+        }
+    }
+
+    // 辅助方法：获取单元格数值
+    @Override
+    public double getNumericCellValue(Cell cell) {
+        if (cell == null) {
+            return 0.0;
+        }
+        switch (cell.getCellType()) {
+            case NUMERIC:
+                return cell.getNumericCellValue();
+            case STRING:
+                try {
+                    return Double.parseDouble(cell.getStringCellValue());
+                } catch (NumberFormatException e) {
+                    return 0.0;
+                }
+            default:
+                return 0.0;
         }
     }
 

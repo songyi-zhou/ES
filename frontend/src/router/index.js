@@ -199,6 +199,16 @@ const routes = [
           requiresInstructor: true,
           title: '中队干部管理'
         }
+      },
+      {
+        path: '/instructor/score-upload',
+        name: 'ScoreUpload',
+        component: () => import('@/views/instructor/ScoreUpload.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresInstructor: true,
+          title: '成绩表格上传'
+        }
       }
 ]
 
