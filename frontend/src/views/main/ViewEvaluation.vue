@@ -103,24 +103,40 @@
             <table class="semester-table">
               <thead>
                 <tr>
-                  <th>班级</th>
-                  <th>姓名</th>
+                  <th>学年</th>
+                  <th>学期</th>
                   <th>学号</th>
-                  <th>基础分</th>
-                  <th>总加分</th>
-                  <th>总扣分</th>
-                  <th>原始总分</th>
+                  <th>姓名</th>
+                  <th>班级</th>
+                  <th>中队</th>
+                  <th>学院</th>
+                  <th>专业</th>
+                  <th>德育成绩</th>
+                  <th>学业成绩</th>
+                  <th>科研竞赛</th>
+                  <th>文体活动</th>
+                  <th>附加分</th>
+                  <th>总分</th>
+                  <th>排名</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="record in semesterRecords" :key="record.id">
-                  <td>{{ record.class_name || record.className }}</td>
+                  <td>{{ record.academic_year }}</td>
+                  <td>{{ record.semester }}</td>
+                  <td>{{ record.student_id }}</td>
                   <td>{{ record.name }}</td>
-                  <td>{{ record.student_id || record.studentId }}</td>
-                  <td>{{ record.base_score || record.baseScore || '0' }}</td>
-                  <td>{{ record.total_bonus || record.totalBonus || '0' }}</td>
-                  <td>{{ record.total_penalty || record.totalPenalty || '0' }}</td>
-                  <td class="total-score">{{ record.raw_score || record.rawScore || '0' }}</td>
+                  <td>{{ record.class_name }}</td>
+                  <td>{{ record.squad }}</td>
+                  <td>{{ record.department }}</td>
+                  <td>{{ record.major }}</td>
+                  <td>{{ record.moral_score || '0' }}</td>
+                  <td>{{ record.academic_score || '0' }}</td>
+                  <td>{{ record.research_score || '0' }}</td>
+                  <td>{{ record.sports_arts_score || '0' }}</td>
+                  <td>{{ record.extra_score || '0' }}</td>
+                  <td>{{ record.total_score || '0' }}</td>
+                  <td>{{ record.rank || '-' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -139,10 +155,11 @@
 import { ref, onMounted, watch, computed } from 'vue';
 import TopBar from "@/components/TopBar.vue";
 import Sidebar from "@/components/Sidebar.vue";
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import axios from 'axios';
 
 const router = useRouter();
+const route = useRoute();
 const selectedCategory = ref('A');
 const selectedYear = ref('');
 const selectedTerm = ref('1');
@@ -281,10 +298,43 @@ const fetchEvaluationData = async () => {
   }
 };
 
+const loadData = async () => {
+  try {
+    console.log('开始请求数据，参数:', {
+      academicYear: route.query.academicYear,
+      semester: route.query.semester
+    })
+    
+    const response = await axios.get('/api/my-evaluation/comprehensive-results', {
+      params: {
+        academicYear: route.query.academicYear,
+        semester: route.query.semester
+      }
+    })
+    
+    console.log('后端返回的完整响应:', response)
+    console.log('响应数据:', response.data)
+    
+    if (response.data && response.data.data) {
+      semesterRecords.value = response.data.data
+      console.log('设置到表格的数据:', semesterRecords.value)
+    } else {
+      console.warn('响应数据格式不符合预期:', response.data)
+      semesterRecords.value = []
+    }
+    
+    dataLoaded.value = true
+  } catch (error) {
+    console.error('加载数据失败:', error)
+    if (error.response) {
+      console.error('错误响应数据:', error.response.data)
+    }
+  }
+}
+
 onMounted(() => {
   generateAcademicYears(); // 生成学年选项
-  // 移除自动查询
-  // fetchEvaluationData();
+  loadData();
 });
 </script>
 

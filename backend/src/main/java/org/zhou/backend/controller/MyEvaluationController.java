@@ -116,6 +116,59 @@ public class MyEvaluationController {
         }
     }
     
+    @GetMapping("/comprehensive-results")
+    public ResponseEntity<ResponseDTO<List<Map<String, Object>>>> getComprehensiveResults(
+            @RequestParam(required = false) String academicYear,
+            @RequestParam(required = false) String semester) {
+        try {
+            // 获取当前用户ID
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            String userId = String.valueOf(userPrincipal.getId());
+            String studentId = getStudentIdFromUserId(userId);
+            
+            if (studentId == null) {
+                return ResponseEntity.ok(ResponseDTO.error("未找到学生信息"));
+            }
+            
+            log.info("查询学生[{}]的综测结果，参数: academicYear={}, semester={}", studentId, academicYear, semester);
+            
+            // 构建查询SQL
+            StringBuilder sql = new StringBuilder();
+            sql.append("SELECT * FROM comprehensive_result WHERE student_id = ? AND status = -1");
+            
+            List<Object> params = new ArrayList<>();
+            params.add(studentId);
+            
+            // 添加学年条件
+            if (academicYear != null && !academicYear.isEmpty()) {
+                sql.append(" AND academic_year = ?");
+                params.add(academicYear);
+            }
+            
+            // 添加学期条件
+            if (semester != null && !semester.isEmpty()) {
+                sql.append(" AND semester = ?");
+                params.add(semester);
+            }
+            
+            // 按学年学期排序
+            sql.append(" ORDER BY academic_year DESC, semester DESC");
+            
+            // 执行查询
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(
+                sql.toString(),
+                params.toArray()
+            );
+            
+            return ResponseEntity.ok(ResponseDTO.success(results));
+            
+        } catch (Exception e) {
+            log.error("获取综测结果失败", e);
+            return ResponseEntity.ok(ResponseDTO.error("获取综测结果失败: " + e.getMessage()));
+        }
+    }
+    
     /**
      * 根据用户ID获取学生ID
      */

@@ -381,7 +381,7 @@ public class EvaluationConfigController {
                             3,
                             ?, ?
                         FROM (
-                            SELECT
+                            SELECT 
                                 student_id, name, squad, department, major, class_id,
                                 SUM(base_score) as total_base_score,
                                 SUM(total_bonus) as total_bonus_sum,
@@ -392,7 +392,7 @@ public class EvaluationConfigController {
                             GROUP BY student_id, name, squad, department, major, class_id
                         ) ms
                         JOIN (
-                            SELECT
+                            SELECT 
                                 major,
                                 AVG(total_raw_score) as avg_score,
                                 STDDEV_POP(total_raw_score) as stddev_score
@@ -404,7 +404,7 @@ public class EvaluationConfigController {
                             ) t
                             GROUP BY major
                         ) s ON ms.major = s.major
-                    """;
+                        """;
 
                     jdbcTemplate.update(insertSemesterSql,
                         request.getAcademicYear(),

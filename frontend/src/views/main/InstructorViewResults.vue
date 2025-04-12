@@ -105,31 +105,63 @@
           <div v-if="students.length === 0 && !isLoading" class="empty-data">
             <p>暂无符合条件的数据</p>
           </div>
-          <table v-else>
+          <table v-else class="results-table">
             <thead>
               <tr>
-                <th>班级</th>
-                <th>姓名</th>
-                <th>学号</th>
-                <th>原始分</th>
-                <th>总加分</th>
-                <th>总扣分</th>
-                <th>原始总分</th>
-                <th>操作</th>
+                <template v-if="currentTableType === 'comprehensive'">
+                  <th>学号</th>
+                  <th>姓名</th>
+                  <th>班级</th>
+                  <th>中队</th>
+                  <th>专业</th>
+                  <th>德育成绩</th>
+                  <th>学业成绩</th>
+                  <th>科研竞赛</th>
+                  <th>文体活动</th>
+                  <th>附加分</th>
+                  <th>总分</th>
+                  <th>排名</th>
+                </template>
+                <template v-else>
+                  <th>班级</th>
+                  <th>姓名</th>
+                  <th>学号</th>
+                  <th>原始分</th>
+                  <th>总加分</th>
+                  <th>总扣分</th>
+                  <th>原始总分</th>
+                  <th>操作</th>
+                </template>
               </tr>
             </thead>
             <tbody>
               <tr v-for="student in students" :key="student.id || student.student_id">
-                <td>{{ student.class_id || student.className }}</td>
-                <td>{{ student.student_name || student.name }}</td>
-                <td>{{ student.student_id }}</td>
-                <td>{{ student.base_score || 0 }}</td>
-                <td>{{ student.total_bonus || student.totalBonus || 0 }}</td>
-                <td>{{ student.total_penalty || student.totalPenalty || 0 }}</td>
-                <td>{{ student.raw_score || student.rawScore || 0 }}</td>
-                <td>
-                  <button class="detail-btn" @click="viewMaterials(student)">查看材料</button>
-                </td>
+                <template v-if="currentTableType === 'comprehensive'">
+                  <td>{{ student.student_id }}</td>
+                  <td>{{ student.student_name || student.name }}</td>
+                  <td>{{ student.class_name }}</td>
+                  <td>{{ student.squad }}</td>
+                  <td>{{ student.major }}</td>
+                  <td>{{ student.moral_score || '0' }}</td>
+                  <td>{{ student.academic_score || '0' }}</td>
+                  <td>{{ student.research_score || '0' }}</td>
+                  <td>{{ student.sports_arts_score || '0' }}</td>
+                  <td>{{ student.extra_score || '0' }}</td>
+                  <td>{{ student.total_score || '0' }}</td>
+                  <td>{{ student.rank || '-' }}</td>
+                </template>
+                <template v-else>
+                  <td>{{ student.class_id || student.className }}</td>
+                  <td>{{ student.student_name || student.name }}</td>
+                  <td>{{ student.student_id }}</td>
+                  <td>{{ student.base_score || 0 }}</td>
+                  <td>{{ student.total_bonus || student.totalBonus || 0 }}</td>
+                  <td>{{ student.total_penalty || student.totalPenalty || 0 }}</td>
+                  <td>{{ student.raw_score || student.rawScore || 0 }}</td>
+                  <td>
+                    <button class="detail-btn" @click="viewMaterials(student)">查看材料</button>
+                  </td>
+                </template>
               </tr>
             </tbody>
           </table>
@@ -214,6 +246,12 @@ import axios from 'axios';
 // API基础URL
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+// 数据加载状态
+const dataLoaded = ref(false);
+
+// 当前显示的表格类型（只在查询时更新）
+const currentTableType = ref('comprehensive');
+
 // 班级数据
 const classes = ref([]);
 
@@ -236,7 +274,7 @@ const generateAcademicYears = () => {
 // 选中的筛选条件
 const selectedClass = ref('');
 const selectedMajor = ref('');
-const selectedTableType = ref('moral');
+const selectedTableType = ref('comprehensive');
 const selectedYear = ref('');
 const selectedTerm = ref('');
 const selectedMonth = ref('');
@@ -324,7 +362,6 @@ const handleMajorChange = () => {
 // 表格类型映射，将前端选项映射到后端API所需的值
 const tableTypeMap = {
   'moral': 'A',           // 德育分表
-  'intellectual': 'B',    // 智育分表
   'research': 'C',        // 研究竞赛评价
   'sports': 'D',          // 体艺评价
   'comprehensive': 'ALL'  // 综合测评总表
@@ -334,6 +371,7 @@ const tableTypeMap = {
 const searchResults = async () => {
   isLoading.value = true;
   errorMessage.value = '';
+  dataLoaded.value = false;
   
   try {
     const token = localStorage.getItem('token');
@@ -362,9 +400,12 @@ const searchResults = async () => {
     console.log('查询结果:', response.data);
     
     if (response.data.success) {
+      // 更新当前显示的表格类型
+      currentTableType.value = selectedTableType.value;
       // 直接使用后端返回的数据，不做字段转换
       students.value = response.data.data;
       totalRecords.value = response.data.total;
+      dataLoaded.value = true;
     } else {
       errorMessage.value = response.data.message || '获取数据失败';
       students.value = [];
@@ -416,9 +457,11 @@ const viewMaterials = async (student) => {
     // 获取选中的表格类型
     const apiTableType = tableTypeMap[selectedTableType.value] || selectedTableType.value;
     
-    console.log('查询材料参数:', {
+    console.log('查询材料的请求参数:', {
       formType: apiTableType,
-      studentId: student.student_id
+      studentId: student.student_id,
+      selectedTableType: selectedTableType.value,
+      currentTableType: currentTableType.value
     });
     
     const response = await axios.get(`${API_URL}/api/review/materials`, {
@@ -433,24 +476,39 @@ const viewMaterials = async (student) => {
     
     isLoading.value = false;
     
-    console.log('材料查询响应:', response.data);
+    console.log('材料查询完整响应:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+      data: response.data
+    });
     
     if (response.data.success) {
-      if (response.data.data.length === 0) {
+      if (!response.data.data || response.data.data.length === 0) {
+        console.log('服务器返回的数据为空');
         alert('该学生暂无证明材料');
         return;
       }
-      console.log("获取到的材料:", response.data.data);
+      console.log("获取到的材料详情:", {
+        count: response.data.data.length,
+        materials: response.data.data
+      });
       materials.value = response.data.data;
       selectedStudent.value = student;
       showMaterialsModal.value = true;
     } else {
+      console.error('获取材料失败:', response.data);
       alert(response.data.message || '获取证明材料失败');
     }
   } catch (error) {
     isLoading.value = false;
-    console.error('获取证明材料失败:', error);
-    alert('获取证明材料失败，请稍后重试: ' + (error.message || '未知错误'));
+    console.error('获取证明材料失败:', {
+      error: error,
+      message: error.message,
+      response: error.response,
+      request: error.request
+    });
+    alert('获取证明材料失败，请稍后重试: ' + (error.response?.data?.message || error.message || '未知错误'));
   }
 };
 

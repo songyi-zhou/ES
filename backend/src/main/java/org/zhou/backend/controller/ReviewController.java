@@ -1,6 +1,7 @@
 package org.zhou.backend.controller;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,51 +68,112 @@ public class ReviewController {
     public ResponseEntity<ResponseDTO<List<Map<String, Object>>>> getMaterials(
             @RequestParam String formType,
             @RequestParam String studentId) {
+        try {
+            // 根据表格类型选择对应的表名
+            String tableName;
+            switch (formType) {
+                case "A":
+                    tableName = "moral_monthly_evaluation";
+                    break;
+                case "C":
+                    tableName = "research_competition_evaluation";
+                    break;
+                case "D":
+                    tableName = "sports_arts_evaluation";
+                    break;
+                default:
+                    return ResponseEntity.ok(ResponseDTO.success(List.of()));
+            }
 
-        // 先通过student_id查找user_id
-        String findUserIdSql = "SELECT id FROM users WHERE user_id = ?";
-        String userId = jdbcTemplate.queryForObject(findUserIdSql, String.class, studentId);
+            // 从对应表中获取 material_ids
+            String findMaterialIdsSql = String.format(
+                "SELECT material_ids FROM %s WHERE student_id = ? AND material_ids IS NOT NULL AND material_ids != ''",
+                tableName
+            );
+            List<String> materialIdsList = jdbcTemplate.queryForList(findMaterialIdsSql, String.class, studentId);
+            
+            if (materialIdsList.isEmpty()) {
+                return ResponseEntity.ok(ResponseDTO.success(List.of()));
+            }
 
-        if (userId == null) {
-            return ResponseEntity.ok(ResponseDTO.success(List.of()));
+            // 收集所有的材料ID
+            List<String> allMaterialIds = new ArrayList<>();
+            for (String materialIdsStr : materialIdsList) {
+                if (materialIdsStr != null && !materialIdsStr.isEmpty()) {
+                    String[] ids = materialIdsStr.split(",");
+                    allMaterialIds.addAll(Arrays.asList(ids));
+                }
+            }
+
+            if (allMaterialIds.isEmpty()) {
+                return ResponseEntity.ok(ResponseDTO.success(List.of()));
+            }
+
+            // 获取材料信息和对应的附件
+            String sql = """
+                SELECT 
+                    m.id, 
+                    m.user_id, 
+                    m.evaluation_type, 
+                    m.title, 
+                    m.description, 
+                    m.score, 
+                    m.status, 
+                    m.created_at, 
+                    m.updated_at, 
+                    m.reviewer_id,
+                    m.review_comment, 
+                    m.class_id, 
+                    m.reported_at, 
+                    m.reviewed_at,
+                    m.department, 
+                    m.squad,
+                    COALESCE(
+                        JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'id', a.id,
+                                'material_id', a.material_id,
+                                'file_name', a.file_name,
+                                'file_path', a.file_path,
+                                'file_size', a.file_size,
+                                'file_type', a.file_type
+                            )
+                        ),
+                        '[]'
+                    ) as attachments
+                FROM evaluation_materials m
+                LEFT JOIN evaluation_attachments a ON m.id = a.material_id
+                WHERE m.id IN (%s)
+                GROUP BY m.id
+                ORDER BY m.created_at DESC
+                """.formatted(String.join(",", allMaterialIds));
+
+            List<Map<String, Object>> materials = jdbcTemplate.queryForList(sql);
+
+            // 处理附件字段的格式
+            materials.forEach(material -> {
+                Object attachments = material.get("attachments");
+                if (attachments != null && !attachments.toString().equals("[]")) {
+                    // 如果是字符串形式的JSON数组，直接使用
+                    if (attachments instanceof String) {
+                        String attachmentsStr = (String) attachments;
+                        if (attachmentsStr.startsWith("[") && attachmentsStr.endsWith("]")) {
+                            // 已经是JSON数组格式，不需要额外处理
+                            return;
+                        }
+                    }
+                    // 如果不是预期的格式，设置为空数组
+                    material.put("attachments", new ArrayList<>());
+                } else {
+                    material.put("attachments", new ArrayList<>());
+                }
+            });
+
+            return ResponseEntity.ok(ResponseDTO.success(materials));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.ok(ResponseDTO.error("获取材料失败: " + e.getMessage()));
         }
-
-        // 从moral_monthly_evaluation表中获取material_ids
-        String findMaterialIdsSql = "SELECT material_ids FROM moral_monthly_evaluation WHERE student_id = ?";
-        String materialIds = jdbcTemplate.queryForObject(findMaterialIdsSql, String.class, studentId);
-
-        if (materialIds == null || materialIds.isEmpty()) {
-            return ResponseEntity.ok(ResponseDTO.success(List.of()));
-        }
-
-        String[] ids = materialIds.split(",");
-
-        // 获取材料信息和对应的附件
-        String sql = """
-            SELECT m.id, m.user_id, m.evaluation_type, m.title, m.description, 
-                   m.score, m.status, m.created_at, m.updated_at, m.reviewer_id,
-                   m.review_comment, m.class_id, m.reported_at, m.reviewed_at,
-                   m.department, m.squad,
-                   GROUP_CONCAT(
-                     JSON_OBJECT(
-                       'id', a.id,
-                       'material_id', a.material_id,
-                       'file_name', a.file_name,
-                       'file_path', a.file_path,
-                       'file_size', a.file_size,
-                       'file_type', a.file_type
-                     )
-                   ) as attachments
-            FROM evaluation_materials m
-            LEFT JOIN evaluation_attachments a ON m.id = a.material_id
-            WHERE m.id IN (%s)
-            AND m.user_id = ?
-            GROUP BY m.id
-            """.formatted(String.join(",", ids));
-
-        List<Map<String, Object>> materials = jdbcTemplate.queryForList(sql, userId);
-
-        return ResponseEntity.ok(ResponseDTO.success(materials));
     }
 
     @PostMapping("/publish")

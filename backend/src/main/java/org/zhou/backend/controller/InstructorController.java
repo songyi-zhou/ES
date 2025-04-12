@@ -365,7 +365,7 @@ public class InstructorController {
                     tableName = "sports_arts_evaluation";
                     break;
                 case "ALL":
-                    tableName = "aesthetic_education_evaluation";
+                    tableName = "comprehensive_result";
                     break;
                 default:
                     return ResponseEntity.badRequest().body(Map.of(
@@ -517,7 +517,7 @@ public class InstructorController {
                     tableTypeName = "体艺评价";
                     break;
                 case "ALL":
-                    tableName = "aesthetic_education_evaluation";
+                    tableName = "comprehensive_result";
                     tableTypeName = "综合测评总表";
                     break;
                 default:
