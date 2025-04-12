@@ -373,6 +373,7 @@ public class EvaluationConfigController {
                             ms.department, ms.major, ms.class_id, ms.total_base_score, ms.total_bonus_sum,
                             ms.total_penalty_sum, ms.total_raw_score, s.avg_score, s.stddev_score,
                             CASE
+                                WHEN (8 * ms.total_raw_score - 8 * s.avg_score) / s.stddev_score + 75 > 100 THEN 100
                                 WHEN s.stddev_score = 0 THEN 0
                                 ELSE (8 * ms.total_raw_score - 8 * s.avg_score) / s.stddev_score + 75
                             END as final_score,
@@ -419,35 +420,173 @@ public class EvaluationConfigController {
 
                 case "COMPREHENSIVE":
                     tableName = "comprehensive_result";
-                    insertSql = """
-                        INSERT INTO comprehensive_result 
-                        (academic_year, semester, description,
-                        student_id, name, class_name, squad, department, major, class_id,
-                        moral_score, academic_score, research_score, 
-                        sports_arts_score, extra_score, total_score, `rank`,
-                        publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
-                                null, null, null, null, 0, null, null,
-                                ?, ?, 0)
+                    
+                    // 1. 检查各个表是否有相关记录且已结束
+                    String checkTablesSql = """
+                        SELECT 
+                            (SELECT COUNT(*) FROM moral_semester_evaluation 
+                             WHERE academic_year = ? AND semester = ? AND status = -1) as moral_count,
+                            (SELECT COUNT(*) FROM academic_evaluation 
+                             WHERE academic_year = ? AND semester = ? AND status = -1) as academic_count,
+                            (SELECT COUNT(*) FROM research_competition_evaluation 
+                             WHERE academic_year = ? AND semester = ? AND status = -1) as research_count,
+                            (SELECT COUNT(*) FROM sports_arts_evaluation 
+                             WHERE academic_year = ? AND semester = ? AND status = -1) as sports_count
                         """;
                     
-                    for (Student student : students) {
-                        Object[] params = new Object[]{
-                            request.getAcademicYear(),
-                            request.getSemester(),
-                            request.getDescription(),
-                            student.getStudentId(),
-                            student.getName(),
-                            student.getClassName(),
-                            student.getSquad(),
-                            student.getDepartment(),
-                            student.getMajor(),
-                            student.getClassId(),
-                            publicityStartTime,
-                            publicityEndTime
-                        };
-                        jdbcTemplate.update(insertSql, params);
+                    Map<String, Object> tableCheckResult = jdbcTemplate.queryForMap(
+                        checkTablesSql,
+                        request.getAcademicYear(), request.getSemester(),
+                        request.getAcademicYear(), request.getSemester(),
+                        request.getAcademicYear(), request.getSemester(),
+                        request.getAcademicYear(), request.getSemester()
+                    );
+                    
+                    // 检查各个表的记录情况
+                    if (((Number) tableCheckResult.get("moral_count")).intValue() == 0) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "德育测评学期表缺少相关记录或未结束"
+                        ));
                     }
+                    if (((Number) tableCheckResult.get("academic_count")).intValue() == 0) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "学业测评表缺少相关记录或未结束"
+                        ));
+                    }
+                    if (((Number) tableCheckResult.get("research_count")).intValue() == 0) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "科研竞赛测评表缺少相关记录或未结束"
+                        ));
+                    }
+                    if (((Number) tableCheckResult.get("sports_count")).intValue() == 0) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "文体活动测评表缺少相关记录或未结束"
+                        ));
+                    }
+
+                    // 2. 插入综合测评结果
+                    String insertComprehensiveSql = """
+                        INSERT INTO comprehensive_result (
+                            academic_year, semester, student_id, name, class_name, 
+                            squad, department, major, class_id,
+                            moral_score, academic_score, research_score, sports_arts_score,
+                            total_score, `rank`, extra_score,
+                            publicity_start_time, publicity_end_time, status
+                        )
+                        SELECT 
+                            ?, ?, -- academic_year, semester
+                            base.student_id, base.name, base.class_name, base.squad, 
+                            base.department, base.major, base.class_id,
+                            moral.moral_score,
+                            academic.academic_score,
+                            research.research_score,
+                            sports.sports_score,
+                            (moral.moral_score * 0.2 + 
+                             academic.academic_score * 0.6 + 
+                             research.research_score * 0.15 + 
+                             sports.sports_score * 0.05) as total_score,
+                            @rank := IF(@current_major = base.major,
+                                       @rank + 1,
+                                       IF(@current_major := base.major, 1, 1)) as `rank`,
+                            0, -- extra_score默认为0
+                            ?, ?, -- publicity_start_time, publicity_end_time
+                            0 -- status
+                        FROM (
+                            SELECT DISTINCT 
+                                s.student_id, s.name, s.class_name, s.squad, 
+                                s.department, s.major, s.class_id
+                            FROM moral_semester_evaluation m
+                            JOIN students s ON m.student_id = s.student_id
+                            WHERE m.academic_year = ? AND m.semester = ?
+                        ) base
+                        LEFT JOIN (
+                            SELECT student_id, final_score as moral_score
+                            FROM moral_semester_evaluation
+                            WHERE academic_year = ? AND semester = ? AND status = -1
+                        ) moral ON base.student_id = moral.student_id
+                        LEFT JOIN (
+                            SELECT 
+                                ae.student_id,
+                                CASE 
+                                    WHEN s.stddev_score = 0 THEN 0
+                                    WHEN (8 * ae.raw_score - 8 * s.avg_score) / s.stddev_score + 75 > 100 THEN 100
+                                    ELSE (8 * ae.raw_score - 8 * s.avg_score) / s.stddev_score + 75
+                                END as academic_score
+                            FROM academic_evaluation ae
+                            JOIN (
+                                SELECT 
+                                    major,
+                                    AVG(raw_score) as avg_score,
+                                    STDDEV_POP(raw_score) as stddev_score
+                                FROM academic_evaluation
+                                WHERE academic_year = ? AND semester = ? AND status = -1
+                                GROUP BY major
+                            ) s ON ae.major = s.major
+                            WHERE ae.academic_year = ? AND ae.semester = ? AND ae.status = -1
+                        ) academic ON base.student_id = academic.student_id
+                        LEFT JOIN (
+                            SELECT 
+                                re.student_id,
+                                CASE 
+                                    WHEN s.stddev_score = 0 THEN 0
+                                    WHEN (8 * re.raw_score - 8 * s.avg_score) / s.stddev_score + 75 > 100 THEN 100
+                                    ELSE (8 * re.raw_score - 8 * s.avg_score) / s.stddev_score + 75
+                                END as research_score
+                            FROM research_competition_evaluation re
+                            JOIN (
+                                SELECT 
+                                    major,
+                                    AVG(raw_score) as avg_score,
+                                    STDDEV_POP(raw_score) as stddev_score
+                                FROM research_competition_evaluation
+                                WHERE academic_year = ? AND semester = ? AND status = -1
+                                GROUP BY major
+                            ) s ON re.major = s.major
+                            WHERE re.academic_year = ? AND re.semester = ? AND re.status = -1
+                        ) research ON base.student_id = research.student_id
+                        LEFT JOIN (
+                            SELECT 
+                                se.student_id,
+                                CASE 
+                                    WHEN s.stddev_score = 0 THEN 0
+                                    WHEN (8 * se.raw_score - 8 * s.avg_score) / s.stddev_score + 75 > 100 THEN 100
+                                    ELSE (8 * se.raw_score - 8 * s.avg_score) / s.stddev_score + 75
+                                END as sports_score
+                            FROM sports_arts_evaluation se
+                            JOIN (
+                                SELECT 
+                                    major,
+                                    AVG(raw_score) as avg_score,
+                                    STDDEV_POP(raw_score) as stddev_score
+                                FROM sports_arts_evaluation
+                                WHERE academic_year = ? AND semester = ? AND status = -1
+                                GROUP BY major
+                            ) s ON se.major = s.major
+                            WHERE se.academic_year = ? AND se.semester = ? AND se.status = -1
+                        ) sports ON base.student_id = sports.student_id
+                        CROSS JOIN (SELECT @rank := 0, @current_major := '') r
+                        ORDER BY base.major, total_score DESC
+                        """;
+
+                    // 初始化排名变量
+                    jdbcTemplate.execute("SET @rank = 0, @current_major = ''");
+                    
+                    jdbcTemplate.update(insertComprehensiveSql,
+                        request.getAcademicYear(), request.getSemester(),
+                        publicityStartTime, publicityEndTime,
+                        request.getAcademicYear(), request.getSemester(),
+                        request.getAcademicYear(), request.getSemester(),
+                        request.getAcademicYear(), request.getSemester(),
+                        request.getAcademicYear(), request.getSemester(),
+                        request.getAcademicYear(), request.getSemester(),
+                        request.getAcademicYear(), request.getSemester(),
+                        request.getAcademicYear(), request.getSemester(),
+                        request.getAcademicYear(), request.getSemester()
+                    );
                     break;
 
                 default:
