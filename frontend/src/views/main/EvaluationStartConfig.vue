@@ -587,19 +587,40 @@ const publishEvaluation = async () => {
       return
     }
 
-    // 发送发布请求
-    const response = await request.post('/evaluation-config/publish', {
+    // 计算总基础分
+    const totalBaseScore = basicConfig.value.formType === 'MONTHLY_A' ? 10 : calculateTotalBaseScore.value
+    
+    // 添加调试日志
+    console.log('=== 发送请求前的数据 ===');
+    console.log('基本配置:', basicConfig.value);
+    console.log('时间配置:', timeConfig.value);
+    console.log('分数配置:', scoreConfig.value);
+    console.log('注意事项配置:', noticeConfig.value);
+    console.log('计算得到的总基础分:', totalBaseScore);
+
+    // 构造请求数据
+    const requestData = {
       ...basicConfig.value,
       ...timeConfig.value,
       ...scoreConfig.value,
       ...noticeConfig.value,
-      // 确保日期格式正确
+      baseScore: totalBaseScore,
       declareStartTime: timeConfig.value.declareStartTime ? new Date(timeConfig.value.declareStartTime).toISOString() : null,
       declareEndTime: timeConfig.value.declareEndTime ? new Date(timeConfig.value.declareEndTime).toISOString() : null,
       reviewEndTime: timeConfig.value.reviewEndTime ? new Date(timeConfig.value.reviewEndTime).toISOString() : null,
       publicityStartTime: timeConfig.value.publicityStartTime ? new Date(timeConfig.value.publicityStartTime).toISOString() : null,
       publicityEndTime: timeConfig.value.publicityEndTime ? new Date(timeConfig.value.publicityEndTime).toISOString() : null
-    })
+    };
+
+    // 打印最终发送的请求数据
+    console.log('=== 最终发送的请求数据 ===');
+    console.log(JSON.stringify(requestData, null, 2));
+
+    const response = await request.post('/evaluation-config/publish', requestData);
+
+    // 打印响应数据
+    console.log('=== 服务器响应数据 ===');
+    console.log(response.data);
 
     if (response.data.success) {
       ElMessage.success(response.data.message)
@@ -627,10 +648,9 @@ const publishEvaluation = async () => {
   }
 }
 
-
 // 计算基础分总和
 const calculateTotalBaseScore = computed(() => {
-  if (basicConfig.value.formType === 'C' || basicConfig.value.formType === 'D') {
+  if (basicConfig.value.formType === 'TYPE_C' || basicConfig.value.formType === 'TYPE_D') {
     return basicConfig.value.monthCount * 10
   }
   return 10 // A类表每月固定10分
