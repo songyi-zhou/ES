@@ -68,13 +68,13 @@ public class EvaluationConfigController {
             switch (request.getFormType()) {
                 case "MONTHLY_A":
                     tableName = "moral_monthly_evaluation";
-                    String checkSql = """
+                    String checkSqlMonthly = """
                         SELECT COUNT(*) FROM moral_monthly_evaluation 
                         WHERE academic_year = ? AND semester = ? AND month = ?
                         """;
-                    int count = jdbcTemplate.queryForObject(checkSql, Integer.class, 
+                    int countMonthly = jdbcTemplate.queryForObject(checkSqlMonthly, Integer.class, 
                         request.getAcademicYear(), request.getSemester(), request.getMonth());
-                    if (count > 0) {
+                    if (countMonthly > 0) {
                         return ResponseEntity.badRequest().body(Map.of(
                             "success", false,
                             "message", "该月度德育测评已存在，请勿重复发布"
@@ -83,15 +83,63 @@ public class EvaluationConfigController {
                     break;
                 case "TYPE_C":
                     tableName = "research_competition_evaluation";
+                    String checkSqlC = """
+                        SELECT COUNT(*) FROM research_competition_evaluation 
+                        WHERE academic_year = ? AND semester = ?
+                        """;
+                    int countC = jdbcTemplate.queryForObject(checkSqlC, Integer.class, 
+                        request.getAcademicYear(), request.getSemester());
+                    if (countC > 0) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "该学期科研竞赛评测已存在，请勿重复发布"
+                        ));
+                    }
                     break;
                 case "TYPE_D":
                     tableName = "sports_arts_evaluation";
+                    String checkSqlD = """
+                        SELECT COUNT(*) FROM sports_arts_evaluation 
+                        WHERE academic_year = ? AND semester = ?
+                        """;
+                    int countD = jdbcTemplate.queryForObject(checkSqlD, Integer.class, 
+                        request.getAcademicYear(), request.getSemester());
+                    if (countD > 0) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "该学期文体活动评测已存在，请勿重复发布"
+                        ));
+                    }
                     break;
                 case "SEMESTER_A":
                     tableName = "moral_semester_evaluation";
+                    String checkSqlSemester = """
+                        SELECT COUNT(*) FROM moral_semester_evaluation 
+                        WHERE academic_year = ? AND semester = ?
+                        """;
+                    int countSemester = jdbcTemplate.queryForObject(checkSqlSemester, Integer.class, 
+                        request.getAcademicYear(), request.getSemester());
+                    if (countSemester > 0) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "该学期德育测评已存在，请勿重复发布"
+                        ));
+                    }
                     break;
                 case "COMPREHENSIVE":
                     tableName = "comprehensive_result";
+                    String checkSqlComprehensive = """
+                        SELECT COUNT(*) FROM comprehensive_result 
+                        WHERE academic_year = ? AND semester = ?
+                        """;
+                    int countComprehensive = jdbcTemplate.queryForObject(checkSqlComprehensive, Integer.class, 
+                        request.getAcademicYear(), request.getSemester());
+                    if (countComprehensive > 0) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "该学期综合测评已存在，请勿重复发布"
+                        ));
+                    }
                     break;
                 default:
                     return ResponseEntity.badRequest().body("未知的表类型");
@@ -262,31 +310,111 @@ public class EvaluationConfigController {
 
                 case "SEMESTER_A":
                     tableName = "moral_semester_evaluation";
-                    insertSql = """
-                        INSERT INTO moral_semester_evaluation 
-                        (academic_year, semester, description,
-                        student_id, name, squad, department, major, class_id,
-                        base_score, total_bonus, total_penalty, raw_score,
-                        publicity_start_time, publicity_end_time, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, null, ?, ?, 0)
+
+                    // 2. 检查A类月表是否满足条件
+                    String checkMonthlyTablesSql = """
+                        WITH month_count AS (
+                            SELECT COUNT(DISTINCT month) as distinct_months
+                            FROM moral_monthly_evaluation
+                            WHERE academic_year = ?
+                            AND semester = ?
+                        ),
+                        status_check AS (
+                            SELECT COUNT(*) as total_tables,
+                                   SUM(CASE WHEN status = -1 THEN 1 ELSE 0 END) as completed_tables
+                            FROM moral_monthly_evaluation
+                            WHERE academic_year = ?
+                            AND semester = ?
+                        )
+                        SELECT 
+                            mc.distinct_months,
+                            sc.total_tables,
+                            sc.completed_tables
+                        FROM month_count mc, status_check sc
                         """;
                     
-                    for (Student student : students) {
-                        Object[] params = new Object[]{
-                            request.getAcademicYear(),
-                            request.getSemester(),
-                            request.getDescription(),
-                            student.getStudentId(),
-                            student.getName(),
-                            student.getSquad(),
-                            student.getDepartment(),
-                            student.getMajor(),
-                            student.getClassId(),
-                            publicityStartTime,
-                            publicityEndTime
-                        };
-                        jdbcTemplate.update(insertSql, params);
+                    Map<String, Object> checkResult = jdbcTemplate.queryForMap(
+                        checkMonthlyTablesSql,
+                        request.getAcademicYear(),
+                        request.getSemester(),
+                        request.getAcademicYear(),
+                        request.getSemester()
+                    );
+                    
+                    int distinctMonths = ((Number) checkResult.get("distinct_months")).intValue();
+                    int totalTables = ((Number) checkResult.get("total_tables")).intValue();
+                    int completedTables = ((Number) checkResult.get("completed_tables")).intValue();
+                    
+                    if (distinctMonths < 3) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "本学期的A类月表数量不足3个月，无法生成学期评测"
+                        ));
                     }
+                    
+                    if (completedTables < totalTables) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "本学期仍有A类月表未结束，请等待所有月表完成后再生成学期评测"
+                        ));
+                    }
+
+                    // 3. 按专业分组插入数据
+                    String insertSemesterSql = """
+                        INSERT INTO moral_semester_evaluation (
+                            academic_year, semester, student_id, name, squad,
+                            department, major, class_id, base_score, total_bonus,
+                            total_penalty, raw_score, avg_score, std_dev,
+                            final_score, `rank`, status,
+                            publicity_start_time, publicity_end_time
+                        )
+                        SELECT
+                            ?, ?, ms.student_id, ms.name, ms.squad,
+                            ms.department, ms.major, ms.class_id, ms.total_base_score, ms.total_bonus_sum,
+                            ms.total_penalty_sum, ms.total_raw_score, s.avg_score, s.stddev_score,
+                            CASE
+                                WHEN s.stddev_score = 0 THEN 0
+                                ELSE (8 * ms.total_raw_score - 8 * s.avg_score) / s.stddev_score + 75
+                            END as final_score,
+                            ROW_NUMBER() OVER (PARTITION BY ms.major ORDER BY ms.total_raw_score DESC) as `rank`,
+                            3,
+                            ?, ?
+                        FROM (
+                            SELECT
+                                student_id, name, squad, department, major, class_id,
+                                SUM(base_score) as total_base_score,
+                                SUM(total_bonus) as total_bonus_sum,
+                                SUM(total_penalty) as total_penalty_sum,
+                                SUM(raw_score) as total_raw_score
+                            FROM moral_monthly_evaluation
+                            WHERE academic_year = ? AND semester = ? AND status = -1
+                            GROUP BY student_id, name, squad, department, major, class_id
+                        ) ms
+                        JOIN (
+                            SELECT
+                                major,
+                                AVG(total_raw_score) as avg_score,
+                                STDDEV_POP(total_raw_score) as stddev_score
+                            FROM (
+                                SELECT major, student_id, SUM(raw_score) as total_raw_score
+                                FROM moral_monthly_evaluation
+                                WHERE academic_year = ? AND semester = ? AND status = -1
+                                GROUP BY major, student_id
+                            ) t
+                            GROUP BY major
+                        ) s ON ms.major = s.major
+                    """;
+
+                    jdbcTemplate.update(insertSemesterSql,
+                        request.getAcademicYear(),
+                        request.getSemester(),
+                        publicityStartTime,
+                        publicityEndTime,
+                        request.getAcademicYear(),
+                        request.getSemester(),
+                        request.getAcademicYear(),
+                        request.getSemester()
+                    );
                     break;
 
                 case "COMPREHENSIVE":
@@ -296,7 +424,7 @@ public class EvaluationConfigController {
                         (academic_year, semester, description,
                         student_id, name, class_name, squad, department, major, class_id,
                         moral_score, academic_score, research_score, 
-                        sports_arts_score, extra_score, total_score, rank,
+                        sports_arts_score, extra_score, total_score, `rank`,
                         publicity_start_time, publicity_end_time, status)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
                                 null, null, null, null, 0, null, null,
