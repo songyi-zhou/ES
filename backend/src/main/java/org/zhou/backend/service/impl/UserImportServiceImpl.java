@@ -33,6 +33,7 @@ import org.zhou.backend.service.UserImportService;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Propagation;
 
 @Service
 @Transactional
@@ -55,136 +56,232 @@ public class UserImportServiceImpl implements UserImportService {
         ImportResult result = new ImportResult();
         List<String> errors = new ArrayList<>();
 
-        for (Row row : sheet) {
-            if (row.getRowNum() == 0) continue;
-            
-            try {
-                // 获取单元格值
-                String userType = getCellValueAsString(row.getCell(0));
-                String userId = getCellValueAsString(row.getCell(1));
-                String name = getCellValueAsString(row.getCell(2));
-                String department = getCellValueAsString(row.getCell(3));
-                String major = getCellValueAsString(row.getCell(4));
+        try {
+            for (Row row : sheet) {
+                if (row.getRowNum() == 0) continue;
                 
-                // 检查必填字段
-                if (userType == null || userId == null || name == null || department == null) {
-                    errors.add("第" + (row.getRowNum() + 1) + "行: 必填字段不能为空");
-                    continue;
+                try {
+                    processRow(row, result, errors);
+                } catch (Exception e) {
+                    String error = "第" + (row.getRowNum() + 1) + "行: " + e.getMessage();
+                    errors.add(error);
+                    logImportError(error);
+                    result.incrementFailureCount();
                 }
-
-                // 验证用户类型
-                if (!userType.equals("student") && !userType.equals("instructor")) {
-                    errors.add("第" + (row.getRowNum() + 1) + "行: 用户类型必须是 student 或 instructor");
-                    continue;
-                }
-
-                // 创建用户基本信息
-                User user = new User();
-                user.setUserId(userId);
-                user.setPassword(passwordEncoder.encode("123456")); // 默认密码
-                user.setName(name);
-                user.setDepartment(department);
-                user.setMajor(major);
-                
-                Set<String> roles = new HashSet<>();
-                
-                if (userType.equals("instructor")) {
-                    // 导员信息
-                    if (userId.length() != 8 || !userId.matches("\\d{8}")) {
-                        errors.add("第" + (row.getRowNum() + 1) + "行: 导员工号必须为8位纯数字");
-                        continue;
-                    }
-                    user.setRoleLevel(3);
-                    roles.add("ROLE_COUNSELOR");
-                    
-                    String squadList = getCellValueAsString(row.getCell(7));
-                    if (squadList == null) {
-                        errors.add("第" + (row.getRowNum() + 1) + "行: 导员必须填写负责的中队信息");
-                        continue;
-                    }
-                    
-                    // 验证每个中队的格式
-                    String[] squads = squadList.split(",");
-                    boolean isValid = true;
-                    for (String squad : squads) {
-                        if (!squad.trim().matches("^\\d{4}-[1-9]$")) {
-                            errors.add("第" + (row.getRowNum() + 1) + "行: 导员中队格式错误，应为'年级-序号'，如'2021-1'，多个用逗号分隔");
-                            isValid = false;
-                            break;
-                        }
-                    }
-                    if (!isValid) continue;
-                    
-                    user.setSquad(squadList);
-                    
-                    Instructor instructor = new Instructor();
-                    instructor.setInstructorId(userId);
-                    instructor.setName(name);
-                    instructor.setDepartment(department);
-                    instructor.setMajor(major);
-                    instructor.setSquadList(squadList);
-                    instructorRepository.save(instructor);
-                } else {
-                    // 学生信息
-                    if (userId.length() != 10 || !userId.matches("\\d{10}")) {
-                        errors.add("第" + (row.getRowNum() + 1) + "行: 学生学号必须为10位纯数字");
-                        continue;
-                    }
-                    
-                    String squad = getCellValueAsString(row.getCell(7));
-                    if (squad == null || !squad.matches("^\\d{4}-[1-9]$")) {
-                        errors.add("第" + (row.getRowNum() + 1) + "行: 学生中队格式错误，应为'年级-序号'，如'2021-1'");
-                        continue;
-                    }
-                    user.setSquad(squad);
-                    
-                    // 从学号中提取年级信息（第3-6位）
-                    String grade = userId.substring(2, 6);
-                    user.setGrade(grade);
-                    
-                    // 验证中队年级与学号年级是否匹配
-                    String squadGrade = squad.substring(0, 4);
-                    if (!grade.equals(squadGrade)) {
-                        errors.add("第" + (row.getRowNum() + 1) + "行: 中队年级与学号中的年级不匹配");
-                        continue;
-                    }
-                    
-                    String className = getCellValueAsString(row.getCell(5));
-                    String classId = getCellValueAsString(row.getCell(6));
-                    
-                    if (className == null || classId == null) {
-                        errors.add("第" + (row.getRowNum() + 1) + "行: 学生必须填写班级信息");
-                        continue;
-                    }
-                    
-                    user.setRoleLevel(0);
-                    roles.add("ROLE_STUDENT");
-                    user.setClassName(className);
-                    user.setClassId(classId);
-                    
-                    Student student = new Student();
-                    student.setStudentId(userId);
-                    student.setName(name);
-                    student.setDepartment(department);
-                    student.setMajor(major);
-                    student.setClassName(className);
-                    student.setClassId(classId);
-                    student.setSquad(squad);
-                    studentRepository.save(student);
-                }
-                
-                user.setRoles(roles);
-                userRepository.save(user);
-                result.incrementSuccessCount();
-                
-            } catch (Exception e) {
-                errors.add("第" + (row.getRowNum() + 1) + "行: " + e.getMessage());
-                result.incrementFailureCount();
             }
+            
+            // 添加导入完成的总结日志
+            logImportSummary(result.getSuccessCount(), result.getFailureCount());
+            
+        } finally {
+            workbook.close();
         }
         
         result.setErrors(errors);
         return result;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    protected void processRow(Row row, ImportResult result, List<String> errors) {
+        // 获取单元格值
+        String userType = getCellValueAsString(row.getCell(0));
+        String userId = getCellValueAsString(row.getCell(1));
+        String name = getCellValueAsString(row.getCell(2));
+        String department = getCellValueAsString(row.getCell(3));
+        String major = getCellValueAsString(row.getCell(4));
+        
+        // 检查必填字段
+        if (userType == null || userId == null || name == null || department == null) {
+            String error = "第" + (row.getRowNum() + 1) + "行: 必填字段不能为空";
+            errors.add(error);
+            logImportError(error);
+            return;
+        }
+
+        // 验证用户类型
+        if (!userType.equals("student") && !userType.equals("instructor")) {
+            String error = "第" + (row.getRowNum() + 1) + "行: 用户类型必须是 student 或 instructor";
+            errors.add(error);
+            logImportError(error);
+            return;
+        }
+
+        // 检查用户是否已存在
+        if (userRepository.findByUserId(userId).isPresent()) {
+            String error = "第" + (row.getRowNum() + 1) + "行: 用户ID已存在";
+            errors.add(error);
+            logImportError(error);
+            return;
+        }
+
+        // 创建用户基本信息
+        User user = new User();
+        user.setUserId(userId);
+        user.setPassword(passwordEncoder.encode("123456")); // 默认密码
+        user.setName(name);
+        user.setDepartment(department);
+        user.setMajor(major);
+        
+        Set<String> roles = new HashSet<>();
+        
+        if (userType.equals("instructor")) {
+            processInstructor(row, user, roles, errors);
+        } else {
+            processStudent(row, user, roles, errors);
+        }
+        
+        if (!errors.isEmpty()) {
+            return;
+        }
+        
+        user.setRoles(roles);
+        userRepository.save(user);
+        result.incrementSuccessCount();
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    protected void processInstructor(Row row, User user, Set<String> roles, List<String> errors) {
+        String userId = user.getUserId();
+        if (userId.length() != 8 || !userId.matches("\\d{8}")) {
+            String error = "第" + (row.getRowNum() + 1) + "行: 导员工号必须为8位纯数字";
+            errors.add(error);
+            logImportError(error);
+            return;
+        }
+        
+        String squadList = getCellValueAsString(row.getCell(7));
+        if (squadList == null) {
+            String error = "第" + (row.getRowNum() + 1) + "行: 导员必须填写负责的中队信息";
+            errors.add(error);
+            logImportError(error);
+            return;
+        }
+        
+        // 验证每个中队的格式
+        String[] squads = squadList.split(",");
+        for (String squad : squads) {
+            if (!squad.trim().matches("^\\d{4}-[1-9]$")) {
+                String error = "第" + (row.getRowNum() + 1) + "行: 导员中队格式错误，应为'年级-序号'，如'2021-1'，多个用逗号分隔";
+                errors.add(error);
+                logImportError(error);
+                return;
+            }
+        }
+        
+        user.setRoleLevel(3);
+        roles.add("ROLE_COUNSELOR");
+        user.setSquad(squadList);
+        user.setMajor(null);
+        
+        Instructor instructor = new Instructor();
+        instructor.setInstructorId(userId);
+        instructor.setName(user.getName());
+        instructor.setDepartment(user.getDepartment());
+        instructor.setMajor(null);
+        instructor.setSquadList(squadList);
+        instructorRepository.save(instructor);
+        
+        logImportSuccess(String.format("导入导员: %s (%s), 负责中队: %s", 
+            user.getName(), userId, squadList));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    protected void processStudent(Row row, User user, Set<String> roles, List<String> errors) {
+        String userId = user.getUserId();
+        if (userId.length() != 10 || !userId.matches("\\d{10}")) {
+            String error = "第" + (row.getRowNum() + 1) + "行: 学生学号必须为10位纯数字";
+            errors.add(error);
+            logImportError(error);
+            return;
+        }
+        
+        String squad = getCellValueAsString(row.getCell(7));
+        if (squad == null || !squad.matches("^\\d{4}-[1-9]$")) {
+            String error = "第" + (row.getRowNum() + 1) + "行: 学生中队格式错误，应为'年级-序号'，如'2021-1'";
+            errors.add(error);
+            logImportError(error);
+            return;
+        }
+        
+        String grade = userId.substring(2, 6);
+        String squadGrade = squad.substring(0, 4);
+        if (!grade.equals(squadGrade)) {
+            String error = "第" + (row.getRowNum() + 1) + "行: 中队年级与学号中的年级不匹配";
+            errors.add(error);
+            logImportError(error);
+            return;
+        }
+        
+        String className = getCellValueAsString(row.getCell(5));
+        String classId = getCellValueAsString(row.getCell(6));
+        
+        if (className == null || classId == null) {
+            String error = "第" + (row.getRowNum() + 1) + "行: 学生必须填写班级信息";
+            errors.add(error);
+            logImportError(error);
+            return;
+        }
+        
+        user.setRoleLevel(0);
+        roles.add("ROLE_STUDENT");
+        user.setClassName(className);
+        user.setClassId(classId);
+        user.setSquad(squad);
+        user.setGrade(grade);
+        
+        Student student = new Student();
+        student.setStudentId(userId);
+        student.setName(user.getName());
+        student.setDepartment(user.getDepartment());
+        student.setMajor(user.getMajor());
+        student.setClassName(className);
+        student.setClassId(classId);
+        student.setSquad(squad);
+        studentRepository.save(student);
+        
+        logImportSuccess(String.format("导入学生: %s (%s), 班级: %s, 中队: %s", 
+            user.getName(), userId, className, squad));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    protected void logImportError(String error) {
+        try {
+            addImportLog("批量导入", "error", error);
+        } catch (Exception e) {
+            log.error("记录导入错误日志失败", e);
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    protected void logImportSuccess(String message) {
+        try {
+            addImportLog("批量导入", "success", message);
+        } catch (Exception e) {
+            log.error("记录导入成功日志失败", e);
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    protected void logImportSummary(int successCount, int failureCount) {
+        try {
+            addImportLog("批量导入", "info", 
+                String.format("导入完成: 成功 %d 条, 失败 %d 条", successCount, failureCount));
+        } catch (Exception e) {
+            log.error("记录导入总结日志失败", e);
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    protected void addImportLog(String type, String status, String description) {
+        ImportLog log = new ImportLog();
+        log.setType(type);
+        log.setStatus(status);
+        if (description != null && description.length() > 200) {
+            description = description.substring(0, 197) + "...";
+        }
+        log.setDescription(description);
+        log.setTime(LocalDateTime.now());
+        importLogRepository.save(log);
     }
 
     // 工具方法：安全地获取单元格的字符串值
@@ -265,7 +362,6 @@ public class UserImportServiceImpl implements UserImportService {
             instructor.setInstructorId(userId);
             instructor.setName(request.getName());
             instructor.setDepartment(request.getDepartment());
-            instructor.setMajor(request.getMajor());
             instructor.setSquadList(request.getSquad());
             instructorRepository.save(instructor);
             
@@ -295,15 +391,6 @@ public class UserImportServiceImpl implements UserImportService {
         
         user.setRoles(roles);
         return userRepository.save(user);
-    }
-
-    private void addImportLog(String type, String status, String description) {
-        ImportLog log = new ImportLog();
-        log.setType(type);
-        log.setStatus(status);
-        log.setDescription(description);
-        log.setTime(LocalDateTime.now());
-        importLogRepository.save(log);
     }
 
     @Override

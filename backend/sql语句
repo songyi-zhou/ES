@@ -232,7 +232,6 @@ CREATE TABLE instructors (
     instructor_id VARCHAR(20) UNIQUE NOT NULL COMMENT '工号',
     name VARCHAR(50) NOT NULL COMMENT '姓名',
     department VARCHAR(50) NOT NULL COMMENT '学院',
-    major VARCHAR(50) COMMENT '专业',
     squad_list VARCHAR(100) COMMENT '负责的中队列表，用逗号分隔',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
