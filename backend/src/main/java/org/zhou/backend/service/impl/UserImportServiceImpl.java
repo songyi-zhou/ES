@@ -203,8 +203,8 @@ public class UserImportServiceImpl implements UserImportService {
             return;
         }
         
-        String grade = userId.substring(2, 6);
-        // String squadGrade = squad.substring(0, 4);
+        // String grade = userId.substring(2, 6);
+        String grade = squad.substring(0, 4);
         // if (!grade.equals(squadGrade)) {
         //     String error = "第" + (row.getRowNum() + 1) + "行: 中队年级与学号中的年级不匹配";
         //     errors.add(error);
