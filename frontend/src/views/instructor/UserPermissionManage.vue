@@ -20,16 +20,30 @@
               </template>
             </el-input>
             <el-select
+              v-model="selectedMajor"
+              placeholder="选择专业"
+              clearable
+              @change="handleMajorChange"
+            >
+              <el-option
+                v-for="major in majors"
+                :key="major.id"
+                :label="major.name"
+                :value="major.name"
+              />
+            </el-select>
+            <el-select
               v-model="selectedClass"
               placeholder="选择班级"
               clearable
+              :disabled="!selectedMajor"
               @change="handleFilterChange"
             >
               <el-option
-                v-for="option in classOptions"
-                :key="option.value"
-                :label="option.label"
-                :value="option.value"
+                v-for="option in filteredClasses"
+                :key="option.id"
+                :label="option.name"
+                :value="option.name"
               />
             </el-select>
             <el-select
@@ -228,9 +242,11 @@ import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 import { useUserStore } from '@/stores/user'
 import StudentDetailDialog from './components/StudentDetailDialog.vue'
+import { useRouter } from 'vue-router'
 
 const userStore = useUserStore()
 const currentUser = ref(userStore.currentUser)
+const router = useRouter()
 
 // 搜索和筛选相关
 const searchKeyword = ref('')
@@ -264,20 +280,81 @@ const roleRules = {
 const users = ref([])
 
 // 选项数据
-const classOptions = ref([
-  { label: '计科2101', value: '计科2101' },
-  { label: '计科2102', value: '计科2102' },
-  { label: '计科2103', value: '计科2103' },
-  { label: '计科2104', value: '计科2104' }
-])
-
+const selectedMajor = ref('')
+const majors = ref([])
+const classes = ref([])
 const roleOptions = ref([])
+
+// 获取专业列表
+const getMajors = async () => {
+  try {
+    const response = await request.get('/classes/majors')
+    if (response.data.success) {
+      majors.value = response.data.data.map((majorName) => ({
+        id: majorName,
+        name: majorName
+      }))
+    } else {
+      ElMessage.error('获取专业列表失败')
+    }
+  } catch (error) {
+    console.error('获取专业列表失败:', error)
+    if (error.response?.status === 403) {
+      router.push('/login')
+    }
+  }
+}
+
+// 获取班级列表
+const getClasses = async () => {
+  if (!selectedMajor.value) {
+    classes.value = []
+    return
+  }
+  
+  try {
+    const response = await request.get('/classes/by-major', {
+      params: { major: selectedMajor.value }
+    })
+    
+    if (response.data.success) {
+      classes.value = response.data.data.map(classInfo => ({
+        id: classInfo.id || classInfo.name,
+        name: classInfo.name
+      }))
+    } else {
+      ElMessage.error('获取班级列表失败')
+    }
+  } catch (error) {
+    console.error('获取班级列表失败:', error)
+    if (error.response?.status === 403) {
+      router.push('/login')
+    }
+  }
+}
+
+// 根据选择的专业筛选班级
+const filteredClasses = computed(() => {
+  return classes.value
+})
+
+// 监听专业变化
+const handleMajorChange = () => {
+  selectedClass.value = '' // 重置班级选择
+  getClasses() // 获取对应专业的班级
+  handleFilterChange() // 触发筛选
+}
 
 // 获取角色选项
 const fetchRoleOptions = async () => {
   try {
-    const { data } = await request.get('/roles/student')
-    roleOptions.value = data
+    const response = await request.get('/roles/student')
+    console.log('获取角色选项响应:', response) // 添加调试日志
+    roleOptions.value = [
+      { value: 'user', label: '普通学生' },
+      { value: 'groupMember', label: '组员' },
+      { value: 'groupLeader', label: '组长' }
+    ]
   } catch (error) {
     console.error('获取角色列表失败:', error)
     ElMessage.error('获取角色列表失败')
@@ -296,32 +373,58 @@ const getRoleDisplayName = (role) => {
   return roleDisplayNames[role] || '普通学生';
 };
 
-// 获取学生列表
+// 修改获取学生列表的方法
 const fetchStudents = async () => {
+  loading.value = true
   try {
+    console.log('正在获取学生列表，参数:', {
+      keyword: searchKeyword.value || undefined,
+      className: selectedClass.value || undefined,
+      role: filterRole.value || undefined
+    }) // 添加调试日志
+    
     const response = await request.get('/instructor/students', {
       params: {
-        keyword: searchKeyword.value,
-        className: selectedClass.value,
-        role: filterRole.value
+        keyword: searchKeyword.value || undefined,
+        className: selectedClass.value || undefined,
+        role: filterRole.value || undefined
       }
-    });
+    })
     
-    // 直接使用后端返回的数据，不需要转换
-    users.value = response.data;
+    console.log('获取学生列表响应:', response) // 添加调试日志
+    
+    if (response.data) {
+      const allData = response.data
+      total.value = allData.length
+      
+      const start = (currentPage.value - 1) * pageSize.value
+      const end = start + pageSize.value
+      users.value = allData.slice(start, end)
+      
+      console.log('处理后的数据:', {
+        total: total.value,
+        currentPage: currentPage.value,
+        pageSize: pageSize.value,
+        displayedData: users.value
+      }) // 添加调试日志
+    } else {
+      ElMessage.error('获取学生列表失败')
+    }
   } catch (error) {
-    console.error('获取学生列表失败:', error);
-    ElMessage.error('获取学生列表失败');
+    console.error('获取学生列表失败:', error)
+    if (error.response?.status === 403) {
+      ElMessage.error('没有权限访问学生列表')
+      router.push('/login')
+    } else {
+      ElMessage.error(error.response?.data || '获取学生列表失败')
+    }
+  } finally {
+    loading.value = false
   }
-};
+}
 
-// 过滤后的用户列表
-const filteredUsers = computed(() => {
-  // 分页处理
-  const start = (currentPage.value - 1) * pageSize.value
-  const end = start + pageSize.value
-  return users.value.slice(start, end)
-})
+// 修改计算属性
+const filteredUsers = computed(() => users.value)
 
 // 打开修改权限对话框
 const openRoleDialog = (row) => {
@@ -396,42 +499,47 @@ const submitRoleChange = async () => {
   }
 }
 
-// 处理分页大小变化
+// 修改分页处理方法
 const handleSizeChange = (val) => {
   pageSize.value = val
+  currentPage.value = 1 // 重置到第一页
   fetchStudents()
 }
 
-// 处理当前页变化
 const handleCurrentChange = (val) => {
   currentPage.value = val
   fetchStudents()
 }
 
-// 处理搜索
+// 修改搜索处理方法
 const handleSearch = () => {
-  currentPage.value = 1
+  currentPage.value = 1 // 重置到第一页
   fetchStudents()
 }
 
-// 处理搜索清除
 const handleSearchClear = () => {
-  currentPage.value = 1
+  searchKeyword.value = ''
+  currentPage.value = 1 // 重置到第一页
   fetchStudents()
 }
 
-// 处理筛选条件变化
 const handleFilterChange = () => {
-  currentPage.value = 1
+  currentPage.value = 1 // 重置到第一页
   fetchStudents()
 }
 
 // 在组件挂载时获取角色列表
-onMounted(() => {
-  // 如果需要刷新用户信息，可以调用 store 中的相关方法
-  // 比如 userStore.getUserInfo() 或其他已定义的方法
-  fetchRoleOptions()
-  fetchStudents()
+onMounted(async () => {
+  try {
+    console.log('组件挂载，开始初始化...') // 添加调试日志
+    await fetchRoleOptions()
+    await getMajors()
+    await fetchStudents()
+    console.log('初始化完成') // 添加调试日志
+  } catch (error) {
+    console.error('初始化失败:', error)
+    ElMessage.error('页面初始化失败')
+  }
 })
 
 // 监听分页和筛选条件变化
@@ -454,11 +562,11 @@ const handleRoleSubmit = async () => {
     ElMessage.success('修改权限成功')
     
     // 如果是修改为综测小组成员，显示额外提示
-    if (roleForm.value.role === 'groupmember') {
+    if (roleForm.value.role === 'groupMember') {
       ElMessage({
         type: 'info',
         message: '请前往中队干部管理页面手动添加小组成员',
-        duration: 5000  // 显示5秒
+        duration: 5000
       })
     }
     
@@ -466,7 +574,7 @@ const handleRoleSubmit = async () => {
     fetchStudents()
   } catch (error) {
     console.error('修改权限失败:', error)
-    ElMessage.error('修改权限失败')
+    ElMessage.error(error.response?.data?.message || '修改权限失败')
   }
 }
 
