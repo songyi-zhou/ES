@@ -162,17 +162,22 @@
                 <div class="card-header">
                   <h3>中队干部列表</h3>
                   <div class="header-actions">
-                    <el-input
-                      v-model="searchText"
-                      placeholder="搜索干部信息"
-                      clearable
-                      @input="filterCadres"
-                      style="width: 200px"
-                    >
-                      <template #prefix>
-                        <el-icon><Search /></el-icon>
-                      </template>
-                    </el-input>
+                    <div class="search-container">
+                      <el-input
+                        v-model="searchText"
+                        placeholder="搜索干部信息"
+                        clearable
+                        @keyup.enter="handleSearch"
+                        style="width: 200px"
+                      >
+                        <template #prefix>
+                          <el-icon><Search /></el-icon>
+                        </template>
+                      </el-input>
+                      <el-button type="primary" @click="handleSearch">
+                        搜索
+                      </el-button>
+                    </div>
                     <el-button type="info" @click="refreshCadres">
                       刷新列表
                     </el-button>
@@ -343,46 +348,70 @@ const importExcel = async () => {
       return
     }
 
-    // 打印请求信息，便于调试
-    console.log('准备上传文件:', fileInfo.value.name)
-    console.log('上传地址:', `${API_URL}/api/instructor/squad-cadre/import-excel`)
-
-    // 使用fetch API代替axios，处理multipart/form-data
-    const response = await fetch(`${API_URL}/api/instructor/squad-cadre/import-excel`, {
-      method: 'POST',
+    const response = await axios.post(`${API_URL}/api/instructor/squad-cadre/import-excel`, formData, {
       headers: {
-        'Authorization': `Bearer ${token}`
-        // 不要设置Content-Type，让浏览器自动设置boundary
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
       },
-      body: formData
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total) {
+          importProgress.value = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          )
+        }
+      }
     })
 
-    // 获取响应
-    const data = await response.json()
-    
-    if (response.ok) {
-      ElMessage.success(`成功导入${data.count || 0}条记录`)
-      fileInfo.value = null
-      importProgress.value = 100
-      // 刷新干部列表
-      fetchCadres()
+    console.log('导入响应:', response.data) // 添加调试日志
+
+    if (response.data) {
+      const { success, message, data } = response.data
       
-      // 如果有导入错误，显示警告
-      if (data.errors && data.errors.length > 0) {
-        importErrors.value = data.errors
-        ElMessage({
-          type: 'warning',
-          message: `有${data.errors.length}条记录导入失败`,
-          duration: 5000
-        })
-        console.warn('导入错误:', data.errors)
+      if (success) {
+        ElMessage.success(message || '导入成功')
+        fileInfo.value = null
+        importProgress.value = 100
+        
+        // 刷新干部列表
+        fetchCadres()
+        
+        // 如果有导入结果数据
+        if (data) {
+          const successCount = data.successCount || 0
+          const failureCount = data.failureCount || 0
+          const totalCount = successCount + failureCount
+          
+          if (totalCount > 0) {
+            if (failureCount > 0) {
+              ElMessage({
+                type: 'warning',
+                message: `导入完成：成功${successCount}条，失败${failureCount}条`,
+                duration: 5000
+              })
+              
+              // 如果有具体的错误信息
+              if (data.errors && data.errors.length > 0) {
+                console.warn('导入错误详情:', data.errors)
+                data.errors.forEach(error => {
+                  ElMessage.error(error)
+                })
+              }
+            } else {
+              ElMessage.success(`成功导入${successCount}条记录`)
+            }
+          }
+        }
+      } else {
+        throw new Error(message || '导入失败')
       }
     } else {
-      throw new Error(data.message || '导入失败')
+      throw new Error('服务器响应格式错误')
     }
   } catch (error) {
     console.error('导入失败:', error)
-    ElMessage.error(error.message || '导入失败，请检查文件格式')
+    const errorMsg = error.response?.data?.message || error.message || '导入失败，请检查文件格式'
+    ElMessage.error(errorMsg)
+    importProgress.value = 0
   } finally {
     importing.value = false
   }
@@ -422,6 +451,8 @@ const fetchClasses = async () => {
       return
     }
     
+    console.log('正在获取班级列表，专业:', formData.major)
+    
     const response = await axios.get(`${API_URL}/api/classes/by-major`, {
       params: { major: formData.major },
       headers: {
@@ -429,15 +460,29 @@ const fetchClasses = async () => {
       }
     })
     
+    console.log('获取班级列表响应:', response.data)
+    
     if (response.data.success) {
-      classes.value = response.data.data
+      classes.value = response.data.data.map(cls => ({
+        id: cls.id,
+        name: cls.className || cls.name
+      }))
+      console.log('处理后的班级列表:', classes.value)
     } else {
       console.error('获取班级列表失败:', response.data.message)
+      ElMessage.error(response.data.message || '获取班级列表失败')
     }
   } catch (error) {
     console.error('获取班级列表失败:', error)
+    ElMessage.error('获取班级列表失败')
   }
 }
+
+// 根据选择的专业筛选班级
+const filteredClasses = computed(() => {
+  console.log('当前班级列表:', classes.value)
+  return classes.value
+})
 
 // 获取学生列表
 const fetchStudents = async () => {
@@ -506,12 +551,15 @@ const fetchCadres = async () => {
 
 // 处理专业变化
 const handleMajorChange = () => {
+  console.log('专业变更为:', formData.major)
   formData.classId = ''
   formData.className = ''
   formData.studentId = ''
   formData.studentName = ''
   if (formData.major) {
     fetchClasses()
+  } else {
+    classes.value = []
   }
 }
 
@@ -665,6 +713,23 @@ const progressFormat = (percentage) => {
   return percentage === 100 ? '完成' : `${percentage}%`
 }
 
+// 处理搜索
+const handleSearch = () => {
+  if (!searchText.value) {
+    filteredCadres.value = [...cadres.value]
+    return
+  }
+  
+  const searchLower = searchText.value.toLowerCase()
+  filteredCadres.value = cadres.value.filter(cadre => 
+    cadre.major.toLowerCase().includes(searchLower) ||
+    cadre.class_name.toLowerCase().includes(searchLower) ||
+    cadre.student_name.toLowerCase().includes(searchLower) ||
+    cadre.student_id.toLowerCase().includes(searchLower) ||
+    cadre.position.toLowerCase().includes(searchLower)
+  )
+}
+
 // 在组件挂载时初始化数据
 onMounted(() => {
   fetchMajors()
@@ -746,6 +811,13 @@ const importErrors = ref([])
 .header-actions {
   display: flex;
   gap: 10px;
+  align-items: center;
+}
+
+.search-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .file-info {

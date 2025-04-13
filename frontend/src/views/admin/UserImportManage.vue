@@ -315,22 +315,56 @@ const importExcel = async () => {
         'Content-Type': 'multipart/form-data'
       },
       onUploadProgress: (progressEvent) => {
-        importProgress.value = Math.round(
-          (progressEvent.loaded * 100) / progressEvent.total
-        )
+        if (progressEvent.total) {
+          importProgress.value = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          )
+        }
       }
     })
 
-    if (response.data.success) {
-      ElMessage.success('导入成功')
-      fileInfo.value = null
-      importProgress.value = 100
-      // 刷新日志
-      refreshLogs()
+    console.log('导入响应:', response) // 添加调试日志
+
+    // 检查响应中的data字段
+    if (response.data) {
+      const { success, message, data } = response.data
+      
+      if (success) {
+        ElMessage.success(message || '导入成功')
+        fileInfo.value = null
+        importProgress.value = 100
+        
+        // 添加成功日志
+        addImportLog('批量导入', 'success', 
+          `成功导入${data?.count || 0}条记录`
+        )
+        
+        // 如果有部分导入失败的记录
+        if (data?.errors?.length > 0) {
+          ElMessage({
+            type: 'warning',
+            message: `有${data.errors.length}条记录导入失败`,
+            duration: 5000
+          })
+          // 为每个错误添加日志
+          data.errors.forEach(error => {
+            addImportLog('批量导入', 'error', error)
+          })
+        }
+        
+        // 刷新日志
+        refreshLogs()
+      } else {
+        throw new Error(message || '导入失败')
+      }
+    } else {
+      throw new Error('服务器响应格式错误')
     }
   } catch (error) {
     console.error('导入失败:', error)
-    ElMessage.error(error.response?.data?.message || '导入失败')
+    ElMessage.error(error.response?.data?.message || error.message || '导入失败')
+    // 添加失败日志
+    addImportLog('批量导入', 'error', '导入失败', error.message)
   } finally {
     importing.value = false
   }

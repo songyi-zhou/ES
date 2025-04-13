@@ -89,11 +89,11 @@ public class SquadCadreController {
         
         // 设置示例数据
         Row exampleRow = sheet.createRow(1);
-        exampleRow.createCell(0).setCellValue("计算机科学与技术学院");
+        exampleRow.createCell(0).setCellValue("信息科学技术学院");
         exampleRow.createCell(1).setCellValue("2021-1");
         exampleRow.createCell(2).setCellValue("计算机科学与技术");
         exampleRow.createCell(3).setCellValue("CS2101");
-        exampleRow.createCell(4).setCellValue("计算机科学与技术1班");
+        exampleRow.createCell(4).setCellValue("计算机科学与技术2021-1");
         exampleRow.createCell(5).setCellValue("2021123456");
         exampleRow.createCell(6).setCellValue("张三");
         exampleRow.createCell(7).setCellValue("中队长");
@@ -102,7 +102,7 @@ public class SquadCadreController {
         // 添加使用说明行
         Row noteRow = sheet.createRow(2);
         Cell noteCell = noteRow.createCell(0);
-        noteCell.setCellValue("注意: 请按照示例格式填写数据，所有字段必填。职位可选：中队长、副中队长、学习委员、生活委员、心理委员、体育委员、宣传委员、文艺委员、纪律委员、组织委员。");
+        noteCell.setCellValue("注意: 请按照示例格式填写数据，所有字段必填。");
         
         // 设置使用说明单元格合并
         CellStyle noteStyle = workbook.createCellStyle();
@@ -361,9 +361,10 @@ public class SquadCadreController {
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam("file") MultipartFile file) {
         try {
-            log.info("批量导入中队干部, 用户ID: {}, 文件名: {}", userPrincipal.getId(), file.getOriginalFilename());
+            log.info("批量导入中队干部开始, 用户ID: {}, 文件名: {}", userPrincipal.getId(), file.getOriginalFilename());
             
             if (file.isEmpty()) {
+                log.warn("上传的文件为空");
                 return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", "上传的文件为空"
@@ -371,13 +372,17 @@ public class SquadCadreController {
             }
             
             // 获取当前辅导员信息
+            log.info("开始获取辅导员信息, 用户ID: {}", userPrincipal.getId());
             String findInstructorSql = "SELECT department, squad_list FROM instructors WHERE instructor_id = (select user_id from users where id = ?)";
             Map<String, Object> instructorInfo = jdbcTemplate.queryForMap(findInstructorSql, userPrincipal.getId());
             
             String department = (String) instructorInfo.get("department");
             String squadList = (String) instructorInfo.get("squad_list");
             
+            log.info("辅导员信息: department={}, squad_list={}", department, squadList);
+            
             if (department == null || squadList == null) {
+                log.warn("未找到辅导员管辖信息: department={}, squad_list={}", department, squadList);
                 return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", "未找到该辅导员的管辖信息"
@@ -389,14 +394,19 @@ public class SquadCadreController {
             for (String squad : squadList.split(",")) {
                 squads.add(squad.trim());
             }
+            log.info("解析后的中队列表: {}", squads);
             
             // 获取当前用户信息
+            log.info("开始获取用户信息");
             String findUserSql = "SELECT id, name FROM users WHERE id = ?";
             Map<String, Object> userInfo = jdbcTemplate.queryForMap(findUserSql, userPrincipal.getId());
+            log.info("获取到的用户信息: {}", userInfo);
             
             // 解析Excel文件
+            log.info("开始解析Excel文件");
             XSSFWorkbook workbook = new XSSFWorkbook(file.getInputStream());
             XSSFSheet sheet = workbook.getSheetAt(0);
+            log.info("Excel文件总行数: {}", sheet.getLastRowNum());
             
             List<Map<String, Object>> dataList = new ArrayList<>();
             List<String> errors = new ArrayList<>();
@@ -404,7 +414,10 @@ public class SquadCadreController {
             // 从第二行开始读取数据（跳过表头）
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
-                if (row == null) continue;
+                if (row == null) {
+                    log.warn("第{}行为空，跳过", i + 1);
+                    continue;
+                }
                 
                 try {
                     String rowDepartment = getCellValueAsString(row.getCell(0));
@@ -417,34 +430,47 @@ public class SquadCadreController {
                     String position = getCellValueAsString(row.getCell(7));
                     Double monthlyBonus = row.getCell(8) != null ? row.getCell(8).getNumericCellValue() : null;
                     
+                    log.info("解析第{}行数据: department={}, squad={}, major={}, classId={}, className={}, studentId={}, studentName={}, position={}, monthlyBonus={}",
+                            i + 1, rowDepartment, rowSquad, major, classId, className, studentId, studentName, position, monthlyBonus);
+                    
                     // 验证必要字段
                     if (rowDepartment.isEmpty() || rowSquad.isEmpty() || major.isEmpty() || classId.isEmpty() || 
                         className.isEmpty() || studentId.isEmpty() || studentName.isEmpty() || position.isEmpty() || monthlyBonus == null) {
-                        errors.add("第" + (i + 1) + "行数据不完整，请检查");
+                        String error = "第" + (i + 1) + "行数据不完整，请检查";
+                        log.warn(error);
+                        errors.add(error);
                         continue;
                     }
                     
                     // 验证Department是否匹配
                     if (!rowDepartment.equals(department)) {
-                        errors.add("第" + (i + 1) + "行学院/部门不在您的管理范围内");
+                        String error = "第" + (i + 1) + "行学院/部门不在您的管理范围内";
+                        log.warn("{}，期望：{}，实际：{}", error, department, rowDepartment);
+                        errors.add(error);
                         continue;
                     }
                     
                     // 验证Squad是否在管理范围内
                     if (!squads.contains(rowSquad)) {
-                        errors.add("第" + (i + 1) + "行中队不在您的管理范围内");
+                        String error = "第" + (i + 1) + "行中队不在您的管理范围内";
+                        log.warn("{}，允许的中队：{}，实际：{}", error, squads, rowSquad);
+                        errors.add(error);
                         continue;
                     }
                     
                     // 验证每月加分数额范围
                     if (monthlyBonus < 0 || monthlyBonus > 10) {
-                        errors.add("第" + (i + 1) + "行每月加分数额超出范围(0-10)");
+                        String error = "第" + (i + 1) + "行每月加分数额超出范围(0-10)";
+                        log.warn("{}，实际值：{}", error, monthlyBonus);
+                        errors.add(error);
                         continue;
                     }
                     
                     // 验证职位长度
                     if (position.isEmpty() || position.length() < 2 || position.length() > 10) {
-                        errors.add("第" + (i + 1) + "行职位长度不合法，应为2-10个字符");
+                        String error = "第" + (i + 1) + "行职位长度不合法，应为2-10个字符";
+                        log.warn("{}，实际长度：{}", error, position.length());
+                        errors.add(error);
                         continue;
                     }
                     
@@ -460,15 +486,20 @@ public class SquadCadreController {
                     data.put("monthlyBonus", monthlyBonus);
                     
                     dataList.add(data);
+                    log.info("第{}行数据验证通过，已添加到待导入列表", i + 1);
                 } catch (Exception e) {
-                    errors.add("第" + (i + 1) + "行数据格式错误: " + e.getMessage());
+                    String error = "第" + (i + 1) + "行数据格式错误: " + e.getMessage();
+                    log.error(error, e);
+                    errors.add(error);
                 }
             }
             
             workbook.close();
+            log.info("Excel文件解析完成，待导入数据{}条，错误{}条", dataList.size(), errors.size());
             
             // 检查是否有错误
             if (!errors.isEmpty()) {
+                log.warn("数据验证阶段发现错误：{}", errors);
                 return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", "导入数据有误",
@@ -478,6 +509,8 @@ public class SquadCadreController {
             
             // 批量插入数据
             int successCount = 0;
+            log.info("开始批量插入数据，总计{}条", dataList.size());
+            
             for (Map<String, Object> data : dataList) {
                 try {
                     // 检查学生和职位组合是否已存在
@@ -486,8 +519,13 @@ public class SquadCadreController {
                             data.get("studentId").toString(), 
                             data.get("position").toString());
                     
+                    log.info("检查学生{}的{}职位是否存在: count={}", 
+                            data.get("studentId"), data.get("position"), count);
+                    
                     if (count != null && count > 0) {
-                        errors.add("学生" + data.get("studentName") + "(" + data.get("studentId") + ")已担任" + data.get("position") + "职位，跳过导入");
+                        String error = "学生" + data.get("studentName") + "(" + data.get("studentId") + ")已担任" + data.get("position") + "职位，跳过导入";
+                        log.warn(error);
+                        errors.add(error);
                         continue;
                     }
                     
@@ -510,10 +548,15 @@ public class SquadCadreController {
                     );
                     
                     successCount++;
+                    log.info("成功导入第{}条数据：学生{}({})", successCount, data.get("studentName"), data.get("studentId"));
                 } catch (Exception e) {
-                    errors.add("导入数据失败: " + e.getMessage());
+                    String error = "导入数据失败: " + e.getMessage();
+                    log.error("导入数据失败: {}", data, e);
+                    errors.add(error);
                 }
             }
+            
+            log.info("数据导入完成，成功：{}条，失败：{}条", successCount, errors.size());
             
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
@@ -524,6 +567,7 @@ public class SquadCadreController {
                 result.put("errors", errors);
             }
             
+            log.info("返回结果：{}", result);
             return ResponseEntity.ok(result);
             
         } catch (Exception e) {
