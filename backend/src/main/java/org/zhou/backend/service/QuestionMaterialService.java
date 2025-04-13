@@ -107,33 +107,66 @@ public class QuestionMaterialService {
     }
     
     public void reviewMaterial(ReviewRequest request) {
-        EvaluationMaterial material = questionMaterialRepository.findById(request.getMaterialId())
-            .orElseThrow(() -> new RuntimeException("材料不存在"));
-            
-        material.setStatus(request.getStatus());
-        material.setReviewComment(request.getComment());
+        if (request.getMaterialId() == null) {
+            throw new IllegalArgumentException("材料ID不能为空");
+        }
         
-        // 如果审核通过，更新加分相关字段并调用加分函数
+        log.info("Processing review for material ID: {}", request.getMaterialId());
+        
+        EvaluationMaterial material = questionMaterialRepository.findById(request.getMaterialId())
+            .orElseThrow(() -> new IllegalArgumentException("材料不存在"));
+        
+        // 验证状态转换的合法性
+        if (request.getStatus() == null || request.getStatus().trim().isEmpty()) {
+            throw new IllegalArgumentException("审核状态不能为空");
+        }
+        
+        // 验证审核通过时的必填字段
         if ("APPROVED".equals(request.getStatus())) {
-            // 更新材料表中的加分信息
-            material.setEvaluationType(request.getEvaluationType());
-            material.setScore(request.getScore());
-            
-            try {
-                evaluationService.updateTotalBonus(
-                    material.getUserId(),
-                    request.getEvaluationType(),
-                    request.getScore(),
-                    material.getId()
-                );
-            } catch (IllegalStateException e) {
-                throw new RuntimeException(e.getMessage());
-            } catch (Exception e) {
-                throw new RuntimeException("加分操作失败：" + e.getMessage());
+            if (request.getEvaluationType() == null || request.getEvaluationType().trim().isEmpty()) {
+                throw new IllegalArgumentException("审核通过时必须指定加分种类");
+            }
+            if (request.getScore() == null || request.getScore() <= 0) {
+                throw new IllegalArgumentException("审核通过时必须指定有效的加分分数");
             }
         }
         
-        questionMaterialRepository.save(material);
+        try {
+            material.setStatus(request.getStatus());
+            material.setReviewComment(request.getComment());
+            
+            // 如果审核通过，更新加分相关字段并调用加分函数
+            if ("APPROVED".equals(request.getStatus())) {
+                log.info("Approving material with type: {} and score: {}", 
+                        request.getEvaluationType(), request.getScore());
+                
+                // 更新材料表中的加分信息
+                material.setEvaluationType(request.getEvaluationType());
+                material.setScore(request.getScore());
+                
+                try {
+                    evaluationService.updateTotalBonus(
+                        material.getUserId(),
+                        request.getEvaluationType(),
+                        request.getScore(),
+                        material.getId()
+                    );
+                    log.info("Successfully updated total bonus for user: {}", material.getUserId());
+                } catch (IllegalStateException e) {
+                    log.error("Failed to update total bonus: {}", e.getMessage());
+                    throw new IllegalStateException("加分更新失败: " + e.getMessage());
+                } catch (Exception e) {
+                    log.error("Unexpected error while updating total bonus", e);
+                    throw new RuntimeException("加分操作失败：" + e.getMessage());
+                }
+            }
+            
+            questionMaterialRepository.save(material);
+            log.info("Successfully reviewed material: {}", material.getId());
+        } catch (Exception e) {
+            log.error("Error while reviewing material: {}", e.getMessage());
+            throw new RuntimeException("审核处理失败：" + e.getMessage());
+        }
     }
     
     @Transactional

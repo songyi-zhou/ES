@@ -279,6 +279,24 @@
               </div>
             </template>
           </el-dialog>
+
+          <!-- 添加预览对话框 -->
+          <el-dialog
+            v-model="showPreviewDialog"
+            title="材料预览"
+            width="80%"
+            destroy-on-close
+            :close-on-click-modal="false"
+          >
+            <div class="preview-container">
+              <img 
+                v-if="previewUrl" 
+                :src="previewUrl" 
+                class="preview-image"
+                alt="预览图片"
+              />
+            </div>
+          </el-dialog>
         </div>
       </main>
     </div>
@@ -425,11 +443,11 @@ const handleReview = async (row) => {
   } else {
     // 原有的逻辑
     currentMaterial.value = row;
-  reviewForm.value = {
-    status: '',
-    comment: '',
-    evaluationType: '',
-    score: 0
+    reviewForm.value = {
+      status: '',
+      comment: '',
+      evaluationType: '',
+      score: 0
     };
     reviewDialogVisible.value = true;
   }
@@ -468,14 +486,12 @@ const handleViewDetails = (row) => {
 
 const openQuestionDialog = (row) => {
   currentMaterial.value = row;
-  reviewForm.value = {
-    status: 'QUESTIONED',
-    comment: '',
-    evaluationType: '',
-    score: 0
+  reportForm.value = {
+    note: ''
   };
-  reviewDialogVisible.value = true;
+  reportDialogVisible.value = true;
 };
+
 
 const submitReview = async () => {
   if (!reviewForm.value.status) {
@@ -501,7 +517,7 @@ const submitReview = async () => {
 
   try {
     submitting.value = true;
-    await axios.post('/question-materials/review', {
+    console.log('提交审核数据:', {
       materialId: currentMaterial.value.id,
       status: reviewForm.value.status,
       comment: reviewForm.value.comment,
@@ -509,10 +525,26 @@ const submitReview = async () => {
       score: reviewForm.value.score
     });
     
-    ElMessage.success('审核提交成功');
-    reviewDialogVisible.value = false;
-    await fetchQuestionMaterials();
+    const response = await axios.post('/question-materials/review', {
+      materialId: currentMaterial.value.id,
+      status: reviewForm.value.status,
+      comment: reviewForm.value.comment,
+      evaluationType: reviewForm.value.evaluationType,
+      score: reviewForm.value.score
+    });
+    
+    console.log('审核提交响应:', response);
+    
+    if (response.data.success) {
+      ElMessage.success(response.data.message || '审核提交成功');
+      reviewDialogVisible.value = false;
+      await fetchQuestionMaterials();
+    } else {
+      ElMessage.error(response.data.message || '审核提交失败');
+    }
   } catch (error) {
+    console.error('审核提交失败:', error);
+    console.error('错误详情:', error.response?.data);
     ElMessage.error('审核提交失败：' + (error.response?.data?.message || '未知错误'));
   } finally {
     submitting.value = false;
@@ -531,11 +563,24 @@ const isPreviewable = (attachment) => {
 const previewAttachment = async (attachment) => {
   const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
   
-    try {
-      const response = await axios.get(`/evaluation/preview/${attachment.id}`, {
-        responseType: 'blob'
+  // 检查文件类型是否支持预览
+  if (!['jpg', 'jpeg', 'png', 'pdf'].includes(fileExtension)) {
+    ElMessage.warning('该文件类型不支持预览，将自动下载');
+    downloadAttachment(attachment);
+    return;
+  }
+
+  try {
+    console.log('开始预览文件:', attachment);
+    loading.value = true;
+    const response = await axios.get(`/evaluation/preview/${attachment.id}`, {
+      responseType: 'blob',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
     });
     
+    console.log('获取到预览响应:', response);
     const blob = new Blob([response.data], {
       type: fileExtension === 'pdf' ? 'application/pdf' : `image/${fileExtension}`
     });
@@ -546,24 +591,26 @@ const previewAttachment = async (attachment) => {
       window.open(url, '_blank');
     } else {
       // 图片在当前窗口预览
-      currentMaterial.value = {
-        ...currentMaterial.value,
-        materialType: 'image',
-        materialUrl: url
-      };
-      }
-    } catch (error) {
+      showPreviewDialog.value = true;
+      previewUrl.value = url;
+    }
+  } catch (error) {
     console.error('预览失败:', error);
     ElMessage.error('预览失败，请尝试下载查看');
     // 预览失败时自动触发下载
     downloadAttachment(attachment);
+  } finally {
+    loading.value = false;
   }
 };
 
 const downloadAttachment = async (attachment) => {
   try {
     const response = await axios.get(`/evaluation/download/${attachment.id}`, {
-      responseType: 'blob'
+      responseType: 'blob',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
     });
     
     const url = URL.createObjectURL(response.data);
@@ -607,24 +654,35 @@ onMounted(() => {
 });
 
 const submitReport = async () => {
+  if (!currentMaterial.value || !currentMaterial.value.id) {
+    ElMessage.error('无效的材料信息');
+    return;
+  }
+
   try {
     submitting.value = true;
-    const response = await request.post('/api/question-materials/report', {
-      materialIds: [selectedMaterials.value[0].id],
-      note: reportForm.value.note || "请审核这些存在疑问的材料"
-    }, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      baseURL: 'http://localhost:8080'
+    console.log('提交上报数据:', {
+      materialIds: [currentMaterial.value.id],
+      note: reportForm.value.note
     });
+
+    const response = await axios.post('/question-materials/report', {
+      materialIds: [currentMaterial.value.id],
+      note: reportForm.value.note || "请审核这些存在疑问的材料"
+    });
+    
+    console.log('上报响应:', response);
     
     if (response.data.success) {
       ElMessage.success(response.data.message || '材料已成功上报');
       reportDialogVisible.value = false;
       await fetchQuestionMaterials();
+    } else {
+      ElMessage.error(response.data.message || '上报失败');
     }
   } catch (error) {
+    console.error('上报失败:', error);
+    console.error('错误详情:', error.response?.data);
     ElMessage.error('上报失败：' + (error.response?.data?.message || error.message));
   } finally {
     submitting.value = false;
@@ -791,6 +849,10 @@ const handleReReview = async () => {
     submitting.value = false;
   }
 };
+
+// 添加预览对话框相关的响应式变量
+const showPreviewDialog = ref(false);
+const previewUrl = ref('');
 </script>
 
 <style scoped>
@@ -1326,5 +1388,20 @@ const handleReReview = async () => {
 
 :deep(.confirm-dialog .el-message-box__message p) {
   margin: 5px 0;
+}
+
+.preview-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 </style> 

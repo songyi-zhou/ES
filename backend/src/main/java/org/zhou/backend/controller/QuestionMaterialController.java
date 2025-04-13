@@ -1,6 +1,7 @@
 package org.zhou.backend.controller;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -28,19 +29,20 @@ import org.zhou.backend.repository.UserRepository;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.QuestionMaterialService;
 import org.zhou.backend.util.SecurityUtils;
+import org.springframework.jdbc.core.JdbcTemplate;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/api/question-materials")
 @PreAuthorize("hasRole('GROUP_LEADER')")
+@RequiredArgsConstructor
+@Slf4j
 public class QuestionMaterialController {
     
-    private static final Logger log = LoggerFactory.getLogger(QuestionMaterialController.class);
-    
-    @Autowired
-    private QuestionMaterialService questionMaterialService;
-    
-    @Autowired
-    private UserRepository userRepository;
+    private final QuestionMaterialService questionMaterialService;
+    private final UserRepository userRepository;
+    private final JdbcTemplate jdbcTemplate;
     
     @GetMapping
     public ResponseEntity<?> getQuestionMaterials(
@@ -69,9 +71,47 @@ public class QuestionMaterialController {
                 currentUser.getSquad(),       // 传入中队
                 statuses, page - 1, size, keyword);
             
+            // 查询每个材料对应的学生信息
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (EvaluationMaterial material : materials.getContent()) {
+                String sql = "SELECT s.student_id, s.name FROM students s " +
+                           "JOIN users u ON s.student_id = u.user_id " +
+                           "WHERE u.id = ?";
+                try {
+                    Map<String, Object> studentInfo = jdbcTemplate.queryForMap(sql, material.getUserId());
+                    Map<String, Object> materialInfo = new HashMap<>();
+                    // 基本信息
+                    materialInfo.put("id", material.getId());
+                    materialInfo.put("userId", material.getUserId());
+                    materialInfo.put("studentId", studentInfo.get("student_id"));
+                    materialInfo.put("studentName", studentInfo.get("name"));
+                    
+                    // 材料信息
+                    materialInfo.put("title", material.getTitle());
+                    materialInfo.put("description", material.getDescription());
+                    materialInfo.put("evaluationType", material.getEvaluationType());
+                    materialInfo.put("attachments", material.getAttachments());
+                    
+                    // 状态和时间信息
+                    materialInfo.put("status", material.getStatus());
+                    materialInfo.put("createdAt", material.getCreatedAt());
+                    materialInfo.put("updatedAt", material.getUpdatedAt());
+                    
+                    // 审核信息
+                    materialInfo.put("reviewerId", material.getReviewerId());
+                    materialInfo.put("reviewComment", material.getReviewComment());
+                    materialInfo.put("reviewedAt", material.getReviewedAt());
+                    materialInfo.put("score", material.getScore());
+                    
+                    result.add(materialInfo);
+                } catch (Exception e) {
+                    log.warn("未找到材料ID {}对应的学生信息", material.getId());
+                }
+            }
+            
             return ResponseEntity.ok(Map.of(
                 "success", true,
-                "data", materials.getContent(),
+                "data", result,
                 "total", materials.getTotalElements(),
                 "pageSize", materials.getSize(),
                 "current", materials.getNumber() + 1
@@ -86,10 +126,28 @@ public class QuestionMaterialController {
     @PostMapping("/review")
     public ResponseEntity<?> reviewQuestionMaterial(@RequestBody ReviewRequest request) {
         try {
+            log.info("Received review request for material ID: {}", request.getMaterialId());
+            log.info("Review details - Status: {}, Type: {}, Score: {}", 
+                    request.getStatus(), request.getEvaluationType(), request.getScore());
+            
             questionMaterialService.reviewMaterial(request);
-            return ResponseEntity.ok(Map.of("success", true));
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "审核成功");
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid review request: {}", e.getMessage());
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "审核失败"));
+            log.error("Error reviewing material: ", e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "审核失败: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
     }
 
