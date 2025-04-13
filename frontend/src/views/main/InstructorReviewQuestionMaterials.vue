@@ -16,7 +16,6 @@
               <el-input
                 v-model="searchKeyword"
                 placeholder="搜索学生姓名/学号"
-                clearable
                 class="search-input"
               />
             </div>
@@ -239,6 +238,8 @@ const filteredQuestionMaterials = computed(() => {
 
   return result
 })
+
+
 
 // 审核相关
 const reviewDialogVisible = ref(false)

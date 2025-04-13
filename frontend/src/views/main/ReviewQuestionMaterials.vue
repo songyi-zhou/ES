@@ -27,7 +27,6 @@
               <el-input
                 v-model="searchKeyword"
                 placeholder="搜索学生姓名/学号"
-                clearable
                 class="search-input"
               />
               <div class="action-buttons">
@@ -392,7 +391,7 @@ const fetchQuestionMaterials = async () => {
 
 // 筛选数据的计算属性
 const filteredQuestionMaterials = computed(() => {
-  let result = [...questionMaterials.value]
+  let result = questionMaterials.value
 
   if (filterStatus.value) {
     result = result.filter(item => item.status === filterStatus.value)
@@ -401,8 +400,8 @@ const filteredQuestionMaterials = computed(() => {
   if (searchKeyword.value) {
     const keyword = searchKeyword.value.toLowerCase()
     result = result.filter(item => 
-      item.userId.toLowerCase().includes(keyword) ||
-      item.title.toLowerCase().includes(keyword)
+      item.studentName.toLowerCase().includes(keyword) ||
+      item.studentId.toLowerCase().includes(keyword)
     )
   }
 
