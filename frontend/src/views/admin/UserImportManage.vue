@@ -25,6 +25,7 @@
                       :auto-upload="false"
                       :on-change="handleFileChange"
                       :show-file-list="false"
+                      :before-upload="beforeUpload"
                       accept=".xlsx,.xls"
                     >
                       <el-button type="success">
@@ -37,20 +38,35 @@
               
               <div v-if="fileInfo" class="file-info">
                 <div class="file-details">
-                  <span>已选择文件：{{ fileInfo.name }}</span>
+                  <div class="file-meta">
+                    <el-icon><Document /></el-icon>
+                    <span class="file-name">{{ fileInfo.name }}</span>
+                    <span class="file-size">({{ formatFileSize(fileInfo.size) }})</span>
+                  </div>
                   <el-button 
                     type="primary" 
                     @click="importExcel"
                     :loading="importing"
+                    :disabled="!fileInfo"
                   >
-                    开始导入
+                    {{ importing ? '正在导入...' : '开始导入' }}
                   </el-button>
                 </div>
-                <el-progress 
-                  v-if="importing"
-                  :percentage="importProgress"
-                  :format="progressFormat"
-                />
+                
+                <div v-if="importing" class="upload-progress">
+                  <el-progress 
+                    :percentage="importProgress" 
+                    :format="progressFormat"
+                    :status="uploadStatus"
+                  />
+                  <p class="progress-tip">{{ progressTip }}</p>
+                </div>
+              </div>
+
+              <div v-else class="upload-tip">
+                <el-icon><Upload /></el-icon>
+                <p>点击选择或拖拽Excel文件到此处</p>
+                <p class="tip-detail">支持 .xlsx, .xls 格式，文件大小不超过10MB</p>
               </div>
             </el-card>
 
@@ -168,6 +184,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, type FormInstance } from 'element-plus'
+import { Document, Upload } from '@element-plus/icons-vue'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 import request from '@/utils/request'
@@ -177,6 +194,8 @@ import { useUserStore } from '@/stores/user'
 const fileInfo = ref<File | null>(null)
 const importing = ref(false)
 const importProgress = ref(0)
+const uploadStatus = ref<'success' | 'exception' | ''>('')
+const progressTip = ref('')
 
 // 用户类型选择
 const userType = ref<'student' | 'instructor'>('student')
@@ -263,37 +282,44 @@ const importLogs = ref<Array<{
   error?: string
 }>>([])
 
-// 下载模板
-const downloadTemplate = async () => {
-  try {
-    const response = await request.get('/user-import/template', {
-      responseType: 'blob',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    })
-    
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', '用户导入模板.xlsx')
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-    
-    ElMessage.success('模板下载成功')
-    addImportLog('系统', 'success', '下载用户导入模板')
-  } catch (error) {
-    console.error('模板下载失败:', error)
-    ElMessage.error('模板下载失败')
-    addImportLog('系统', 'error', '下载模板失败', error.message)
+// 文件大小限制（10MB）
+const MAX_FILE_SIZE = 10 * 1024 * 1024
+
+// 格式化文件大小
+const formatFileSize = (bytes: number) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+// 上传前验证
+const beforeUpload = (file: File) => {
+  // 检查文件类型
+  const isExcel = /\.(xlsx|xls)$/.test(file.name.toLowerCase())
+  if (!isExcel) {
+    ElMessage.error('只能上传Excel文件！')
+    return false
   }
+
+  // 检查文件大小
+  if (file.size > MAX_FILE_SIZE) {
+    ElMessage.error(`文件大小不能超过 ${formatFileSize(MAX_FILE_SIZE)}！`)
+    return false
+  }
+
+  return true
 }
 
 // 处理文件选择
 const handleFileChange = (file) => {
-  fileInfo.value = file.raw
+  if (beforeUpload(file.raw)) {
+    fileInfo.value = file.raw
+    importProgress.value = 0
+    uploadStatus.value = ''
+    progressTip.value = ''
+  }
 }
 
 // 修改导入方法
@@ -309,6 +335,8 @@ const importExcel = async () => {
   try {
     importing.value = true
     importProgress.value = 0
+    uploadStatus.value = ''
+    progressTip.value = '正在上传文件...'
 
     const response = await request.post('/user-import/excel', formData, {
       headers: {
@@ -316,44 +344,53 @@ const importExcel = async () => {
       },
       onUploadProgress: (progressEvent) => {
         if (progressEvent.total) {
-          importProgress.value = Math.round(
+          const percentage = Math.round(
             (progressEvent.loaded * 100) / progressEvent.total
           )
+          importProgress.value = Math.min(99, percentage) // 保留最后1%给服务器处理时间
+          
+          if (percentage >= 99) {
+            progressTip.value = '文件已上传，正在处理数据...'
+          }
         }
       }
     })
 
-    console.log('导入响应:', response) // 添加调试日志
+    console.log('导入响应:', response)
 
-    // 检查响应中的data字段
     if (response.data) {
       const { success, message, data } = response.data
       
       if (success) {
-        ElMessage.success(message || '导入成功')
-        fileInfo.value = null
+        uploadStatus.value = 'success'
         importProgress.value = 100
-        
-        // 添加成功日志
-        addImportLog('批量导入', 'success', 
-          `成功导入${data?.count || 0}条记录`
-        )
+        progressTip.value = `导入成功！共导入 ${data?.count || 0} 条记录`
+        ElMessage.success(message || '导入成功')
         
         // 如果有部分导入失败的记录
         if (data?.errors?.length > 0) {
-          ElMessage({
-            type: 'warning',
-            message: `有${data.errors.length}条记录导入失败`,
-            duration: 5000
-          })
+          setTimeout(() => {
+            ElMessage({
+              type: 'warning',
+              message: `有${data.errors.length}条记录导入失败`,
+              duration: 5000
+            })
+          }, 1000)
+          
           // 为每个错误添加日志
           data.errors.forEach(error => {
             addImportLog('批量导入', 'error', error)
           })
         }
         
-        // 刷新日志
-        refreshLogs()
+        // 延迟清除文件信息
+        setTimeout(() => {
+          fileInfo.value = null
+          importing.value = false
+          importProgress.value = 0
+          uploadStatus.value = ''
+          progressTip.value = ''
+        }, 3000)
       } else {
         throw new Error(message || '导入失败')
       }
@@ -362,11 +399,16 @@ const importExcel = async () => {
     }
   } catch (error) {
     console.error('导入失败:', error)
+    uploadStatus.value = 'exception'
+    progressTip.value = '导入失败！'
     ElMessage.error(error.response?.data?.message || error.message || '导入失败')
-    // 添加失败日志
     addImportLog('批量导入', 'error', '导入失败', error.message)
   } finally {
-    importing.value = false
+    if (uploadStatus.value === 'exception') {
+      setTimeout(() => {
+        importing.value = false
+      }, 2000)
+    }
   }
 }
 
@@ -481,8 +523,11 @@ onMounted(() => {
 })
 
 // 进度条格式化
-const progressFormat = (percentage: number) => {  
-  return percentage === 100 ? '完成' : `${percentage}%`
+const progressFormat = (percentage: number) => {
+  if (percentage === 100 && uploadStatus.value === 'success') {
+    return '完成'
+  }
+  return `${percentage}%`
 }
 
 // 格式化时间函数
@@ -497,6 +542,34 @@ const formatTime = (time: string) => {
     second: '2-digit',
     hour12: false
   }).replace(/\//g, '-');
+}
+
+// 下载模板
+const downloadTemplate = async () => {
+  try {
+    const response = await request.get('/user-import/template', {
+      responseType: 'blob',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    })
+    
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', '用户导入模板.xlsx')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+    ElMessage.success('模板下载成功')
+    addImportLog('系统', 'success', '下载用户导入模板')
+  } catch (error) {
+    console.error('模板下载失败:', error)
+    ElMessage.error('模板下载失败')
+    addImportLog('系统', 'error', '下载模板失败', error.message)
+  }
 }
 </script>
 
@@ -569,14 +642,64 @@ const formatTime = (time: string) => {
 }
 
 .file-info {
-  padding: 10px 0;
+  padding: 20px 0;
 }
 
 .file-details {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 15px;
+}
+
+.file-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.file-size {
+  color: #909399;
+  font-size: 0.9em;
+}
+
+.upload-progress {
+  padding: 10px 0;
+}
+
+.progress-tip {
+  margin-top: 8px;
+  color: #909399;
+  font-size: 0.9em;
+  text-align: center;
+}
+
+.upload-tip {
+  padding: 30px;
+  text-align: center;
+  color: #909399;
+  border: 2px dashed #e4e7ed;
+  border-radius: 6px;
+}
+
+.upload-tip .el-icon {
+  font-size: 48px;
   margin-bottom: 10px;
+  color: #c0c4cc;
+}
+
+.upload-tip p {
+  margin: 5px 0;
+}
+
+.tip-detail {
+  font-size: 0.9em;
+  color: #c0c4cc;
 }
 
 .log-section {
@@ -658,6 +781,22 @@ const formatTime = (time: string) => {
   
   .log-section {
     margin-top: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .file-details {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .file-meta {
+    justify-content: center;
   }
 }
 </style>

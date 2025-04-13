@@ -70,6 +70,8 @@ import org.zhou.backend.service.UserService;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.EmptyResultDataAccessException;
 
 @RestController
 @RequestMapping("/api/instructor")
@@ -780,8 +782,17 @@ public class InstructorController {
                     try {
                         String findSquadSql = "SELECT squad FROM students WHERE student_id = ?";
                         squad = jdbcTemplate.queryForObject(findSquadSql, String.class, studentId);
+                        if (squad == null || squad.trim().isEmpty()) {
+                            log.warn("学生{}的中队信息为空", studentId);
+                        }
+                    } catch (EmptyResultDataAccessException e) {
+                        log.warn("未找到学生{}的记录", studentId);
+                    } catch (DataAccessException e) {
+                        log.error("查询学生{}的中队信息时发生数据库错误: {}", studentId, e.getMessage());
+                        throw new RuntimeException("数据库查询错误", e);
                     } catch (Exception e) {
-                        log.warn("未找到学生{}的中队信息，将设置为null", studentId);
+                        log.error("查询学生{}的中队信息时发生未知错误: {}", studentId, e.getMessage());
+                        throw new RuntimeException("未知错误", e);
                     }
 
                     // 获取 class_id
