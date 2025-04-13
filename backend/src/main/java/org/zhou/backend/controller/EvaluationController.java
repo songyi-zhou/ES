@@ -3,6 +3,7 @@ package org.zhou.backend.controller;
 import java.net.URLEncoder;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +34,7 @@ import org.zhou.backend.service.EvaluationService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @RestController
 @RequestMapping("/api/evaluation")
@@ -40,6 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class EvaluationController {
     private final EvaluationService evaluationService;
+    private final JdbcTemplate jdbcTemplate;
     
     @PostMapping("/submit")
     public ResponseEntity<?> submitMaterial(
@@ -243,7 +246,32 @@ public class EvaluationController {
         try {
             Long userId = userDetails.getId();
             List<EvaluationMaterial> materials = evaluationService.getAllMaterials(userId);
-            return ResponseEntity.ok(materials);
+            
+            // 查询每个材料对应的学生信息
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (EvaluationMaterial material : materials) {
+                String sql = "SELECT s.student_id, s.name FROM students s " +
+                           "JOIN users u ON s.student_id = u.user_id " +
+                           "WHERE u.id = ?";
+                try {
+                    Map<String, Object> studentInfo = jdbcTemplate.queryForMap(sql, material.getUserId());
+                    Map<String, Object> materialInfo = new HashMap<>();
+                    materialInfo.put("id", material.getId());
+                    materialInfo.put("studentId", studentInfo.get("student_id"));
+                    materialInfo.put("studentName", studentInfo.get("name"));
+                    materialInfo.put("title", material.getTitle());
+                    materialInfo.put("description", material.getDescription());
+                    materialInfo.put("status", material.getStatus());
+                    materialInfo.put("createdAt", material.getCreatedAt());
+                    materialInfo.put("evaluationType", material.getEvaluationType());
+                    materialInfo.put("attachments", material.getAttachments());
+                    result.add(materialInfo);
+                } catch (Exception e) {
+                    log.warn("未找到材料ID {}对应的学生信息", material.getId());
+                }
+            }
+            
+            return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
         }

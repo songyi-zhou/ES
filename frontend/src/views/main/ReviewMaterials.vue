@@ -61,7 +61,8 @@
                 {{ formatDate(scope.row.createdAt) }}
               </template>
             </el-table-column>
-            <el-table-column prop="userId" label="学号" min-width="100" align="center" />
+            <el-table-column prop="studentId" label="学号" width="120" />
+            <el-table-column prop="studentName" label="姓名" width="120" />
             <el-table-column prop="title" label="材料名称" min-width="100" show-overflow-tooltip align="center" />
             <el-table-column prop="evaluationType" label="材料类型" min-width="100" align="center">
               <template #default="scope">

@@ -55,7 +55,8 @@
               style="width: 100%"
             >
               <el-table-column prop="updatedAt" label="提交时间" width="180" />
-              <el-table-column prop="userId" label="学号" width="120" />
+              <el-table-column prop="studentId" label="学号" width="120" />
+              <el-table-column prop="studentName" label="姓名" width="120" />
               <el-table-column prop="title" label="材料名称" width="150" />
               <el-table-column prop="evaluationType" label="申请类别" width="120" />
               <el-table-column prop="status" label="材料状态" min-width="100" align="center">
@@ -75,7 +76,7 @@
                   <span>{{ scope.row.score }}</span>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="280" fixed="right">
+              <el-table-column label="操作" width="320" fixed="right">
                 <template #default="{ row }">
                   <div class="action-buttons">
                     <template v-if="row.status === 'CORRECTED'">
