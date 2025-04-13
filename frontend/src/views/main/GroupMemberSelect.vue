@@ -29,16 +29,16 @@
                 >
               </div>
               <div class="filter-group">
-                <select v-model="selectedMajor">
+                <select v-model="selectedMajor" @change="handleMajorChange">
                   <option value="">所有专业</option>
-                  <option v-for="major in majors" :key="major.id" :value="major.id">
-                    {{ major.name }}
+                  <option v-for="major in majors" :key="major.id" :value="major.name">
+                    {{ formatMajorName(major) }}
                   </option>
                 </select>
                 <select v-model="selectedClass" :disabled="!selectedMajor">
                   <option value="">所有班级</option>
-                  <option v-for="class_ in filteredClasses" :key="class_.id" :value="class_.id">
-                    {{ class_.name }}
+                  <option v-for="class_ in filteredClasses" :key="class_.id" :value="class_.name">
+                    {{ formatClassName(class_) }}
                   </option>
                 </select>
               </div>
@@ -55,10 +55,26 @@
                   type="selection" 
                   :selectable="row => !isAlreadySelected(row)"
                 />
-                <el-table-column prop="studentId" label="学号" />
-                <el-table-column prop="name" label="姓名" />
-                <el-table-column prop="major" label="专业" />
-                <el-table-column prop="className" label="班级" />
+                <el-table-column 
+                  prop="studentId" 
+                  label="学号"
+                  sortable
+                />
+                <el-table-column 
+                  prop="name" 
+                  label="姓名"
+                  sortable
+                />
+                <el-table-column 
+                  prop="major" 
+                  label="专业"
+                  sortable
+                />
+                <el-table-column 
+                  prop="className" 
+                  label="班级"
+                  sortable
+                />
                 <el-table-column label="状态" width="100">
                   <template #default="scope">
                     <el-tag 
@@ -112,18 +128,8 @@ import { ElMessage } from 'element-plus'
 import { formatDateTime } from '@/utils/format'
 
 // 专业和班级数据
-const majors = ref([
-  { id: 1, name: '计算机科学与技术' },
-  { id: 2, name: '软件工程' },
-  // ... 更多专业
-])
-
-const classes = ref([
-  { id: 1, majorId: 1, name: '计科2101' },
-  { id: 2, majorId: 1, name: '计科2102' },
-  { id: 3, majorId: 2, name: '软工2101' },
-  // ... 更多班级
-])
+const majors = ref([])
+const classes = ref([])
 
 // 学生数据
 const allStudents = ref([
@@ -142,7 +148,7 @@ const searchQuery = ref('')
 const selectedMajor = ref('')
 const selectedClass = ref('')
 const selectedStudents = ref([])
-const originalSelection = ref([]) // 用于跟踪更改
+const originalSelection = ref([])
 const router = useRouter()
 const loading = ref(false)
 const students = ref([])
@@ -150,96 +156,102 @@ const existingMembers = ref([])
 const members = ref([])
 const isComponentMounted = ref(true)
 
-// 计算属性
-const filteredClasses = computed(() => {
-  if (!selectedMajor.value) return []
-  return classes.value.filter(c => c.majorId === Number(selectedMajor.value))
-})
-
-const isAllSelected = computed(() => {
-  return students.value.length > 0 && 
-         students.value.every(s => isSelected(s))
-})
-
-const hasChanges = computed(() => {
-  return JSON.stringify(selectedStudents.value.map(s => s.id).sort()) !== 
-         JSON.stringify(originalSelection.value.sort())
-})
-
-const isSelected = (student) => {
-  return selectedStudents.value.some(s => s.id === student.id)
-}
-
-const toggleSelection = (student) => {
-  const index = selectedStudents.value.findIndex(s => s.id === student.id)
-  if (index === -1) {
-    selectedStudents.value.push(student)
-  } else {
-    selectedStudents.value.splice(index, 1)
-  }
-}
-
-const toggleAllSelection = () => {
-  if (isAllSelected.value) {
-    selectedStudents.value = selectedStudents.value.filter(s => 
-      !students.value.some(fs => fs.id === s.id)
-    )
-  } else {
-    const newSelections = students.value.filter(s => !isSelected(s))
-    selectedStudents.value = [...selectedStudents.value, ...newSelections]
-  }
-}
-
-const removeSelection = (student) => {
-  const index = selectedStudents.value.findIndex(s => s.id === student.id)
-  if (index !== -1) {
-    selectedStudents.value.splice(index, 1)
-  }
-}
-
-const saveSelectedMembers = async () => {
+// 获取专业列表
+const getMajors = async () => {
   try {
-    const response = await request.post('/group-members/batch', {
-      studentIds: selectedStudents.value.map(s => s.studentId)
-    })
+    const response = await request.get('/classes/majors')
     if (response.data.success) {
-      ElMessage.success('选择成功！')
-      // 添加新的提示信息
-      ElMessage({
-        type: 'info',
-        message: '请前往中队干部管理页面手动添加小组成员',
-        duration: 5000  // 显示5秒
-      })
-      // 重置选择状态
-      selectedStudents.value = []
-      // 刷新数据
-      await fetchExistingMembers()
-      await fetchStudents()
+      majors.value = response.data.data.map((major) => ({
+        id: major.id || major,
+        name: major.name || major,
+        department: major.department
+      }))
+    } else {
+      ElMessage.error('获取专业列表失败')
     }
   } catch (error) {
-    console.error('提交选择失败:', error)
-    ElMessage.error('提交失败，请重试')
+    console.error('获取专业列表失败:', error)
+    if (error.response?.status === 403) {
+      router.push('/login')
+    }
   }
 }
+
+// 获取班级列表
+const getClasses = async () => {
+  if (!selectedMajor.value) {
+    classes.value = []
+    return
+  }
+  
+  try {
+    const response = await request.get('/classes/by-major', {
+      params: { major: selectedMajor.value }
+    })
+    
+    if (response.data.success) {
+      classes.value = response.data.data.map(classInfo => ({
+        id: classInfo.id || classInfo.name,
+        name: classInfo.name,
+        major: classInfo.major,
+        department: classInfo.department
+      }))
+    } else {
+      ElMessage.error('获取班级列表失败')
+    }
+  } catch (error) {
+    console.error('获取班级列表失败:', error)
+    if (error.response?.status === 403) {
+      router.push('/login')
+    }
+  }
+}
+
+// 根据选择的专业筛选班级
+const filteredClasses = computed(() => {
+  return classes.value
+})
+
+// 监听专业变化
+const handleMajorChange = () => {
+  selectedClass.value = '' // 重置班级选择
+  getClasses() // 获取对应专业的班级
+}
+
+// 监听筛选条件变化
+watch([searchQuery, selectedMajor, selectedClass], () => {
+  fetchStudents()
+}, { deep: true })
 
 const fetchStudents = async () => {
   loading.value = true
   try {
-    const response = await request.get('/students/list', {
-      params: {
-        major: selectedMajor.value || undefined,
-        className: selectedClass.value || undefined,
-        keyword: searchQuery.value || undefined
-      }
-    })
+    // 构建请求参数
+    const params = {
+      major: selectedMajor.value ? selectedMajor.value : undefined,
+      className: selectedClass.value ? selectedClass.value : undefined,
+      keyword: searchQuery.value || undefined
+    }
+
+    // 移除所有 undefined 的参数
+    Object.keys(params).forEach(key => params[key] === undefined && delete params[key])
+
+    console.log('Fetching students with params:', params)
+
+    const response = await request.get('/students/list', { params })
+
+    console.log('Students response:', response.data)
+
     if (response.data.success) {
       students.value = response.data.data
+    } else {
+      ElMessage.error(response.data.message || '获取学生列表失败')
     }
   } catch (error) {
+    console.error('获取学生列表失败:', error)
     if (error.response?.status === 403) {
       router.push('/login')
     }
-    console.error('获取学生列表失败:', error)
   } finally {
     loading.value = false
   }
@@ -297,8 +309,9 @@ const clearSelection = () => {
 // 初始化
 onMounted(() => {
   isComponentMounted.value = true
-  fetchExistingMembers() // 先获取已选成员
-  fetchStudents()        // 再获取学生列表
+  getMajors() // 获取专业列表
+  fetchExistingMembers() // 获取已选成员
+  fetchStudents() // 获取学生列表
   fetchMembers()
 })
 
@@ -353,6 +366,47 @@ const fetchMembers = async () => {
       ElMessage.error('获取成员列表失败')
     }
   }
+}
+
+const saveSelectedMembers = async () => {
+  try {
+    const response = await request.post('/group-members/batch', {
+      studentIds: selectedStudents.value.map(s => s.studentId)
+    })
+    if (response.data.success) {
+      ElMessage.success('选择成功！')
+      // 添加新的提示信息
+      ElMessage({
+        type: 'info',
+        message: '请前往中队干部管理页面手动添加小组成员',
+        duration: 5000  // 显示5秒
+      })
+      // 重置选择状态
+      selectedStudents.value = []
+      // 刷新数据
+      await fetchExistingMembers()
+      await fetchStudents()
+    }
+  } catch (error) {
+    console.error('提交选择失败:', error)
+    ElMessage.error('提交失败，请重试')
+  }
+}
+
+const removeSelection = (student) => {
+  const index = selectedStudents.value.findIndex(s => s.id === student.id)
+  if (index !== -1) {
+    selectedStudents.value.splice(index, 1)
+  }
+}
+
+// 添加专业和班级的显示格式化
+const formatClassName = (classInfo) => {
+  return classInfo.name || classInfo
+}
+
+const formatMajorName = (major) => {
+  return major.name || major
 }
 </script>
 
