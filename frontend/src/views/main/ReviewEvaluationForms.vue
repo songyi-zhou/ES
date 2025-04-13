@@ -586,26 +586,52 @@ const viewMaterials = async (form) => {
       return
     }
     
+    // 根据表格类型确定对应的类型标识符
+    let type = ''
+    switch (filterForm.value.formType) {
+      case 'moral_monthly_evaluation':
+        type = 'A'
+        break
+      case 'research_competition_evaluation':
+        type = 'C'
+        break
+      case 'sports_arts_evaluation':
+        type = 'D'
+        break
+    }
+    
+    console.log('开始获取证明材料，参数:', {
+      formType: type,
+      studentId: form.studentId
+    })
+    
     const response = await request.get('/review/materials', {
       params: {
-        formType: filterForm.value.formType,
+        formType: type,
         studentId: form.studentId
       }
     })
     
+    console.log('获取证明材料响应:', response)
+    
     if (response.data.success) {
-      if (response.data.data.length === 0) {
+      if (!response.data.data || response.data.data.length === 0) {
+        console.log('未找到证明材料')
         ElMessage.warning('该学生暂无证明材料')
         return
       }
-      console.log("get",response.data.data)
+      console.log('获取到证明材料数据:', response.data.data)
       materials.value = response.data.data
       showMaterialsModal.value = true
     } else {
+      console.error('获取证明材料失败:', response.data.message)
       ElMessage.error(response.data.message || '获取证明材料失败')
     }
   } catch (error) {
     console.error('获取证明材料失败:', error)
+    if (error.response) {
+      console.error('错误响应:', error.response.data)
+    }
     ElMessage.error('获取证明材料失败，请稍后重试')
   }
 }
