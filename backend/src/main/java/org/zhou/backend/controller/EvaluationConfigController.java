@@ -373,8 +373,8 @@ public class EvaluationConfigController {
                             ms.department, ms.major, ms.class_id, ms.total_base_score, ms.total_bonus_sum,
                             ms.total_penalty_sum, ms.total_raw_score, s.avg_score, s.stddev_score,
                             CASE
-                                WHEN (8 * ms.total_raw_score - 8 * s.avg_score) / s.stddev_score + 75 > 100 THEN 100
                                 WHEN s.stddev_score = 0 THEN 0
+                                WHEN (8 * ms.total_raw_score - 8 * s.avg_score) / s.stddev_score + 75 > 100 THEN 100
                                 ELSE (8 * ms.total_raw_score - 8 * s.avg_score) / s.stddev_score + 75
                             END as final_score,
                             ROW_NUMBER() OVER (PARTITION BY ms.major ORDER BY ms.total_raw_score DESC) as `rank`,
@@ -421,6 +421,64 @@ public class EvaluationConfigController {
                 case "COMPREHENSIVE":
                     tableName = "comprehensive_result";
                     
+                    // 检查四个表是否都有对应数据的SQL
+                    String checkTablesSql = """
+                        SELECT 
+                            (SELECT COUNT(*) FROM moral_semester_evaluation 
+                             WHERE academic_year = ? AND semester = ? AND department = ? AND squad = ? AND status = -1) as moral_count,
+                            (SELECT COUNT(*) FROM academic_evaluation 
+                             WHERE academic_year = ? AND semester = ? AND department = ? AND squad = ? AND status = -1) as academic_count,
+                            (SELECT COUNT(*) FROM research_competition_evaluation 
+                             WHERE academic_year = ? AND semester = ? AND department = ? AND squad = ? AND status = -1) as research_count,
+                            (SELECT COUNT(*) FROM sports_arts_evaluation 
+                             WHERE academic_year = ? AND semester = ? AND department = ? AND squad = ? AND status = -1) as sports_count
+                        """;
+                    
+                    Map<String, Object> tableCounts = jdbcTemplate.queryForMap(
+                        checkTablesSql,
+                        request.getAcademicYear(), request.getSemester(), department, squad,
+                        request.getAcademicYear(), request.getSemester(), department, squad,
+                        request.getAcademicYear(), request.getSemester(), department, squad,
+                        request.getAcademicYear(), request.getSemester(), department, squad
+                    );
+                    
+                    // 检查每个表是否都有数据
+                    StringBuilder missingTables = new StringBuilder();
+                    if (((Number)tableCounts.get("moral_count")).intValue() == 0) {
+                        missingTables.append("德育学期测评、");
+                    }
+                    if (((Number)tableCounts.get("academic_count")).intValue() == 0) {
+                        missingTables.append("学业测评、");
+                    }
+                    if (((Number)tableCounts.get("research_count")).intValue() == 0) {
+                        missingTables.append("科研竞赛测评、");
+                    }
+                    if (((Number)tableCounts.get("sports_count")).intValue() == 0) {
+                        missingTables.append("文体活动测评、");
+                    }
+                    
+                    // 如果有缺失的表，返回错误信息
+                    if (missingTables.length() > 0) {
+                        missingTables.setLength(missingTables.length() - 1); // 删除最后一个顿号
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", String.format("无法生成综合测评，以下测评表缺失数据：%s", missingTables.toString())
+                        ));
+                    }
+
+                    String checkSqlComprehensive = """
+                        SELECT COUNT(*) FROM comprehensive_result 
+                        WHERE academic_year = ? AND semester = ?
+                        """;
+                    int countComprehensive = jdbcTemplate.queryForObject(checkSqlComprehensive, Integer.class, 
+                        request.getAcademicYear(), request.getSemester());
+                    if (countComprehensive > 0) {
+                        return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "该学期综合测评已存在，请勿重复发布"
+                        ));
+                    }
+
                     // 1. 先更新各个表的平均分、标准差和最终得分
                     String updateAcademicSql = """
                         UPDATE academic_evaluation ae
@@ -548,6 +606,24 @@ public class EvaluationConfigController {
                         WHERE se.academic_year = ? AND se.semester = ? AND se.status = -1
                     """;
 
+
+                     // 添加诊断日志
+                     String diagnosticSql = """
+                        SELECT 
+                            COUNT(*) as total_records,
+                            AVG(raw_score) as avg_raw_score,
+                            STDDEV_POP(raw_score) as stddev_raw_score
+                        FROM sports_arts_evaluation
+                        WHERE academic_year = ? AND semester = ? AND status = -1
+                    """;
+                    Map<String, Object> diagnosticResult = jdbcTemplate.queryForMap(
+                        diagnosticSql,
+                        request.getAcademicYear(),
+                        request.getSemester()
+                    );
+                    log.info("Sports Arts Evaluation Diagnostic: {}", diagnosticResult);
+
+                    
                     // 执行更新
                     jdbcTemplate.update(updateAcademicSql,
                         request.getAcademicYear(), request.getSemester(),

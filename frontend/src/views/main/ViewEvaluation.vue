@@ -71,30 +71,46 @@
 
           <!-- 月度评分表格 -->
           <div class="table-container" v-if="dataLoaded">
-            <table class="monthly-table">
+            <h3>{{ selectedCategory }}类评分表</h3>
+            <table class="evaluation-table">
               <thead>
                 <tr>
                   <th>班级</th>
                   <th>姓名</th>
                   <th>学号</th>
                   <th>基础分</th>
-                  <th>总加分</th>
-                  <th>总扣分</th>
-                  <th>原始总分</th>
+                  <th v-if="selectedCategory === 'A'">总加分</th>
+                  <th v-if="selectedCategory === 'A'">总扣分</th>
+                  <th>{{ selectedCategory === 'A' ? '原始总分' : '得分' }}</th>
+                  <th v-if="selectedCategory !== 'A'">平均分</th>
+                  <th v-if="selectedCategory !== 'A'">标准差</th>
+                  <th v-if="selectedCategory !== 'A'">最终得分</th>
+                  <th v-if="selectedCategory !== 'A'">排名</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="record in monthlyRecords" :key="record.id">
-                  <td>{{ record.class_id || record.className }}</td>
+                <tr v-if="!monthlyRecords || monthlyRecords.length === 0">
+                  <td :colspan="selectedCategory === 'A' ? 7 : 8" class="no-data">暂无数据</td>
+                </tr>
+                <tr v-else v-for="(record, index) in monthlyRecords" :key="index">
+                  <td>{{ record.class_id }}</td>
                   <td>{{ record.name }}</td>
-                  <td>{{ record.student_id || record.studentId }}</td>
-                  <td>{{ record.base_score || record.baseScore || '0' }}</td>
-                  <td>{{ record.total_bonus || record.totalBonus || '0' }}</td>
-                  <td>{{ record.total_penalty || record.totalPenalty || '0' }}</td>
-                  <td class="total-score">{{ record.raw_score || record.rawScore || '0' }}</td>
+                  <td>{{ record.student_id }}</td>
+                  <td>{{ record.base_score || 0 }}</td>
+                  <td v-if="selectedCategory === 'A'">{{ record.total_bonus || 0 }}</td>
+                  <td v-if="selectedCategory === 'A'">{{ record.total_penalty || 0 }}</td>
+                  <td>{{ record.raw_score || 0 }}</td>
+                  <td v-if="selectedCategory !== 'A'">{{ record.avg_score || 0 }}</td>
+                  <td v-if="selectedCategory !== 'A'">{{ record.std_dev || 0 }}</td>
+                  <td v-if="selectedCategory !== 'A'">{{ record.final_score || 0 }}</td>
+                  <td v-if="selectedCategory !== 'A'">{{ record.rank || '-' }}</td>
                 </tr>
               </tbody>
             </table>
+            <div v-if="monthlyRecords && monthlyRecords.length > 0" class="debug-info" style="margin-top: 10px; color: #666; font-size: 12px;">
+              <!-- 添加调试信息 -->
+              <!-- <pre>{{ JSON.stringify(monthlyRecords, null, 2) }}</pre> -->
+            </div>
           </div>
 
           <!-- 学期总表 -->
@@ -222,6 +238,7 @@ const fetchEvaluationData = async () => {
     isLoading.value = true;
     hasSearched.value = true;
     dataLoaded.value = true;
+    monthlyRecords.value = []; // 清空之前的数据
     
     const [yearStart] = selectedYear.value.split('-');
     // 构建semester参数，格式：year-year-term
@@ -234,8 +251,6 @@ const fetchEvaluationData = async () => {
     });
 
     const token = localStorage.getItem('token');
-    console.log('使用的Token:', token ? `${token.substring(0, 20)}...` : 'Token未找到');
-
     if (!token) {
       console.error('未找到登录令牌');
       alert('请先登录后再查询成绩');
@@ -243,7 +258,6 @@ const fetchEvaluationData = async () => {
       return;
     }
 
-    console.log('开始发送请求...');
     const response = await axios.get(`/api/my-evaluation/scores`, {
       params: {
         category: selectedCategory.value,
@@ -257,43 +271,42 @@ const fetchEvaluationData = async () => {
     
     console.log('收到响应:', response.data);
     
-    if (response.data.success) {
-      console.log('数据处理成功');
-      // 根据后端返回的数据结构更新
-      monthlyRecords.value = response.data.data.monthlyData || [];
-      semesterRecords.value = response.data.data.semesterData || [];
+    if (response.data.success && response.data.data) {
+      // 处理返回的数据
+      const data = response.data.data;
+      console.log('原始数据:', data);
+      
+      if (selectedCategory.value === 'A') {
+        // A类评分处理 monthlyData
+        if (data.monthlyData) {
+          monthlyRecords.value = Array.isArray(data.monthlyData) ? data.monthlyData : [data.monthlyData];
+        } else {
+          monthlyRecords.value = [];
+        }
+      } else {
+        // C类和D类评分处理 semesterData
+        if (data.semesterData) {
+          monthlyRecords.value = Array.isArray(data.semesterData) ? data.semesterData : [data.semesterData];
+        } else {
+          monthlyRecords.value = [];
+        }
+      }
+      
+      console.log('处理后的数据:', monthlyRecords.value);
     } else {
-      console.error('请求成功但返回错误:', response.data.message);
-      alert(response.data.message || '获取数据失败');
+      console.error('请求成功但返回错误或无数据:', response.data.message);
+      monthlyRecords.value = [];
     }
   } catch (error) {
     console.error('获取评分数据失败:', error);
-    hasSearched.value = false;
-    dataLoaded.value = false;
-    
-    if (error.response) {
-      console.error('错误详情:', {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data
-      });
-      
-      if (error.response.status === 401 || error.response.status === 403) {
-        console.log('权限错误，准备跳转到登录页');
-        alert('登录已过期或没有权限，请重新登录');
-        router.push('/login');
-      } else {
-        alert(`请求失败: ${error.response.status} ${error.response.statusText}`);
-      }
-    } else if (error.request) {
-      console.error('请求未收到响应:', error.request);
-      alert('无法连接到服务器，请检查网络连接');
+    monthlyRecords.value = [];
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      alert('登录已过期或没有权限，请重新登录');
+      router.push('/login');
     } else {
-      console.error('请求配置错误:', error.message);
-      alert(`发生错误: ${error.message || '未知错误'}`);
+      alert(error.response?.data?.message || '获取数据失败');
     }
   } finally {
-    console.log('请求结束，重置加载状态');
     isLoading.value = false;
   }
 };
@@ -539,5 +552,41 @@ h3 {
     justify-content: center;
     margin-top: 20px;
   }
+}
+
+.evaluation-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  background: white;
+}
+
+.evaluation-table th,
+.evaluation-table td {
+  padding: 12px;
+  text-align: center;
+  border: 1px solid #ebeef5;
+}
+
+.evaluation-table th {
+  background-color: #f5f7fa;
+  color: #606266;
+  font-weight: 500;
+}
+
+.evaluation-table tbody tr:hover {
+  background-color: #f5f7fa;
+}
+
+.no-data {
+  text-align: center;
+  color: #909399;
+  padding: 24px;
+}
+
+.table-container h3 {
+  margin-bottom: 16px;
+  color: #303133;
+  font-size: 18px;
 }
 </style> 
