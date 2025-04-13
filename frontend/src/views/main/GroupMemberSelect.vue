@@ -119,7 +119,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
@@ -243,7 +243,22 @@ const fetchStudents = async () => {
     console.log('Students response:', response.data)
 
     if (response.data.success) {
+      // 保存当前选中的学生
+      const currentSelectedIds = selectedStudents.value.map(s => s.studentId)
+      
+      // 更新学生列表
       students.value = response.data.data
+      
+      // 在下一个 tick 中恢复选中状态
+      nextTick(() => {
+        if (tableRef.value) {
+          students.value.forEach(student => {
+            if (currentSelectedIds.includes(student.studentId)) {
+              tableRef.value.toggleRowSelection(student, true)
+            }
+          })
+        }
+      })
     } else {
       ElMessage.error(response.data.message || '获取学生列表失败')
     }
@@ -294,8 +309,11 @@ const isAlreadySelected = (student) => {
 }
 
 const handleSelectionChange = (selection) => {
-  console.log('Selection changed:', selection);
-  selectedStudents.value = selection;
+  console.log('Selection changed:', selection)
+  // 合并新选择的学生和已选择但当前不在列表中的学生
+  const currentStudentIds = students.value.map(s => s.studentId)
+  const selectedFromOtherPages = selectedStudents.value.filter(s => !currentStudentIds.includes(s.studentId))
+  selectedStudents.value = [...selection, ...selectedFromOtherPages]
 }
 
 // 添加表格引用以便清除选择状态
@@ -394,9 +412,15 @@ const saveSelectedMembers = async () => {
 }
 
 const removeSelection = (student) => {
-  const index = selectedStudents.value.findIndex(s => s.id === student.id)
-  if (index !== -1) {
-    selectedStudents.value.splice(index, 1)
+  // 从已选列表中移除
+  selectedStudents.value = selectedStudents.value.filter(s => s.studentId !== student.studentId)
+  
+  // 如果学生在当前表格中，也取消其选中状态
+  if (tableRef.value) {
+    const rowInTable = students.value.find(s => s.studentId === student.studentId)
+    if (rowInTable) {
+      tableRef.value.toggleRowSelection(rowInTable, false)
+    }
   }
 }
 
