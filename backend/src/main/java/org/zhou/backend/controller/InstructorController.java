@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.IOUtils;
@@ -67,6 +68,7 @@ import org.zhou.backend.service.EvaluationService;
 import org.zhou.backend.service.FileStorageService;
 import org.zhou.backend.service.InstructorService;
 import org.zhou.backend.service.UserService;
+import org.zhou.backend.repository.UserRepository;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -81,6 +83,7 @@ public class InstructorController {
     private final EvaluationService evaluationService;
     private final InstructorService instructorService;
     private final UserService userService;
+    private final UserRepository userRepository;
     private final GroupMemberRepository groupMemberRepository;
     private final JdbcTemplate jdbcTemplate;
     @Value("${file.upload.path:${user.home}/evaluation-files}")
@@ -106,9 +109,53 @@ public class InstructorController {
             Page<EvaluationMaterial> materials = evaluationService.getReportedMaterialsForInstructor(
                 userPrincipal.getId(), status, page, size);
             
+            // 获取所有材料对应的用户ID
+            List<Long> userIds = materials.getContent().stream()
+                .map(EvaluationMaterial::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+            
+            // 批量查询用户信息
+            Map<Long, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
+            
+            // 将用户信息添加到材料数据中
+            List<Map<String, Object>> materialDataList = materials.getContent().stream()
+                .map(material -> {
+                    Map<String, Object> materialData = new HashMap<>();
+                    // 复制材料的所有字段
+                    materialData.put("id", material.getId());
+                    materialData.put("title", material.getTitle());
+                    materialData.put("description", material.getDescription());
+                    materialData.put("status", material.getStatus());
+                    materialData.put("evaluationType", material.getEvaluationType());
+                    materialData.put("score", material.getScore());
+                    materialData.put("reviewComment", material.getReviewComment());
+                    materialData.put("reportedAt", material.getReportedAt());
+                    materialData.put("reviewedAt", material.getReviewedAt());
+                    materialData.put("reviewerId", material.getReviewerId());
+                    materialData.put("classId", material.getClassId());
+                    materialData.put("department", material.getDepartment());
+                    materialData.put("squad", material.getSquad());
+                    materialData.put("createdAt", material.getCreatedAt());
+                    materialData.put("updatedAt", material.getUpdatedAt());
+                    materialData.put("userId", material.getUserId());
+                    materialData.put("attachments", material.getAttachments());  // 添加附件信息
+                    
+                    // 添加用户信息
+                    User user = userMap.get(material.getUserId());
+                    if (user != null) {
+                        materialData.put("studentId", user.getUserId());  // 学号
+                        materialData.put("studentName", user.getName());  // 姓名
+                    }
+                    
+                    return materialData;
+                })
+                .collect(Collectors.toList());
+            
             return ResponseEntity.ok(Map.of(
                 "success", true,
-                "data", materials.getContent(),
+                "data", materialDataList,
                 "total", materials.getTotalElements(),
                 "pageSize", materials.getSize(),
                 "current", materials.getNumber() + 1

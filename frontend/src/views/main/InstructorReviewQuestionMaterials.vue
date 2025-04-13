@@ -28,7 +28,8 @@
               :data="filteredQuestionMaterials"
               style="width: 100%">
               <el-table-column prop="reportedAt" label="提交时间" width="180" />
-              <el-table-column prop="userId" label="学号" width="120" />
+              <el-table-column prop="studentId" label="学号" width="120" />
+              <el-table-column prop="studentName" label="姓名" width="120" />
               <el-table-column prop="title" label="材料名称" />
               <el-table-column prop="evaluationType" label="申请类别" width="120">
                 <template #default="{ row }">
@@ -140,16 +141,22 @@
           <!-- 材料预览对话框 -->
           <el-dialog
             v-model="previewDialogVisible"
-            title="材料预览"
-            width="800px"
+            :title="'预览附件'"
+            width="80%"
+            destroy-on-close
+            class="preview-dialog"
           >
-            <div class="preview-content">
-              <div class="material-preview">
-                <!-- 这里可以根据材料类型显示不同的预览内容 -->
-                <img v-if="currentMaterial?.materialType === 'image'" :src="currentMaterial?.materialUrl" />
-                <iframe v-else-if="currentMaterial?.materialType === 'pdf'" :src="currentMaterial?.materialUrl" />
-                <div v-else>暂不支持预览该类型的材料</div>
+            <div v-if="previewUrl" class="preview-container">
+              <img v-if="isImage" :src="previewUrl" class="preview-image" />
+              <iframe v-else-if="isPdf" :src="previewUrl" class="preview-pdf"></iframe>
+              <div v-else class="unsupported-file">
+                <p>不支持预览此类型的文件</p>
+                <el-button type="primary" @click="downloadFile">下载文件</el-button>
               </div>
+            </div>
+            <div v-else class="loading-container">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              <span>加载中...</span>
             </div>
           </el-dialog>
 
@@ -188,11 +195,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from '@/utils/request'  // 使用配置好的axios实例
 import TopBar from '@/components/TopBar.vue'
 import Sidebar from '@/components/Sidebar.vue'
+import { Loading } from '@element-plus/icons-vue'
 
 // 加分类别选项
 const categories = [
@@ -396,30 +404,56 @@ const handleViewAttachments = (row) => {
   attachmentDialogVisible.value = true
 }
 
-// 添加附件预览方法
+// 预览相关的响应式变量
+const previewUrl = ref('')
+const isImage = ref(false)
+const isPdf = ref(false)
+
+// 预览附件方法
 const previewAttachment = async (attachment) => {
-  const fileType = attachment.fileType.toLowerCase()
-  
-  if (['jpg', 'jpeg', 'png', 'pdf'].includes(fileType)) {
-    try {
-      const response = await axios.get(`/api/evaluation/preview/${attachment.id}`, {
-        responseType: 'blob'
-      })
-      
-      const url = URL.createObjectURL(response.data)
-      window.open(url, '_blank')
-    } catch (error) {
-      ElMessage.error('预览失败')
+  try {
+    // 重置预览状态
+    previewUrl.value = ''
+    isImage.value = false
+    isPdf.value = false
+    previewDialogVisible.value = true
+
+    // 获取文件扩展名
+    const fileExt = attachment.fileName.split('.').pop().toLowerCase()
+    
+    // 检查文件类型
+    isImage.value = ['jpg', 'jpeg', 'png', 'gif'].includes(fileExt)
+    isPdf.value = fileExt === 'pdf'
+
+    // 如果是不支持预览的文件类型，直接触发下载
+    if (!isImage.value && !isPdf.value) {
+      ElMessage.info('不支持预览此类型的文件，将自动下载')
+      downloadFile(attachment)
+      return
     }
-  } else {
-    ElMessage.info('该文件类型不支持预览，请下载后查看')
+
+    // 获取预览URL
+    const response = await axios.get(`/evaluation/preview/${attachment.id}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      responseType: 'blob'
+    })
+
+    // 创建Blob URL
+    previewUrl.value = URL.createObjectURL(response.data)
+  } catch (error) {
+    console.error('预览失败:', error)
+    ElMessage.error('预览失败，将尝试下载文件')
+    downloadFile(attachment)
   }
 }
 
+// 下载文件方法
 // 添加附件下载方法
 const downloadAttachment = async (attachment) => {
   try {
-    const response = await axios.get(`/api/evaluation/download/${attachment.id}`, {
+    const response = await axios.get(`/evaluation/download/${attachment.id}`, {
       responseType: 'blob'
     })
     
@@ -435,6 +469,14 @@ const downloadAttachment = async (attachment) => {
     ElMessage.error('下载失败')
   }
 }
+
+
+// 组件卸载前清理URL
+onBeforeUnmount(() => {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+  }
+})
 
 const formatFileSize = (size) => {
   if (size < 1024) {
@@ -660,5 +702,39 @@ const formatFileSize = (size) => {
 .custom-input:focus {
   outline: none;
   border-color: #409eff;
+}
+
+.preview-dialog {
+  .preview-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    
+    .preview-image {
+      max-width: 100%;
+      max-height: 70vh;
+      object-fit: contain;
+    }
+    
+    .preview-pdf {
+      width: 100%;
+      height: 70vh;
+      border: none;
+    }
+    
+    .unsupported-file {
+      text-align: center;
+      padding: 20px;
+    }
+  }
+  
+  .loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    gap: 10px;
+  }
 }
 </style> 
