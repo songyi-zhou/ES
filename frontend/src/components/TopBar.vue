@@ -5,8 +5,7 @@
       <span class="system-title">综合测评管理系统</span>
     </div>
     <div class="user-info">
-      <img src="@/assets/picture/school_logo.webp" alt="用户头像" class="user-avatar" />
-      <span class="user-name">{{ userName }}</span>
+      <span class="user-name">欢迎，{{ userName }}</span>
       <button class="logout-btn" @click="logout">登出</button>
     </div>
   </header>
