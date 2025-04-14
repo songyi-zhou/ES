@@ -16,28 +16,38 @@
             </div>
             <div class="info-row">
               <span class="label">学号：</span>
-              <span class="value">{{ userInfo.studentNumber }}</span>
+              <span class="value">{{ userInfo.userId }}</span>
             </div>
             <div class="info-row">
               <span class="label">学院：</span>
-              <span class="value">{{ userInfo.college }}</span>
+              <span class="value">{{ userInfo.department }}</span>
             </div>
             <div class="info-row">
               <span class="label">专业：</span>
               <span class="value">{{ userInfo.major }}</span>
             </div>
             <div class="info-row">
+              <span class="label">班级：</span>
+              <span class="value">{{ userInfo.className }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">中队：</span>
+              <span class="value">{{ userInfo.squad }}</span>
+            </div>
+            <div class="info-row">
               <span class="label">联系电话：</span>
-              <span class="value">{{ userInfo.phone }}</span>
+              <span class="value">{{ userInfo.phone || '未设置' }}</span>
             </div>
             <div class="info-row">
               <span class="label">邮箱：</span>
-              <span class="value">{{ userInfo.email }}</span>
+              <span class="value">{{ userInfo.email || '未设置' }}</span>
             </div>
           </div>
 
-          <!-- 修改个人信息 -->
-          <button class="edit-btn" @click="editProfile">修改信息</button>
+          <div class="button-group">
+            <button class="edit-btn" @click="editProfile">修改信息</button>
+            <button class="change-password-btn" @click="changePassword">修改密码</button>
+          </div>
         </section>
       </main>
     </div>
@@ -45,34 +55,61 @@
 </template>
 
 <script setup>
-import {ref, onMounted} from "vue";
+import { ref, onMounted } from "vue";
 import TopBar from "@/components/TopBar.vue";
 import Sidebar from "@/components/Sidebar.vue";
 import router from "@/router";
+import axios from "axios";
+import { ElMessage } from "element-plus";
 
 // 用户信息
 const userInfo = ref({
-  name: "张三",
-  studentNumber: "20211001",
-  college: "计算机学院",
-  major: "软件工程",
-  phone: "13888888888",
-  email: "zhangsan@example.com",
-  avatar: "https://via.placeholder.com/100" // 默认头像
+  name: "",
+  userId: "",
+  department: "",
+  major: "",
+  className: "",
+  squad: "",
+  phone: "",
+  email: ""
 });
+
+// 加载状态
+const isLoading = ref(true);
+
+// 获取用户信息
+const fetchUserInfo = async () => {
+  try {
+    isLoading.value = true;
+    const response = await axios.get('/api/profile/info');
+    if (response.data.success) {
+      userInfo.value = response.data.data;
+    } else {
+      ElMessage.error(response.data.message || '获取用户信息失败');
+    }
+  } catch (error) {
+    console.error('获取用户信息失败:', error);
+    ElMessage.error('获取用户信息失败，请稍后重试');
+  } finally {
+    isLoading.value = false;
+  }
+};
 
 // 跳转到修改个人信息页面
 const editProfile = () => {
   router.push("/profile/edit");
 };
 
-// 模拟从后端获取数据
+// 跳转到修改密码页面
+const changePassword = () => {
+  router.push("/profile/change-password");
+};
+
+// 组件挂载时获取用户信息
 onMounted(() => {
-  // 假设这里调用API获取个人信息
-  console.log("加载用户信息...");
+  fetchUserInfo();
 });
 </script>
-
 
 <style scoped>
 .profile-container {
@@ -166,28 +203,45 @@ onMounted(() => {
   font-size: 15px;
 }
 
+/* 按钮组 */
+.button-group {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 32px;
+}
+
 /* 修改按钮 */
-.edit-btn {
+.edit-btn,
+.change-password-btn {
   width: 200px;
-  margin: 32px auto 0;
   padding: 12px 24px;
-  background: linear-gradient(135deg, #409eff, #3a8ee6);
-  color: white;
   border: none;
   border-radius: 8px;
   font-size: 16px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s;
-  display: block;
 }
 
-.edit-btn:hover {
+.edit-btn {
+  background: linear-gradient(135deg, #409eff, #3a8ee6);
+  color: white;
+}
+
+.change-password-btn {
+  background: linear-gradient(135deg, #67c23a, #5daf34);
+  color: white;
+}
+
+.edit-btn:hover,
+.change-password-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.edit-btn:active {
+.edit-btn:active,
+.change-password-btn:active {
   transform: translateY(0);
 }
 </style>

@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
+import java.util.HashMap;
 
 @Slf4j
 @RestController
@@ -32,18 +33,20 @@ public class UserProfileController {
             User user = userRepository.findByUserId(userPrincipal.getUserId())
                 .orElseThrow(() -> new RuntimeException("用户不存在"));
 
+            // 使用HashMap而不是Map.of，以允许null值
+            Map<String, Object> userData = new HashMap<>();
+            userData.put("userId", user.getUserId());
+            userData.put("name", user.getName());
+            userData.put("department", user.getDepartment());
+            userData.put("major", user.getMajor());
+            userData.put("className", user.getClassName());
+            userData.put("squad", user.getSquad());
+            userData.put("phone", user.getPhone());
+            userData.put("email", user.getEmail());
+
             return ResponseEntity.ok(Map.of(
                 "success", true,
-                "data", Map.of(
-                    "userId", user.getUserId(),
-                    "name", user.getName(),
-                    "department", user.getDepartment(),
-                    "major", user.getMajor(),
-                    "className", user.getClassName(),
-                    "squad", user.getSquad(),
-                    "phone", user.getPhone(),
-                    "email", user.getEmail()
-                )
+                "data", userData
             ));
         } catch (Exception e) {
             log.error("获取用户信息失败", e);
