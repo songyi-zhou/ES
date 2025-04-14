@@ -8,7 +8,7 @@
           <h2>个人信息</h2>
           <div class="profile-info">
             <div class="avatar-container">
-              <img src="@/assets/picture/school_logo.webp" alt="用户头像" class="avatar" />
+              <img :src="avatarUrl" alt="用户头像" class="avatar" />
             </div>
             <div class="info-row">
               <span class="label">姓名：</span>
@@ -55,12 +55,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import TopBar from "@/components/TopBar.vue";
 import Sidebar from "@/components/Sidebar.vue";
 import router from "@/router";
 import axios from "axios";
 import { ElMessage } from "element-plus";
+import defaultAvatar from '@/assets/picture/school_logo.webp';
+import { loadImage, getImageUrl } from '@/utils/imageLoader';
 
 // 用户信息
 const userInfo = ref({
@@ -71,8 +73,23 @@ const userInfo = ref({
   className: "",
   squad: "",
   phone: "",
-  email: ""
+  email: "",
+  avatar: ""
 });
+
+// 头像URL
+const avatarUrl = ref(defaultAvatar);
+
+// 加载头像
+const loadAvatar = async () => {
+  if (userInfo.value.avatar) {
+    const url = getImageUrl(userInfo.value.avatar);
+    const imageUrl = await loadImage(url);
+    if (imageUrl) {
+      avatarUrl.value = imageUrl;
+    }
+  }
+};
 
 // 加载状态
 const isLoading = ref(true);
@@ -84,6 +101,7 @@ const fetchUserInfo = async () => {
     const response = await axios.get('/api/profile/info');
     if (response.data.success) {
       userInfo.value = response.data.data;
+      await loadAvatar(); // 加载头像
     } else {
       ElMessage.error(response.data.message || '获取用户信息失败');
     }
@@ -163,7 +181,8 @@ onMounted(() => {
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  object-fit: cover;
+  background-size: cover;
+  background-position: center;
   border: 4px solid #fff;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transition: transform 0.3s;

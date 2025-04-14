@@ -5,9 +5,11 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.zhou.backend.entity.User;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.UserService;
+import org.zhou.backend.service.FileStorageService;
 import org.zhou.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ public class UserProfileController {
     private final UserService userService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final FileStorageService fileStorageService;
 
     @GetMapping("/info")
     @PreAuthorize("isAuthenticated()")
@@ -43,6 +46,7 @@ public class UserProfileController {
             userData.put("squad", user.getSquad());
             userData.put("phone", user.getPhone());
             userData.put("email", user.getEmail());
+            userData.put("avatar", user.getAvatarUrl());
 
             return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -50,6 +54,60 @@ public class UserProfileController {
             ));
         } catch (Exception e) {
             log.error("获取用户信息失败", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
+        }
+    }
+
+    @PostMapping("/avatar")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> uploadAvatar(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam("file") MultipartFile file) {
+        try {
+            // 验证文件类型
+            String contentType = file.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "只能上传图片文件"
+                ));
+            }
+
+            // 验证文件大小（最大5MB）
+            if (file.getSize() > 5 * 1024 * 1024) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "图片大小不能超过5MB"
+                ));
+            }
+
+            User user = userRepository.findByUserId(userPrincipal.getUserId())
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+
+            // 删除旧头像
+            if (user.getAvatarUrl() != null) {
+                try {
+                    fileStorageService.deleteFile(user.getAvatarUrl());
+                } catch (Exception e) {
+                    log.warn("删除旧头像失败: {}", e.getMessage());
+                }
+            }
+
+            // 保存新头像
+            String fileName = fileStorageService.storeFile(file);
+            user.setAvatarUrl(fileName);
+            userRepository.save(user);
+
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "头像上传成功",
+                "data", Map.of("avatar", fileName)
+            ));
+        } catch (Exception e) {
+            log.error("上传头像失败", e);
             return ResponseEntity.badRequest().body(Map.of(
                 "success", false,
                 "message", e.getMessage()

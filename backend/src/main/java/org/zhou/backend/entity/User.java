@@ -64,6 +64,9 @@ public class User {
     @Column(name = "email")
     private String email;  // 邮箱
 
+    @Column(name = "avatar_url")
+    private String avatarUrl;  // 头像URL
+
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
