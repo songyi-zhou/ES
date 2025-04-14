@@ -58,6 +58,12 @@ public class User {
     @Column(name = "squad")
     private String squad;  // 对于学生是所属中队号，对于导员是负责的中队列表
 
+    @Column(name = "phone")
+    private String phone;  // 联系电话
+
+    @Column(name = "email")
+    private String email;  // 邮箱
+
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;

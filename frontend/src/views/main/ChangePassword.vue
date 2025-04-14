@@ -8,17 +8,38 @@
           <h2>修改密码</h2>
           <form @submit.prevent="changePassword">
             <label>旧密码：</label>
-            <input v-model="oldPassword" type="password" required />
+            <input 
+              v-model="oldPassword" 
+              type="password" 
+              required 
+              :disabled="isLoading"
+            />
 
             <label>新密码：</label>
-            <input v-model="newPassword" type="password" required />
+            <input 
+              v-model="newPassword" 
+              type="password" 
+              required 
+              :disabled="isLoading"
+            />
 
             <label>确认新密码：</label>
-            <input v-model="confirmPassword" type="password" required />
+            <input 
+              v-model="confirmPassword" 
+              type="password" 
+              required 
+              :disabled="isLoading"
+            />
 
             <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
-            <button type="submit" class="save-btn">确认修改</button>
+            <button 
+              type="submit" 
+              class="save-btn"
+              :disabled="isLoading"
+            >
+              {{ isLoading ? '修改中...' : '确认修改' }}
+            </button>
           </form>
         </section>
       </main>
@@ -31,15 +52,22 @@ import { ref } from "vue";
 import TopBar from "@/components/TopBar.vue";
 import Sidebar from "@/components/Sidebar.vue";
 import router from "@/router";
+import axios from "axios";
+import { ElMessage } from "element-plus";
 
 // 密码字段
 const oldPassword = ref("");
 const newPassword = ref("");
 const confirmPassword = ref("");
 const errorMessage = ref("");
+const isLoading = ref(false);
 
 // 修改密码逻辑
-const changePassword = () => {
+const changePassword = async () => {
+  // 重置错误信息
+  errorMessage.value = "";
+
+  // 前端验证
   if (!oldPassword.value) {
     errorMessage.value = "旧密码不能为空";
     return;
@@ -55,14 +83,37 @@ const changePassword = () => {
     return;
   }
 
-  // TODO: 调用后端 API 修改密码
-  console.log("提交修改密码请求", {
-    oldPassword: oldPassword.value,
-    newPassword: newPassword.value,
-  });
+  try {
+    isLoading.value = true;
+    
+    // 调用后端API
+    const response = await axios.post("/api/profile/change-password", {
+      oldPassword: oldPassword.value,
+      newPassword: newPassword.value,
+      confirmPassword: confirmPassword.value
+    });
 
-  alert("密码修改成功！");
-  router.push("/profile/view");
+    if (response.data.success) {
+      ElMessage.success("密码修改成功！");
+      // 清空表单
+      oldPassword.value = "";
+      newPassword.value = "";
+      confirmPassword.value = "";
+      // 跳转到个人资料页面
+      router.push("/profile/view");
+    } else {
+      errorMessage.value = response.data.message;
+    }
+  } catch (error) {
+    if (error.response && error.response.data) {
+      errorMessage.value = error.response.data.message || "修改密码失败";
+    } else {
+      errorMessage.value = "网络错误，请稍后重试";
+    }
+    console.error("修改密码失败:", error);
+  } finally {
+    isLoading.value = false;
+  }
 };
 </script>
 
