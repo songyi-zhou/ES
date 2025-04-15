@@ -526,4 +526,20 @@ CREATE TABLE score_upload_files (
     INDEX idx_upload_history_id (upload_history_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成绩上传文件信息表';
 
+CREATE TABLE messages (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '消息ID，主键自增',
+    title VARCHAR(255) NOT NULL COMMENT '消息标题',
+    content TEXT NOT NULL COMMENT '消息内容',
+    sender VARCHAR(255) NOT NULL COMMENT '发送者',
+    receiver VARCHAR(255) NOT NULL COMMENT '接收者',
+    type VARCHAR(50) NOT NULL COMMENT '消息类型：system-系统通知, evaluation-综测相关, announcement-重要公告',
+    `read` BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否已读',
+    create_time DATETIME NOT NULL COMMENT '创建时间',
+    read_time DATETIME COMMENT '阅读时间',
+    INDEX idx_receiver (receiver) COMMENT '接收者索引',
+    INDEX idx_type (type) COMMENT '消息类型索引',
+    INDEX idx_read (`read`) COMMENT '已读状态索引',
+    INDEX idx_create_time (create_time) COMMENT '创建时间索引'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息表';
+
 
