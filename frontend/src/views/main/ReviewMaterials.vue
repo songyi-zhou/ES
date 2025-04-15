@@ -250,7 +250,7 @@
     <el-dialog
       v-model="approveDialogVisible"
       title="通过审核"
-      width="500px"
+      width="800px"
     >
       <div class="approve-form">
         <div class="form-item">
@@ -261,10 +261,53 @@
               <i class="dropdown-icon">▼</i>
             </div>
             <div class="dropdown-menu" v-if="showTypeDropdown">
-              <div class="dropdown-item" @click="selectEvaluationType('A')">德育测评加分(A)</div>
-              <div class="dropdown-item" @click="selectEvaluationType('C')">科研竞赛加分(C)</div>
-              <div class="dropdown-item" @click="selectEvaluationType('D')">文体活动加分(D)</div>
+              <div class="dropdown-item" @click="selectEvaluationType('A')">德育测评加分(A类)</div>
+              <div class="dropdown-item" @click="selectEvaluationType('C')">科研竞赛加分(C类)</div>
+              <div class="dropdown-item" @click="selectEvaluationType('D')">文体活动加分(D类)</div>
             </div>
+          </div>
+        </div>
+        
+        <div class="form-item">
+          <div class="input-mode-switch">
+            <el-radio-group v-model="inputMode" @change="handleInputModeChange">
+              <el-radio label="manual">手动输入</el-radio>
+              <el-radio label="rule">选择规则</el-radio>
+            </el-radio-group>
+          </div>
+        </div>
+        
+        <div class="form-item" v-if="inputMode === 'rule'">
+          <label class="form-label">加分规则</label>
+          <div class="rules-search">
+            <input
+              v-model="ruleSearchKeyword"
+              placeholder="输入关键词搜索规则"
+              class="custom-input"
+            />
+          </div>
+          <div v-if="ruleSearchKeyword.trim()" class="rules-list">
+            <div v-if="filteredBonusRules.length > 0" class="rules-grid">
+              <div 
+                v-for="rule in filteredBonusRules" 
+                :key="rule.id" 
+                class="rule-item"
+                :class="{ 'selected': selectedRuleId === rule.id }"
+                @click="selectRule(rule)"
+              >
+                <div class="rule-content">
+                  <div class="rule-title">{{ rule.reason }}</div>
+                  <div class="rule-score">加分数额: {{ formatScore(rule.points) }}分</div>
+                  <div class="rule-reason">{{ rule.description }}</div>
+                </div>
+              </div>
+            </div>
+            <div v-else class="no-rules">
+              <p>未找到相关加分规则</p>
+            </div>
+          </div>
+          <div v-else class="no-rules">
+            <p>请输入关键词搜索加分规则</p>
           </div>
         </div>
         
@@ -279,6 +322,7 @@
               max="20" 
               step="0.5" 
               class="score-input"
+              :disabled="inputMode === 'rule' && selectedRuleId !== null"
             />
             <button class="score-btn" @click="increaseScore">+</button>
           </div>
@@ -291,6 +335,7 @@
             class="custom-textarea"
             rows="3"
             placeholder="请输入备注信息"
+            :disabled="inputMode === 'rule' && selectedRuleId !== null"
           ></textarea>
         </div>
       </div>
@@ -394,6 +439,19 @@ interface EvaluationMaterial {
   attachments?: EvaluationAttachment[];
 }
 
+interface BonusRule {
+  id: number;
+  points: number;
+  reason: string;
+  type: string;
+  level?: string;
+  department?: string;
+  squad?: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 const materials = ref<EvaluationMaterial[]>([]);
 const loading = ref(true);
 const searchKeyword = ref('');
@@ -426,6 +484,10 @@ const correctForm = ref({
   reviewComment: ''
 });
 const showCorrectTypeDropdown = ref(false);
+const bonusRules = ref<BonusRule[]>([]);
+const selectedRuleId = ref<number | null>(null);
+const inputMode = ref<'manual' | 'rule'>('manual');
+const ruleSearchKeyword = ref('');
 
 const evaluationTypes = [
   { value: 'academic', label: '学术成果' },
@@ -520,11 +582,9 @@ const getStatusText = (status: string) => {
 
 const getEvaluationTypeText = (type: string) => {
   const typeMap: Record<string, string> = {
-    'academic': '学术成果',
-    'practice': '社会实践',
-    'volunteer': '志愿服务',
-    'work': '学生工作',
-    'other': '其他'
+    'A': '德育测评加分(A类)',
+    'C': '科研竞赛加分(C类)',
+    'D': '文体活动加分(D类)'
   };
   return typeMap[type] || type;
 };
@@ -556,12 +616,20 @@ const openRejectDialog = (record: EvaluationMaterial) => {
 
 const handleReview = (record: EvaluationMaterial) => {
   approveForm.value = {
-    evaluationType: 'A',
+    evaluationType: record.evaluationType || 'A',
     score: 1,
     comment: '',
     materialId: record.id
   };
+  selectedRuleId.value = null;
+  bonusRules.value = [];
+  inputMode.value = 'manual';
   approveDialogVisible.value = true;
+  
+  // 如果是规则模式，自动加载对应类型的规则
+  if (inputMode.value === 'rule') {
+    fetchBonusRules(record.evaluationType || 'A');
+  }
 };
 
 const submitReject = async () => {
@@ -664,9 +732,54 @@ const toggleTypeDropdown = () => {
   showTypeDropdown.value = !showTypeDropdown.value;
 };
 
-const selectEvaluationType = (type) => {
+const selectEvaluationType = async (type: string) => {
   approveForm.value.evaluationType = type;
   showTypeDropdown.value = false;
+  selectedRuleId.value = null; // 清除已选择的规则
+  ruleSearchKeyword.value = ''; // 清除搜索关键词
+  
+  // 如果是规则模式，加载新类型的规则
+  if (inputMode.value === 'rule') {
+    await fetchBonusRules(type);
+  }
+};
+
+const fetchBonusRules = async (type: string) => {
+  try {
+    const response = await request.get('/bonus-rules', {
+      params: {
+        type: type
+      }
+    });
+    // 后端直接返回数组，不需要 .data
+    bonusRules.value = response.data || [];
+    selectedRuleId.value = null; // 重置选中的规则
+  } catch (error) {
+    console.error('获取加分规则失败:', error);
+    ElMessage.error('获取加分规则失败');
+  }
+};
+
+const filteredBonusRules = computed(() => {
+  if (!ruleSearchKeyword.value.trim()) {
+    return []; // 没有搜索关键词时返回空数组
+  }
+  const searchText = ruleSearchKeyword.value.toLowerCase();
+  return bonusRules.value.filter(rule => {
+    return (
+      rule.reason?.toLowerCase().includes(searchText) ||
+      rule.description?.toLowerCase().includes(searchText) ||
+      rule.level?.toLowerCase().includes(searchText) ||
+      rule.department?.toLowerCase().includes(searchText) ||
+      rule.squad?.toLowerCase().includes(searchText)
+    );
+  });
+});
+
+const selectRule = (rule: BonusRule) => {
+  selectedRuleId.value = rule.id;
+  approveForm.value.score = rule.points;
+  approveForm.value.comment = rule.reason;
 };
 
 const increaseScore = () => {
@@ -683,28 +796,46 @@ const decreaseScore = () => {
 
 const submitApprove = async () => {
   if (!approveForm.value.evaluationType) {
+    console.warn('提交审核失败：未选择加分类型');
     ElMessage.warning('请选择加分类型');
     return;
   }
   
   if (!approveForm.value.score) {
+    console.warn('提交审核失败：未输入加分数额');
     ElMessage.warning('请输入加分数额');
     return;
   }
   
+  console.log('开始提交审核请求', {
+    materialId: approveForm.value.materialId,
+    evaluationType: approveForm.value.evaluationType,
+    score: approveForm.value.score,
+    comment: approveForm.value.comment
+  });
+  
   try {
     submitting.value = true;
-    await axios.post('/evaluation/review-material', {
+    console.log('发送审核请求到后端...');
+    const response = await axios.post('/evaluation/review-material', {
       materialId: approveForm.value.materialId,
       status: 'APPROVED',
       evaluationType: approveForm.value.evaluationType,
       score: approveForm.value.score,
       comment: approveForm.value.comment || '通过审核'
     });
+    console.log('审核请求成功', response.data);
     ElMessage.success('审核通过成功');
     approveDialogVisible.value = false;
+    console.log('开始重新获取材料列表...');
     await fetchMaterials();
+    console.log('材料列表更新完成');
   } catch (error) {
+    console.error('审核请求失败', {
+      status: error.response?.status,
+      message: error.response?.data?.message,
+      error: error
+    });
     if (error.response?.status === 403) {
       ElMessage.error('没有权限执行此操作');
     } else {
@@ -712,6 +843,7 @@ const submitApprove = async () => {
     }
   } finally {
     submitting.value = false;
+    console.log('审核流程结束');
   }
 };
 
@@ -785,6 +917,23 @@ const selectCorrectType = (type) => {
 
 const toggleCorrectTypeDropdown = () => {
   showCorrectTypeDropdown.value = !showCorrectTypeDropdown.value;
+};
+
+const handleInputModeChange = (mode: 'manual' | 'rule') => {
+  if (mode === 'manual') {
+    selectedRuleId.value = null;
+    approveForm.value.score = 1;
+    approveForm.value.comment = '';
+  } else {
+    // 切换到规则模式时，加载当前类型的规则
+    fetchBonusRules(approveForm.value.evaluationType);
+  }
+};
+
+// 添加分数格式化函数
+const formatScore = (score: number | string) => {
+  const num = typeof score === 'string' ? parseFloat(score) : score;
+  return isNaN(num) ? '0.0' : num.toFixed(1);
 };
 
 onMounted(() => {
@@ -1384,5 +1533,89 @@ h2 {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.rules-search {
+  margin-bottom: 12px;
+}
+
+.rules-search .custom-input {
+  width: 100%;
+}
+
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  padding: 12px;
+}
+
+.rule-item {
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background-color: #fff;
+}
+
+.rule-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.rule-item.selected {
+  background-color: #ecf5ff;
+  border: 1px solid #409eff;
+}
+
+.rule-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rule-title {
+  font-weight: bold;
+  color: #303133;
+  font-size: 14px;
+}
+
+.rule-score {
+  color: #67c23a;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.rule-reason {
+  color: #606266;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.rules-list {
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+  background-color: #f5f7fa;
+}
+
+.input-mode-switch {
+  margin-bottom: 20px;
+  padding: 10px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+  display: flex;
+  justify-content: center;
+}
+
+:deep(.el-radio-group) {
+  display: flex;
+  gap: 20px;
+}
+
+:deep(.el-radio) {
+  margin-right: 0;
 }
 </style>
