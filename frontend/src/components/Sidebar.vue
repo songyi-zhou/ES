@@ -130,6 +130,7 @@ const menuItems = ref([
       { title: '权限管理', path: '/admin/permissions', icon: 'el-icon-key' },
       { title: '用户信息导入', path: '/admin/user-import', icon: 'el-icon-upload' },
       { title: '系统参数配置', path: '/admin/system-config', icon: 'el-icon-setting' },
+      { title: '班级管理', path: '/admin/class-management', icon: 'el-icon-s-data' }
     ]
   },
   {

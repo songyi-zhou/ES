@@ -209,6 +209,16 @@ const routes = [
           requiresInstructor: true,
           title: '成绩表格上传'
         }
+      },
+      {
+        path: '/admin/class-management',
+        name: 'ClassManagement',
+        component: () => import('@/views/admin/ClassManagement.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresInstructor: true,
+          title: '班级管理'
+        }
       }
 ]
 

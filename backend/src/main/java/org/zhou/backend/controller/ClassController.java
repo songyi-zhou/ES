@@ -8,15 +8,28 @@ import java.util.stream.Collectors;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.web.multipart.MultipartFile;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
 import org.zhou.backend.entity.SchoolClass;
 import org.zhou.backend.repository.ClassRepository;
 import org.zhou.backend.service.ClassService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import org.zhou.backend.common.Result;
+import org.zhou.backend.entity.Class;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -98,6 +111,72 @@ public class ClassController {
                 "success", false,
                 "message", "获取班级列表失败: " + e.getMessage()
             ));
+        }
+    }
+
+    /**
+     * 获取所有班级信息（不分页）
+     */
+    @GetMapping("/all")
+    public Result<List<SchoolClass>> getClasses() {
+        return Result.success(classService.findAll());
+    }
+
+    /**
+     * 分页获取班级信息
+     */
+    @GetMapping("/page")
+    public Result<Page<SchoolClass>> getClasses(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        PageRequest pageRequest = PageRequest.of(page - 1, size);
+        return Result.success(classService.findPage(pageRequest));
+    }
+
+    /**
+     * 添加班级
+     */
+    @PostMapping
+    public Result<SchoolClass> addClass(@RequestBody SchoolClass classes) {
+        return Result.success(classService.save(classes));
+    }
+
+    /**
+     * 更新班级信息
+     */
+    @PutMapping("/{id}")
+    public Result<SchoolClass> updateClass(@PathVariable String id, @RequestBody SchoolClass classes) {
+        classes.setId(id);
+        return Result.success(classService.update(classes));
+    }
+
+    /**
+     * 删除班级
+     */
+    @DeleteMapping("/{id}")
+    public Result<Void> deleteClass(@PathVariable String id) {
+        classService.delete(id);
+        return Result.success(null);
+    }
+
+    /**
+     * 下载班级导入模板
+     */
+    @GetMapping("/template")
+    public void downloadTemplate(HttpServletResponse response) throws IOException {
+        classService.generateTemplate(response);
+    }
+
+    /**
+     * 批量导入班级
+     */
+    @PostMapping("/import")
+    public Result<String> importClasses(@RequestParam("file") MultipartFile file) {
+        try {
+            int count = classService.importClasses(file);
+            return Result.success("成功导入 " + count + " 条数据");
+        } catch (Exception e) {
+            return Result.error("导入失败：" + e.getMessage());
         }
     }
 } 
