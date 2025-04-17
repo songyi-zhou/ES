@@ -7,10 +7,13 @@
         <el-card class="box-card">
           <template #header>
             <div class="card-header">
-              <span>班级管理</span>
+              <div class="page-header">
+                <h2>班级管理</h2>
+              </div>
               <div class="header-actions">
                 <el-button type="primary" @click="showAddDialog">添加班级</el-button>
-                <el-button @click="showImportDialog">批量导入</el-button>
+                <el-button type="success" @click="downloadTemplate">下载模板</el-button>
+                <el-button type="warning" @click="showImportDialog">批量导入</el-button>
               </div>
             </div>
           </template>
@@ -32,7 +35,7 @@
           </div>
 
           <!-- 班级列表 -->
-          <el-table :data="filteredClasses" style="width: 100%" v-loading="loading">
+          <el-table :data="classes" style="width: 100%" v-loading="loading">
             <el-table-column prop="id" label="班级ID" width="120" />
             <el-table-column prop="name" label="班级名称" width="200" />
             <el-table-column prop="department" label="学院" width="150" />
@@ -67,9 +70,9 @@
             <el-pagination
               v-model:current-page="currentPage"
               v-model:page-size="pageSize"
-              :page-sizes="[10, 20, 50, 100]"
-              layout="total, sizes, prev, pager, next, jumper"
+              :page-sizes="[10, 20, 50]"
               :total="total"
+              layout="total, sizes, prev, pager, next, jumper"
               @size-change="handleSizeChange"
               @current-change="handleCurrentChange"
             />
@@ -208,17 +211,22 @@ const filteredClasses = computed(() => {
 
 // 方法
 const fetchClasses = async () => {
-  console.log('Fetching all classes')
+  console.log('Fetching classes with pagination')
   loading.value = true
   try {
-    const response = await axios.get('/api/classes/all')
-    console.log('Fetched classes:', response.data)
-    classes.value = response.data.data
-    total.value = classes.value.length
+    const response = await axios.get('/api/classes/page', {
+      params: {
+        page: currentPage.value,
+        size: pageSize.value
+      }
+    })
+    // 从响应中获取数据和总数
+    classes.value = response.data.data.content
+    total.value = response.data.data.totalElements
+    loading.value = false
   } catch (error) {
     console.error('Error fetching classes:', error)
     ElMessage.error('获取班级列表失败')
-  } finally {
     loading.value = false
   }
 }
@@ -311,19 +319,17 @@ const submitForm = async () => {
 }
 
 const handleSearch = () => {
-  console.log('Handling search with query:', searchQuery.value)
-  currentPage.value = 1
+  currentPage.value = 1 // 重置到第一页
   fetchClasses()
 }
 
 const handleSizeChange = (val) => {
-  console.log('Page size changed to:', val)
   pageSize.value = val
+  currentPage.value = 1 // 重置到第一页
   fetchClasses()
 }
 
 const handleCurrentChange = (val) => {
-  console.log('Current page changed to:', val)
   currentPage.value = val
   fetchClasses()
 }
@@ -439,6 +445,14 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 0 20px;
+}
+
+.page-header h2 {
+  font-size: 24px;
+  color: #333;
+  margin: 0;
+  font-weight: 500;
 }
 
 .header-actions {

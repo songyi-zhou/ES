@@ -542,4 +542,23 @@ CREATE TABLE messages (
     INDEX idx_create_time (create_time) COMMENT '创建时间索引'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息表';
 
+-- 创建反馈表
+CREATE TABLE IF NOT EXISTS feedback (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    type VARCHAR(20) NOT NULL COMMENT '问题类型：bug-功能异常, suggestion-功能建议, other-其他',
+    description TEXT NOT NULL COMMENT '问题描述',
+    email VARCHAR(100) COMMENT '联系方式（邮箱）',
+    status VARCHAR(20) DEFAULT 'pending' COMMENT '处理状态：pending-待处理, processing-处理中, resolved-已解决',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    resolved_at TIMESTAMP NULL COMMENT '解决时间',
+    resolved_by VARCHAR(50) COMMENT '处理人',
+    resolution TEXT COMMENT '处理结果'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户反馈表';
+
+-- 创建反馈表索引
+CREATE INDEX idx_feedback_type ON feedback(type);
+CREATE INDEX idx_feedback_status ON feedback(status);
+CREATE INDEX idx_feedback_created_at ON feedback(created_at);
+
 

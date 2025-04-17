@@ -69,6 +69,8 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 
@@ -80,22 +82,29 @@ const feedback = reactive({
 
 const successMessage = ref('')
 
-const submitFeedback = () => {
+const submitFeedback = async () => {
   if (!feedback.type || !feedback.description) {
-    successMessage.value = '请填写所有必填项'
+    ElMessage.warning('请填写所有必填项')
     return
   }
 
-  // 模拟提交
-  console.log('提交的反馈:', feedback)
-
-  // 成功提示
-  successMessage.value = '反馈提交成功！感谢您的反馈！'
-
-  // 清空输入
-  feedback.type = ''
-  feedback.description = ''
-  feedback.email = ''
+  try {
+    const response = await axios.post('/api/feedback', feedback)
+    if (response.data.code === 200) {
+      ElMessage.success('反馈提交成功！感谢您的反馈！')
+      // 清空输入
+      feedback.type = ''
+      feedback.description = ''
+      feedback.email = ''
+      // 2秒后返回登录页
+      setTimeout(() => {
+        router.push('/login')
+      }, 2000)
+    }
+  } catch (error) {
+    console.error('提交反馈失败:', error)
+    ElMessage.error(error.response?.data?.message || '提交反馈失败，请稍后重试')
+  }
 }
 
 // 返回登录页面
