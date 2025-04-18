@@ -552,22 +552,27 @@ public class InstructorController {
             // 根据表格类型确定要查询的表名和表格类型名称
             String tableName;
             String tableTypeName;
+            String[] columns;
             switch (tableType) {
                 case "A":
                     tableName = "moral_monthly_evaluation";
                     tableTypeName = "德育分表";
+                    columns = new String[]{"序号", "班级", "姓名", "学号", "原始分", "总加分", "总扣分", "原始总分"};
                     break;
                 case "C":
                     tableName = "research_competition_evaluation";
                     tableTypeName = "研究竞赛评价";
+                    columns = new String[]{"序号", "班级", "姓名", "学号", "原始分", "总加分", "总扣分", "原始总分"};
                     break;
                 case "D":
                     tableName = "sports_arts_evaluation";
                     tableTypeName = "体艺评价";
+                    columns = new String[]{"序号", "班级", "姓名", "学号", "原始分", "总加分", "总扣分", "原始总分"};
                     break;
                 case "ALL":
                     tableName = "comprehensive_result";
                     tableTypeName = "综合测评总表";
+                    columns = new String[]{"学号", "姓名", "班级", "中队", "专业", "德育成绩", "学业成绩", "科研竞赛", "文体活动", "附加分", "总分", "排名"};
                     break;
                 default:
                     throw new RuntimeException("无效的表格类型");
@@ -575,12 +580,21 @@ public class InstructorController {
             
             // 构建查询SQL - 使用IN子句处理多个中队
             StringBuilder sqlBuilder = new StringBuilder();
-            sqlBuilder.append("SELECT e.*, s.name as student_name, s.class_id, c.class_name, s.major ")
-                     .append("FROM ").append(tableName).append(" e ")
-                     .append("JOIN students s ON e.student_id = s.student_id ")
-                     .append("JOIN classes c ON s.class_id = c.id ")
-                     .append("WHERE e.department = ? AND e.squad IN (");
-            
+            if ("ALL".equals(tableType)) {
+                sqlBuilder.append("SELECT e.*, s.name as student_name, s.class_id, c.class_name, s.major, s.squad, ")
+                         .append("e.moral_score, e.academic_score, e.research_score, e.sports_arts_score, e.extra_score, e.total_score, e.rank ")
+                         .append("FROM ").append(tableName).append(" e ")
+                         .append("JOIN students s ON e.student_id = s.student_id ")
+                         .append("JOIN classes c ON s.class_id = c.id ")
+                         .append("WHERE e.department = ? AND e.squad IN (");
+            } else {
+                sqlBuilder.append("SELECT e.*, s.name as student_name, s.class_id, c.class_name, s.major ")
+                         .append("FROM ").append(tableName).append(" e ")
+                         .append("JOIN students s ON e.student_id = s.student_id ")
+                         .append("JOIN classes c ON s.class_id = c.id ")
+                         .append("WHERE e.department = ? AND e.squad IN (");
+            }
+
             // 为每个中队添加一个占位符
             for (int i = 0; i < squads.length; i++) {
                 if (i > 0) {
@@ -649,7 +663,6 @@ public class InstructorController {
             Row headerRow = sheet.createRow(0);
             
             // 设置表头
-            String[] columns = {"序号", "班级", "姓名", "学号", "原始分", "总加分", "总扣分", "原始总分"};
             for (int i = 0; i < columns.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(columns[i]);
@@ -662,36 +675,51 @@ public class InstructorController {
             for (Map<String, Object> row : results) {
                 Row dataRow = sheet.createRow(rowNum++);
                 
-                // 序号
-                dataRow.createCell(0).setCellValue(rowNum - 1);
-                
-                // 班级
-                dataRow.createCell(1).setCellValue(row.get("class_id") != null ? row.get("class_id").toString() : "");
-                
-                // 姓名
-                dataRow.createCell(2).setCellValue(row.get("student_name") != null ? row.get("student_name").toString() : "");
-                
-                // 学号
-                dataRow.createCell(3).setCellValue(row.get("student_id") != null ? row.get("student_id").toString() : "");
-                
-                // 原始分
-                Object baseScoreObj = row.get("base_score");
-                double baseScore = baseScoreObj != null ? ((Number) baseScoreObj).doubleValue() : 0;
-                dataRow.createCell(4).setCellValue(baseScore);
-                
-                // 总加分
-                Object totalBonusObj = row.get("total_bonus");
-                double totalBonus = totalBonusObj != null ? ((Number) totalBonusObj).doubleValue() : 0;
-                dataRow.createCell(5).setCellValue(totalBonus);
-                
-                // 总扣分
-                Object totalPenaltyObj = row.get("total_penalty");
-                double totalPenalty = totalPenaltyObj != null ? ((Number) totalPenaltyObj).doubleValue() : 0;
-                dataRow.createCell(6).setCellValue(totalPenalty);
-                
-                // 原始总分
-                double rawScore = baseScore + totalBonus - totalPenalty;
-                dataRow.createCell(7).setCellValue(rawScore);
+                if ("ALL".equals(tableType)) {
+                    // 综合测评总表的数据填充
+                    dataRow.createCell(0).setCellValue(row.get("student_id") != null ? row.get("student_id").toString() : "");
+                    dataRow.createCell(1).setCellValue(row.get("student_name") != null ? row.get("student_name").toString() : "");
+                    dataRow.createCell(2).setCellValue(row.get("class_id") != null ? row.get("class_id").toString() : "");
+                    dataRow.createCell(3).setCellValue(row.get("squad") != null ? row.get("squad").toString() : "");
+                    dataRow.createCell(4).setCellValue(row.get("major") != null ? row.get("major").toString() : "");
+                    
+                    // 各项成绩
+                    setNumericCellValue(dataRow, 5, row.get("moral_score"));
+                    setNumericCellValue(dataRow, 6, row.get("academic_score"));
+                    setNumericCellValue(dataRow, 7, row.get("research_score"));
+                    setNumericCellValue(dataRow, 8, row.get("activity_score"));
+                    setNumericCellValue(dataRow, 9, row.get("extra_score"));
+                    setNumericCellValue(dataRow, 10, row.get("total_score"));
+                    
+                    // 排名
+                    Object rankObj = row.get("rank");
+                    if (rankObj != null) {
+                        dataRow.createCell(11).setCellValue(((Number) rankObj).intValue());
+                    } else {
+                        dataRow.createCell(11).setCellValue("");
+                    }
+                } else {
+                    // 其他表格的原有数据填充逻辑
+                    dataRow.createCell(0).setCellValue(rowNum - 1);
+                    dataRow.createCell(1).setCellValue(row.get("class_id") != null ? row.get("class_id").toString() : "");
+                    dataRow.createCell(2).setCellValue(row.get("student_name") != null ? row.get("student_name").toString() : "");
+                    dataRow.createCell(3).setCellValue(row.get("student_id") != null ? row.get("student_id").toString() : "");
+                    
+                    Object baseScoreObj = row.get("base_score");
+                    double baseScore = baseScoreObj != null ? ((Number) baseScoreObj).doubleValue() : 0;
+                    dataRow.createCell(4).setCellValue(baseScore);
+                    
+                    Object totalBonusObj = row.get("total_bonus");
+                    double totalBonus = totalBonusObj != null ? ((Number) totalBonusObj).doubleValue() : 0;
+                    dataRow.createCell(5).setCellValue(totalBonus);
+                    
+                    Object totalPenaltyObj = row.get("total_penalty");
+                    double totalPenalty = totalPenaltyObj != null ? ((Number) totalPenaltyObj).doubleValue() : 0;
+                    dataRow.createCell(6).setCellValue(totalPenalty);
+                    
+                    double rawScore = baseScore + totalBonus - totalPenalty;
+                    dataRow.createCell(7).setCellValue(rawScore);
+                }
             }
             
             // 构建文件名
@@ -932,5 +960,13 @@ public class InstructorController {
         }
     }
 
-    
+    // 添加辅助方法用于设置数值单元格
+    private void setNumericCellValue(Row row, int column, Object value) {
+        if (value != null) {
+            double numericValue = ((Number) value).doubleValue();
+            row.createCell(column).setCellValue(numericValue);
+        } else {
+            row.createCell(column).setCellValue(0.0);
+        }
+    }
 } 
