@@ -575,9 +575,10 @@ const downloadTemplate = async () => {
 
 <style scoped>
 .import-container {
+  width: 100%;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  height: 100vh;
 }
 
 .content {
@@ -589,14 +590,18 @@ const downloadTemplate = async () => {
 .main-content {
   flex: 1;
   padding: 20px;
-  overflow: hidden;
+  background: #f5f7fa;
+  overflow-y: auto; /* 允许主内容区域滚动 */
+}
+
+.page-header {
+  margin-bottom: 20px;
 }
 
 .page-layout {
   display: flex;
   gap: 20px;
-  height: calc(100vh - 140px);
-  overflow: hidden;
+  min-height: calc(100vh - 140px); /* 设置最小高度，确保内容区域足够高 */
 }
 
 .main-section {
@@ -604,71 +609,19 @@ const downloadTemplate = async () => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  min-width: 0;
-  overflow: hidden;
 }
 
 .import-card,
-.manual-card {
-  margin-bottom: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.import-card {
-  flex: 1;
-  min-height: 250px;
-}
-
-.import-card :deep(.el-card__body) {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-}
-
-.manual-card {
-  flex: 2;
-}
-
-.manual-card :deep(.el-card__body) {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-}
-
-.log-section {
-  flex: 1;
-  min-width: 300px;
-  max-width: 400px;
-  display: flex;
-  flex-direction: column;
-}
-
+.manual-card,
 .log-card {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.log-card :deep(.el-card__body) {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 20px;
-}
-
-.log-card .el-timeline {
-  padding: 20px 0;
+  margin-bottom: 20px;
+  height: fit-content;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.card-header h3 {
-  margin: 0;
-  font-size: 18px;
 }
 
 .header-actions {
@@ -703,9 +656,19 @@ const downloadTemplate = async () => {
   color: #909399;
 }
 
+.upload-progress {
+  margin-top: 15px;
+}
+
+.progress-tip {
+  margin-top: 8px;
+  color: #909399;
+  font-size: 14px;
+}
+
 .upload-tip {
   text-align: center;
-  padding: 40px 0;
+  padding: 40px 20px;
   color: #909399;
 }
 
@@ -719,30 +682,21 @@ const downloadTemplate = async () => {
   margin-top: 8px;
 }
 
-.upload-progress {
-  margin-top: 15px;
-}
-
-.progress-tip {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #909399;
-}
-
 .log-content {
-  padding: 10px;
+  padding: 12px;
   background: #f8f9fa;
   border-radius: 4px;
+  margin-bottom: 8px;
 }
 
 .log-type {
   font-weight: 500;
-  margin-right: 10px;
+  margin-right: 8px;
 }
 
 .log-status {
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: 4px;
   font-size: 12px;
 }
 
@@ -767,23 +721,66 @@ const downloadTemplate = async () => {
   margin-top: 4px;
 }
 
-/* 滚动条统一样式 */
-.import-card :deep(.el-card__body)::-webkit-scrollbar,
-.manual-card :deep(.el-card__body)::-webkit-scrollbar,
+/* 滚动条样式 */
+.main-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.main-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.main-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+/* 响应式布局 */
+@media (max-width: 992px) {
+  .page-layout {
+    flex-direction: column;
+  }
+
+  .log-section {
+    max-width: none;
+  }
+}
+
+.log-section {
+  flex: 1;
+  min-width: 300px;
+  max-width: 400px;
+}
+
+.log-card {
+  margin-bottom: 20px;
+  height: calc(100vh ); /* 设置固定高度，减去顶部导航和页面标题的高度 */
+  display: flex;
+  flex-direction: column;
+}
+
+.log-card :deep(.el-card__body) {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 20px;
+}
+
+.log-card .el-timeline {
+  padding: 20px 0;
+}
+
+/* 日志部分的滚动条样式 */
 .log-card :deep(.el-card__body)::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-.import-card :deep(.el-card__body)::-webkit-scrollbar-thumb,
-.manual-card :deep(.el-card__body)::-webkit-scrollbar-thumb,
 .log-card :deep(.el-card__body)::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 3px;
 }
 
-.import-card :deep(.el-card__body)::-webkit-scrollbar-track,
-.manual-card :deep(.el-card__body)::-webkit-scrollbar-track,
 .log-card :deep(.el-card__body)::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
@@ -792,43 +789,14 @@ const downloadTemplate = async () => {
 @media (max-width: 992px) {
   .page-layout {
     flex-direction: column;
-    height: auto;
-    overflow: visible;
   }
-  
-  .main-section {
-    overflow: visible;
-  }
-  
-  .import-card,
-  .manual-card {
-    height: auto;
-  }
-  
-  .import-card :deep(.el-card__body),
-  .manual-card :deep(.el-card__body) {
-    max-height: 500px;
-  }
-  
+
   .log-section {
     max-width: none;
-    height: 400px;
   }
-}
 
-@media (max-width: 768px) {
-  .header-actions {
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .file-details {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .file-meta {
-    justify-content: center;
+  .log-card {
+    height: 400px; /* 在移动端设置固定高度 */
   }
 }
 </style>
