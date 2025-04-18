@@ -1,6 +1,8 @@
 package org.zhou.backend.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.zhou.backend.common.ResponseResult;
@@ -9,6 +11,7 @@ import org.zhou.backend.service.FeedbackService;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/feedback")
@@ -42,13 +45,19 @@ class AdminFeedbackController {
     public ResponseEntity<?> getFeedbackList(
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         try {
-            List<Feedback> feedbackList = feedbackService.findByTypeAndStatus(type, status, page, size);
-            return ResponseEntity.ok().body(new ResponseResult<List<Feedback>>(200, "获取反馈列表成功", feedbackList));
+            Page<Feedback> feedbackPage = feedbackService.findByTypeAndStatus(type, status, PageRequest.of(page, size));
+            return ResponseEntity.ok().body(new ResponseResult<>(200, "获取反馈列表成功", 
+                Map.of(
+                    "content", feedbackPage.getContent(),
+                    "totalElements", feedbackPage.getTotalElements(),
+                    "totalPages", feedbackPage.getTotalPages()
+                )
+            ));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new ResponseResult<Void>(400, "获取反馈列表失败：" + e.getMessage(), null));
+            return ResponseEntity.badRequest().body(new ResponseResult<>(400, "获取反馈列表失败：" + e.getMessage(), null));
         }
     }
     

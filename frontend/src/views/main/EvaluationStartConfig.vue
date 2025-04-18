@@ -725,57 +725,130 @@ refreshLogs()
 .page-layout {
   display: flex;
   gap: 20px;
-  height: calc(100vh - 180px); /* 减去顶部导航和页头的高度 */
+  height: calc(100vh - 140px); /* 减去顶部导航和页面标题的高度 */
   overflow: hidden;
 }
 
 .main-section {
-  flex: 1;
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   overflow-y: auto;
-  padding-right: 10px;
+}
+
+.config-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-right: 10px; /* 为滚动条预留空间 */
 }
 
 .logs-section {
-  margin-top: 20px;
-  padding: 20px;
+  flex: 1;
+  min-width: 300px;
+  max-width: 400px;
   background: #fff;
-  border-radius: 4px;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .logs-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid #ebeef5;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+}
+
+.logs-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.el-timeline {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
 }
 
 .log-item {
-  padding: 15px;
-  background: #f5f7fa;
+  background: #f8f9fa;
   border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 8px;
 }
 
 .log-header {
-  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
-.log-header .operator {
-  font-weight: bold;
-  margin-right: 10px;
-}
-
-.log-content .el-tag {
-  margin-right: 8px;
-}
-
-.description {
-  margin: 8px 0 0;
+.operator {
+  font-weight: 500;
   color: #606266;
 }
 
-:deep(.el-timeline-item__timestamp) {
-  color: #909399;
-  font-size: 12px;
+.log-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.description {
+  width: 100%;
+  margin: 8px 0 0;
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* 滚动条样式 */
+.main-section::-webkit-scrollbar,
+.el-timeline::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.main-section::-webkit-scrollbar-thumb,
+.el-timeline::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.main-section::-webkit-scrollbar-track,
+.el-timeline::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+/* 响应式布局 */
+@media (max-width: 992px) {
+  .page-layout {
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
+  }
+
+  .main-section {
+    overflow: visible;
+  }
+
+  .logs-section {
+    max-width: none;
+    height: 400px;
+    margin-top: 20px;
+  }
+
+  .el-timeline {
+    max-height: calc(100% - 60px); /* 减去header高度 */
+  }
 }
 
 .config-sections {

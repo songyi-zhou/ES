@@ -216,8 +216,18 @@ const routes = [
         component: () => import('@/views/admin/ClassManagement.vue'),
         meta: {
           requiresAuth: true,
-          requiresInstructor: true,
+          requiresAdmin: true,
           title: '班级管理'
+        }
+      },
+      {
+        path: '/admin/feedback-management',
+        name: 'FeedbackManagement',
+        component: () => import('@/views/admin/FeedbackManagement.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresAdmin: true,
+          title: '反馈管理'
         }
       }
 ]

@@ -160,13 +160,13 @@
                 <el-timeline-item
                   v-for="(log, index) in importLogs"
                   :key="index"
-                  :type="log.status === 'success' ? 'success' : 'danger'"
+                  :type="log.status === 'error' ? 'danger' : 'success'"
                   :timestamp="log.time"
                 >
                   <div class="log-content">
                     <span class="log-type">{{ log.type }}</span>
                     <span class="log-status" :class="log.status">
-                      {{ log.status === 'success' ? '成功' : '失败' }}
+                      {{ log.status === 'error' ? '失败' : '成功' }}
                     </span>
                     <p class="log-description">{{ log.description }}</p>
                     <p v-if="log.error" class="log-error">{{ log.error }}</p>
@@ -574,13 +574,10 @@ const downloadTemplate = async () => {
 </script>
 
 <style scoped>
-/* 样式部分保持不变 */
 .import-container {
-  width: 100%;
-  height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  height: 100vh;
 }
 
 .content {
@@ -592,24 +589,14 @@ const downloadTemplate = async () => {
 .main-content {
   flex: 1;
   padding: 20px;
-  background: #f5f7fa;
-  overflow-y: auto;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: 24px;
-  color: #333;
+  overflow: hidden;
 }
 
 .page-layout {
   display: flex;
   gap: 20px;
-  height: calc(100vh - 100px);
+  height: calc(100vh - 140px);
+  overflow: hidden;
 }
 
 .main-section {
@@ -617,12 +604,60 @@ const downloadTemplate = async () => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  overflow-y: auto;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .import-card,
 .manual-card {
   margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.import-card {
+  flex: 1;
+  min-height: 250px;
+}
+
+.import-card :deep(.el-card__body) {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.manual-card {
+  flex: 2;
+}
+
+.manual-card :deep(.el-card__body) {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.log-section {
+  flex: 1;
+  min-width: 300px;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-card :deep(.el-card__body) {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 20px;
+}
+
+.log-card .el-timeline {
+  padding: 20px 0;
 }
 
 .card-header {
@@ -642,7 +677,9 @@ const downloadTemplate = async () => {
 }
 
 .file-info {
-  padding: 20px 0;
+  padding: 20px;
+  border: 1px dashed #dcdfe6;
+  border-radius: 4px;
 }
 
 .file-details {
@@ -660,69 +697,52 @@ const downloadTemplate = async () => {
 
 .file-name {
   font-weight: 500;
-  color: #333;
 }
 
 .file-size {
   color: #909399;
-  font-size: 0.9em;
-}
-
-.upload-progress {
-  padding: 10px 0;
-}
-
-.progress-tip {
-  margin-top: 8px;
-  color: #909399;
-  font-size: 0.9em;
-  text-align: center;
 }
 
 .upload-tip {
-  padding: 30px;
   text-align: center;
+  padding: 40px 0;
   color: #909399;
-  border: 2px dashed #e4e7ed;
-  border-radius: 6px;
 }
 
 .upload-tip .el-icon {
   font-size: 48px;
   margin-bottom: 10px;
-  color: #c0c4cc;
-}
-
-.upload-tip p {
-  margin: 5px 0;
 }
 
 .tip-detail {
-  font-size: 0.9em;
-  color: #c0c4cc;
+  font-size: 12px;
+  margin-top: 8px;
 }
 
-.log-section {
-  flex: 1;
-  overflow-y: auto;
+.upload-progress {
+  margin-top: 15px;
 }
 
-.log-card {
-  height: 100%;
+.progress-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #909399;
 }
 
 .log-content {
-  padding: 5px 0;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 4px;
 }
 
 .log-type {
-  font-weight: bold;
-  margin-right: 8px;
+  font-weight: 500;
+  margin-right: 10px;
 }
 
 .log-status {
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 3px;
   font-size: 12px;
 }
 
@@ -736,51 +756,63 @@ const downloadTemplate = async () => {
   color: #f56c6c;
 }
 
-.log-status.info {
-  background: #f4f4f5;
-  color: #909399;
-}
-
 .log-description {
-  margin: 5px 0;
-  color: #666;
-  font-size: 14px;
+  margin: 8px 0;
+  color: #606266;
 }
 
 .log-error {
   color: #f56c6c;
   font-size: 12px;
-  margin: 5px 0;
+  margin-top: 4px;
 }
 
-/* 滚动条样式 */
-::-webkit-scrollbar {
+/* 滚动条统一样式 */
+.import-card :deep(.el-card__body)::-webkit-scrollbar,
+.manual-card :deep(.el-card__body)::-webkit-scrollbar,
+.log-card :deep(.el-card__body)::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-::-webkit-scrollbar-thumb {
+.import-card :deep(.el-card__body)::-webkit-scrollbar-thumb,
+.manual-card :deep(.el-card__body)::-webkit-scrollbar-thumb,
+.log-card :deep(.el-card__body)::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 3px;
 }
 
-::-webkit-scrollbar-track {
+.import-card :deep(.el-card__body)::-webkit-scrollbar-track,
+.manual-card :deep(.el-card__body)::-webkit-scrollbar-track,
+.log-card :deep(.el-card__body)::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
 
-/* 响应式调整 */
+/* 响应式布局调整 */
 @media (max-width: 992px) {
   .page-layout {
     flex-direction: column;
+    height: auto;
+    overflow: visible;
   }
   
-  .main-section,
-  .log-section {
-    width: 100%;
+  .main-section {
+    overflow: visible;
+  }
+  
+  .import-card,
+  .manual-card {
+    height: auto;
+  }
+  
+  .import-card :deep(.el-card__body),
+  .manual-card :deep(.el-card__body) {
+    max-height: 500px;
   }
   
   .log-section {
-    margin-top: 20px;
+    max-width: none;
+    height: 400px;
   }
 }
 

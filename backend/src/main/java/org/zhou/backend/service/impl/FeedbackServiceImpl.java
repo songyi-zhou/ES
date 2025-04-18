@@ -1,14 +1,14 @@
 package org.zhou.backend.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.zhou.backend.entity.Feedback;
 import org.zhou.backend.repository.FeedbackRepository;
 import org.zhou.backend.service.FeedbackService;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -18,20 +18,22 @@ public class FeedbackServiceImpl implements FeedbackService {
     
     @Override
     public Feedback save(Feedback feedback) {
+        feedback.setStatus("pending");
+        feedback.setCreatedAt(LocalDateTime.now());
+        feedback.setUpdatedAt(LocalDateTime.now());
         return feedbackRepository.save(feedback);
     }
     
     @Override
-    public List<Feedback> findByTypeAndStatus(String type, String status, int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page - 1, size);
-        if (type != null && status != null) {
-            return feedbackRepository.findByTypeAndStatus(type, status, pageRequest);
-        } else if (type != null) {
-            return feedbackRepository.findByType(type, pageRequest);
-        } else if (status != null) {
-            return feedbackRepository.findByStatus(status, pageRequest);
+    public Page<Feedback> findByTypeAndStatus(String type, String status, Pageable pageable) {
+        if (type != null && !type.isEmpty() && status != null && !status.isEmpty()) {
+            return feedbackRepository.findByTypeAndStatus(type, status, pageable);
+        } else if (type != null && !type.isEmpty()) {
+            return feedbackRepository.findByType(type, pageable);
+        } else if (status != null && !status.isEmpty()) {
+            return feedbackRepository.findByStatus(status, pageable);
         } else {
-            return feedbackRepository.findAll(pageRequest).getContent();
+            return feedbackRepository.findAll(pageable);
         }
     }
     
@@ -45,8 +47,8 @@ public class FeedbackServiceImpl implements FeedbackService {
     public Feedback resolveFeedback(Long id, String resolvedBy, String resolution) {
         Feedback feedback = findById(id);
         feedback.setStatus("resolved");
-        feedback.setResolvedBy(resolvedBy);
         feedback.setResolution(resolution);
+        feedback.setResolvedBy(resolvedBy);
         feedback.setResolvedAt(LocalDateTime.now());
         feedback.setUpdatedAt(LocalDateTime.now());
         return feedbackRepository.save(feedback);
