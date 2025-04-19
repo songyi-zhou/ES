@@ -43,28 +43,26 @@
             </div>
 
             <div class="message-list">
-              <template v-if="filteredMessages.length">
-                <div 
-                  v-for="message in filteredMessages" 
-                  :key="message.id"
-                  class="message-item"
-                  :class="{ unread: !message.read }"
-                  @click="readMessage(message)"
-                >
-                  <div class="message-info">
-                    <span class="message-title">{{ message.title }}</span>
-                    <span class="message-time">{{ message.time }}</span>
-                  </div>
-                  <div class="message-preview">{{ message.preview }}</div>
-                  <div class="message-footer">
-                    <span class="message-sender">{{ message.sender }}</span>
-                    <el-tag size="small" :type="getTagType(message.type)">
-                      {{ message.type }}
-                    </el-tag>
-                  </div>
+              <div 
+                v-for="message in filteredMessages" 
+                :key="message.id"
+                class="message-item"
+                :class="{ unread: !message.isRead }"
+                @click="readMessage(message)"
+              >
+                <div class="message-info">
+                  <span class="message-title">{{ message.title || '无标题' }}</span>
+                  <span class="message-time">{{ formatTime(message.createTime) }}</span>
                 </div>
-              </template>
-              <el-empty v-else description="暂无消息" />
+                <div class="message-preview">{{ message.content || '无内容' }}</div>
+                <div class="message-footer">
+                  <span class="message-sender">{{ message.sender || '系统' }}</span>
+                  <el-tag size="small" :type="getTagType(message.type)">
+                    {{ formatType(message.type) }}
+                  </el-tag>
+                </div>
+              </div>
+              <el-empty v-if="!filteredMessages.length" :description="`暂无${getCurrentCategoryName}`" />
             </div>
           </div>
         </div>
@@ -80,7 +78,7 @@
       <div class="message-detail">
         <div class="detail-header">
           <span class="detail-sender">发送人：{{ currentMessage?.sender }}</span>
-          <span class="detail-time">{{ currentMessage?.time }}</span>
+          <span class="detail-time">{{ currentMessage?.createTime }}</span>
         </div>
         <div class="detail-content" v-html="currentMessage?.content"></div>
       </div>
@@ -89,63 +87,205 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 
 // 消息分类
 const categories = [
-  { type: 'all', name: '全部消息', icon: 'fas fa-inbox', unread: 5 },
-  { type: 'system', name: '系统通知', icon: 'fas fa-bell', unread: 2 },
-  { type: 'evaluation', name: '综测相关', icon: 'fas fa-tasks', unread: 3 },
+  { type: 'all', name: '全部消息', icon: 'fas fa-inbox', unread: 0 },
+  { type: 'system', name: '系统通知', icon: 'fas fa-bell', unread: 0 },
+  { type: 'evaluation', name: '综测相关', icon: 'fas fa-tasks', unread: 0 },
   { type: 'announcement', name: '重要公告', icon: 'fas fa-bullhorn', unread: 0 }
 ]
 
 const currentCategory = ref('all')
 const dialogVisible = ref(false)
 const currentMessage = ref(null)
+const messages = ref([])
+const page = ref(1)
+const size = ref(10)
 
-// 示例消息数据
-const messages = ref([
-  {
-    id: 1,
-    type: 'evaluation',
-    title: '您的综测申请已通过审核',
-    preview: '您提交的2024年第一学期综合测评申请已通过审核...',
-    content: '您提交的2024年第一学期综合测评申请已通过审核，最终得分为88分。如有疑问，请及时联系辅导员。',
-    sender: '综测系统',
-    time: '2024-03-20 14:30',
-    read: false
-  },
-  {
-    id: 2,
-    type: 'system',
-    title: '系统更新通知',
-    preview: '系统将于今晚22:00-23:00进行例行维护...',
-    content: '系统将于今晚22:00-23:00进行例行维护，维护期间系统将暂停服务。给您带来的不便敬请谅解。',
-    sender: '系统管理员',
-    time: '2024-03-19 16:00',
-    read: true
-  },
-  {
-    id: 3,
-    type: 'announcement',
-    title: '关于开展2024年综合测评工作的通知',
-    preview: '现将2024年综合测评工作相关事项通知如下...',
-    content: '现将2024年综合测评工作相关事项通知如下：\n1. 测评时间：3月25日-4月10日\n2. 提交材料要求：...',
-    sender: '教务处',
-    time: '2024-03-18 09:00',
-    read: false
+// 获取消息列表
+const fetchMessages = async () => {
+  try {
+    const params = new URLSearchParams({
+      page: page.value.toString(),
+      size: size.value.toString()
+    })
+    
+    if (currentCategory.value !== 'all') {
+      params.append('type', currentCategory.value)
+    }
+    
+    console.log('发送请求到:', `/api/messages?${params.toString()}`)
+    const response = await axios.get(`/api/messages?${params.toString()}`)
+    console.log('后端返回的原始数据:', response.data)
+    
+    if (response.data.code === 200) {
+      const rawData = response.data.data
+      console.log('解析到的消息数组:', rawData)
+      
+      // 确保数据是数组
+      const messageData = Array.isArray(rawData) ? rawData : [rawData]
+      
+      // 转换数据结构
+      messages.value = messageData.map(msg => ({
+        id: msg.id,
+        title: msg.title || '无标题',
+        content: msg.content || '无内容',
+        createTime: msg.createTime || new Date().toISOString(),
+        sender: msg.sender || '系统',
+        type: msg.type || 'system',
+        isRead: msg.isRead === false
+      }))
+      
+      console.log('处理后的消息列表:', messages.value)
+    } else {
+      messages.value = []
+      console.warn('获取消息列表失败:', response.data.message)
+      ElMessage.error(response.data.message || '获取消息失败')
+    }
+  } catch (error) {
+    messages.value = []
+    console.error('获取消息列表异常:', error)
+    ElMessage.error('获取消息失败')
   }
-])
+}
+
+// 获取未读消息数
+const fetchUnreadCount = async () => {
+  console.log('开始获取未读消息数')
+  
+  try {
+    const response = await axios.get('/api/messages/unread/count')
+    console.log('未读消息数响应:', response.data)
+    
+    if (response.data.success) {
+      const counts = response.data.data
+      console.log('未读消息统计:', counts)
+      
+      categories.forEach(category => {
+        if (category.type === 'all') {
+          category.unread = Object.values(counts).reduce((a, b) => a + b, 0)
+        } else {
+          category.unread = counts[category.type] || 0
+        }
+      })
+    } else {
+      console.warn('获取未读消息数失败:', response.data.message)
+    }
+  } catch (error) {
+    console.error('获取未读消息数异常:', error)
+    ElMessage.error('获取未读消息数失败')
+  }
+}
+
+// 标记消息为已读
+const readMessage = async (message) => {
+  console.log('开始标记消息为已读:', message)
+  
+  try {
+    await axios.put(`/api/messages/${message.id}/read`)
+    console.log('消息标记已读成功:', message.id)
+    
+    message.isRead = true
+    currentMessage.value = message
+    dialogVisible.value = true
+    
+    await fetchUnreadCount()
+  } catch (error) {
+    console.error('标记消息已读异常:', error)
+    ElMessage.error('标记已读失败')
+  }
+}
+
+// 全部标记为已读
+const markAllRead = async () => {
+  console.log('开始标记所有消息为已读', {
+    category: currentCategory.value
+  })
+  
+  try {
+    const type = currentCategory.value === 'all' ? null : currentCategory.value
+    console.log('请求参数:', { type })
+    
+    await axios.put('/api/messages/read/all', null, { params: { type } })
+    console.log('全部标记已读成功')
+    
+    ElMessage.success('已全部标记为已读')
+    await fetchMessages()
+    await fetchUnreadCount()
+  } catch (error) {
+    console.error('标记全部已读异常:', error)
+    ElMessage.error('标记全部已读失败')
+  }
+}
+
+// 刷新消息
+const refreshMessages = async () => {
+  console.log('开始刷新消息')
+  
+  await fetchMessages()
+  await fetchUnreadCount()
+  console.log('消息刷新完成')
+  
+  ElMessage.success('消息已刷新')
+}
+
+// 删除消息
+const deleteMessage = async (messageId) => {
+  console.log('开始删除消息:', messageId)
+  
+  try {
+    await axios.delete(`/api/messages/${messageId}`)
+    console.log('消息删除成功:', messageId)
+    
+    ElMessage.success('删除成功')
+    await fetchMessages()
+    await fetchUnreadCount()
+  } catch (error) {
+    console.error('删除消息异常:', error)
+    ElMessage.error('删除失败')
+  }
+}
+
+// 获取标签类型
+const getTagType = (type) => {
+  const types = {
+    'system': 'info',
+    'evaluation': 'success',
+    'announcement': 'warning'
+  }
+  return types[type] || 'info'
+}
 
 // 根据当前分类筛选消息
 const filteredMessages = computed(() => {
-  if (currentCategory.value === 'all') {
-    return messages.value
+  console.log('开始筛选消息，当前分类:', currentCategory.value)
+  
+  if (!Array.isArray(messages.value)) {
+    console.warn('messages.value 不是数组:', messages.value)
+    return []
   }
-  return messages.value.filter(msg => msg.type === currentCategory.value)
+  
+  let result = []
+  if (currentCategory.value === 'all') {
+    result = messages.value
+  } else {
+    result = messages.value.filter(msg => msg.type === currentCategory.value)
+  }
+  
+  console.log(`当前分类 ${currentCategory.value} 筛选后的消息:`, result)
+  return result
+})
+
+// 在模板渲染部分也添加 v-if 的判断日志
+const hasMessages = computed(() => {
+  // 直接使用 filteredMessages 的长度判断
+  return filteredMessages.value.length > 0
 })
 
 // 获取当前分类名称
@@ -154,49 +294,45 @@ const getCurrentCategoryName = computed(() => {
   return category ? category.name : '全部消息'
 })
 
-// 标记消息为已读
-const readMessage = (message) => {
-  message.read = true
-  currentMessage.value = message
-  dialogVisible.value = true
-  updateUnreadCount()
-}
-
-// 更新未读消息数
-const updateUnreadCount = () => {
-  categories.forEach(category => {
-    if (category.type === 'all') {
-      category.unread = messages.value.filter(msg => !msg.read).length
-    } else {
-      category.unread = messages.value.filter(msg => !msg.read && msg.type === category.type).length
-    }
-  })
-}
-
-// 全部标记为已读
-const markAllRead = () => {
-  messages.value.forEach(msg => msg.read = true)
-  updateUnreadCount()
-  ElMessage.success('已全部标记为已读')
-}
-
-// 刷新消息
-const refreshMessages = async () => {
-  // TODO: 调用获取消息API
-  await new Promise(resolve => setTimeout(resolve, 500))
-  updateUnreadCount()
-  ElMessage.success('消息已刷新')
-}
-
-// 获取标签类型
-const getTagType = (type) => {
-  const types = {
-    system: 'info',
-    evaluation: 'success',
-    announcement: 'warning'
+// 添加时间格式化函数
+const formatTime = (time) => {
+  if (!time) return '无时间'
+  try {
+    const date = new Date(time)
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch (e) {
+    return time
   }
-  return types[type] || 'info'
 }
+
+// 添加消息类型格式化函数
+const formatType = (type) => {
+  const typeMap = {
+    'system': '系统通知',
+    'evaluation': '综测相关',
+    'announcement': '重要公告'
+  }
+  return typeMap[type] || type
+}
+
+// 初始化
+onMounted(() => {
+  console.log('消息中心初始化')
+  fetchMessages()
+  fetchUnreadCount()
+})
+
+// 监听分类变化
+watch(currentCategory, (newCategory) => {
+  console.log('分类切换:', newCategory)
+  fetchMessages()
+})
 </script>
 
 <style scoped>

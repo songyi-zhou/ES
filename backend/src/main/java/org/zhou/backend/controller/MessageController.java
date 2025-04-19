@@ -7,6 +7,8 @@ import org.zhou.backend.service.MessageService;
 import org.zhou.backend.common.Result;
 import org.zhou.backend.model.Message;
 import org.zhou.backend.dto.MessageDTO;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.zhou.backend.security.UserPrincipal;
 
 import java.util.List;
 import java.util.Map;
@@ -29,8 +31,9 @@ public class MessageController {
     public ResponseEntity<Result<List<MessageDTO>>> getMessages(
             @RequestParam(required = false) String type,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(messageService.getMessages(type, page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        return ResponseEntity.ok(messageService.getMessages(userPrincipal.getId(), type, page, size));
     }
 
     /**
@@ -38,8 +41,9 @@ public class MessageController {
      * @return 各类型消息的未读数量
      */
     @GetMapping("/unread/count")
-    public ResponseEntity<Result<Map<String, Integer>>> getUnreadCount() {
-        return ResponseEntity.ok(messageService.getUnreadCount());
+    public ResponseEntity<Result<Map<String, Integer>>> getUnreadCount(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        return ResponseEntity.ok(messageService.getUnreadCount(userPrincipal.getId()));
     }
 
     /**
@@ -48,8 +52,10 @@ public class MessageController {
      * @return 操作结果
      */
     @PutMapping("/{messageId}/read")
-    public ResponseEntity<Result<Void>> markAsRead(@PathVariable Long messageId) {
-        return ResponseEntity.ok(messageService.markAsRead(messageId));
+    public ResponseEntity<Result<Void>> markAsRead(
+            @PathVariable Long messageId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        return ResponseEntity.ok(messageService.markAsRead(userPrincipal.getId(), messageId));
     }
 
     /**
@@ -58,8 +64,10 @@ public class MessageController {
      * @return 操作结果
      */
     @PutMapping("/read/all")
-    public ResponseEntity<Result<Void>> markAllAsRead(@RequestParam(required = false) String type) {
-        return ResponseEntity.ok(messageService.markAllAsRead(type));
+    public ResponseEntity<Result<Void>> markAllAsRead(
+            @RequestParam(required = false) String type,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        return ResponseEntity.ok(messageService.markAllAsRead(userPrincipal.getId(), type));
     }
 
     /**
@@ -68,8 +76,10 @@ public class MessageController {
      * @return 操作结果
      */
     @DeleteMapping("/{messageId}")
-    public ResponseEntity<Result<Void>> deleteMessage(@PathVariable Long messageId) {
-        return ResponseEntity.ok(messageService.deleteMessage(messageId));
+    public ResponseEntity<Result<Void>> deleteMessage(
+            @PathVariable Long messageId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        return ResponseEntity.ok(messageService.deleteMessage(userPrincipal.getId(), messageId));
     }
 
     /**
@@ -78,7 +88,9 @@ public class MessageController {
      * @return 消息详情
      */
     @GetMapping("/{messageId}")
-    public ResponseEntity<Result<MessageDTO>> getMessageDetail(@PathVariable Long messageId) {
-        return ResponseEntity.ok(messageService.getMessageDetail(messageId));
+    public ResponseEntity<Result<MessageDTO>> getMessageDetail(
+            @PathVariable Long messageId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        return ResponseEntity.ok(messageService.getMessageDetail(userPrincipal.getId(), messageId));
     }
 } 

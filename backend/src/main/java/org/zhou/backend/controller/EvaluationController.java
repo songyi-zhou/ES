@@ -35,6 +35,8 @@ import org.zhou.backend.service.EvaluationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.context.ApplicationEventPublisher;
+import org.zhou.backend.event.MessageEvent;
 
 @RestController
 @RequestMapping("/api/evaluation")
@@ -43,6 +45,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class EvaluationController {
     private final EvaluationService evaluationService;
     private final JdbcTemplate jdbcTemplate;
+    private final ApplicationEventPublisher eventPublisher;
     
     @PostMapping("/submit")
     public ResponseEntity<?> submitMaterial(
@@ -209,10 +212,41 @@ public class EvaluationController {
             Long materialId = Long.parseLong(request.get("materialId").toString());
             String description = request.get("description").toString();
             
+            // 获取材料信息
+            EvaluationMaterial material = evaluationService.getMaterialById(materialId);
+            String evaluationType = material.getEvaluationType();
+            String title = material.getTitle();
+            
+            // 获取中队综测负责人ID
+            String sql = "SELECT sgl.user_id FROM squad_group_leader sgl " +
+                        "JOIN users u ON u.id = ? " +
+                        "WHERE sgl.department = u.department " +
+                        "AND sgl.squad = u.squad";
+            Long counselorId = jdbcTemplate.queryForObject(sql, Long.class, material.getUserId());
+            
+            // 提交疑问
             evaluationService.raiseQuestion(materialId, description);
-            return ResponseEntity.ok(Map.of("success", true));
+            
+            // 发送消息通知给中队综测负责人
+            MessageEvent event = new MessageEvent(
+                this,
+                "收到新的综测疑问",
+                String.format("关于%s（%s）的疑问：%s", title, evaluationType, description),
+                "综测系统",
+                counselorId.toString(), // 发送给中队综测负责人
+                "evaluation"
+            );
+            eventPublisher.publishEvent(event);
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "疑问提交成功"
+            ));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(createErrorResponse("提交疑问失败"));
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "提交疑问失败：" + e.getMessage()
+            ));
         }
     }
 

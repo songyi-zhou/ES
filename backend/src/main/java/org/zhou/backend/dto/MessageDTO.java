@@ -12,7 +12,7 @@ public class MessageDTO {
     private String sender;
     private String receiver;
     private String type;
-    private Boolean read;
+    private Boolean isRead;
     private LocalDateTime createTime;
     private LocalDateTime readTime;
 } 

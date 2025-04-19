@@ -3,11 +3,11 @@ package org.zhou.backend.event;
 import org.springframework.context.ApplicationEvent;
 
 public class MessageEvent extends ApplicationEvent {
-    private String title;
-    private String content;
-    private String sender;
-    private String receiver;
-    private String type;
+    private final String title;
+    private final String content;
+    private final String sender;
+    private final String receiver;
+    private final String type;
 
     public MessageEvent(Object source, String title, String content, String sender, String receiver, String type) {
         super(source);

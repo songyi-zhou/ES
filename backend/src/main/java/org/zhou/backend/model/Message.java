@@ -34,8 +34,8 @@ public class Message {
     @Column(nullable = false)
     private String type; // system, evaluation, announcement
 
-    @Column(nullable = false)
-    private Boolean read = false;
+    @Column(name = "is_read", nullable = false)
+    private Boolean isRead;
 
     @Column(name = "create_time", nullable = false)
     private LocalDateTime createTime;
@@ -43,8 +43,15 @@ public class Message {
     @Column(name = "read_time")
     private LocalDateTime readTime;
 
+    @Column(name = "receiver_id")
+    private Long receiverId;
+
     @PrePersist
     protected void onCreate() {
         createTime = LocalDateTime.now();
+    }
+
+    public Long getReceiverId() {
+        return receiverId;
     }
 } 
