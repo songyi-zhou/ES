@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +16,8 @@ import org.zhou.backend.dto.RuleAttachmentDTO;
 import org.zhou.backend.dto.RuleDTO;
 import org.zhou.backend.entity.EvaluationRule;
 import org.zhou.backend.entity.RuleAttachment;
+import org.zhou.backend.entity.Student;
+import org.zhou.backend.event.MessageEvent;
 import org.zhou.backend.exception.ResourceNotFoundException;
 import org.zhou.backend.repository.RuleRepository;
 
@@ -27,6 +31,8 @@ import lombok.extern.slf4j.Slf4j;
 public class RuleService {
     private final RuleRepository ruleRepository;
     private final FileStorageService fileStorageService;
+    private final JdbcTemplate jdbcTemplate;
+    private final ApplicationEventPublisher eventPublisher;
     
     public List<EvaluationRule> getRulesByDepartment(String department) {
         return ruleRepository.findByDepartmentCriteria(department);
@@ -66,7 +72,43 @@ public class RuleService {
         
         rule.addAttachment(attachment);
         
-        return ruleRepository.save(rule);
+        // 保存规则
+        EvaluationRule savedRule = ruleRepository.save(rule);
+        
+        // 获取上传者姓名
+        String senderName = jdbcTemplate.queryForObject(
+            "SELECT name FROM users WHERE id = ?", String.class, userId);
+        
+        // 获取该中队下所有学生的ID
+        String findStudentsSql = "SELECT id FROM users WHERE department = ? AND squad = ?";
+        List<Long> groupMemberIds = jdbcTemplate.queryForList(findStudentsSql, Long.class, department, squad);
+        
+        log.info("找到对应中队的学生数量: {}, 部门: {}, 中队: {}", groupMemberIds.size(), department, squad);
+        
+        // 构建通知内容
+        String notificationTitle = "规章制度通知";
+        String notificationContent = String.format(
+            "新的规章制度已上传：%s。%s", 
+            name, 
+            description != null && !description.isEmpty() ? "说明：" + description : ""
+        );
+        
+        // 向所有学生发送通知
+        for (Long memberId : groupMemberIds) {
+            // 发送消息通知
+            MessageEvent event = new MessageEvent(
+                this,
+                notificationTitle,
+                notificationContent,
+                senderName, // 使用当前用户的真实姓名作为发送者
+                memberId.toString(), // 收件人为中队下所有学生
+                "announcement" // 类型为公告
+            );
+            eventPublisher.publishEvent(event);
+            log.info("已发送规章制度通知给学生ID: {}", memberId);
+        }
+        
+        return savedRule;
     }
     
     public List<EvaluationRule> getAllActiveRules() {
