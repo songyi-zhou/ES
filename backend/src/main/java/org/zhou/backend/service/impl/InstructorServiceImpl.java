@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.ApplicationEventPublisher;
 import org.zhou.backend.entity.GroupMember;
 import org.zhou.backend.entity.Instructor;
 import org.zhou.backend.entity.SquadGroupLeader;
@@ -29,6 +30,7 @@ import org.zhou.backend.repository.SquadGroupLeaderRepository;
 import org.zhou.backend.repository.StudentRepository;
 import org.zhou.backend.repository.UserRepository;
 import org.zhou.backend.service.InstructorService;
+import org.zhou.backend.event.MessageEvent;
 
 import lombok.RequiredArgsConstructor;
 
@@ -44,6 +46,7 @@ public class InstructorServiceImpl implements InstructorService {
     private final GroupMemberRepository groupMemberRepository;
     private final ClassGroupMemberRepository classGroupMemberRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final ApplicationEventPublisher eventPublisher;
     private static final Logger log = LoggerFactory.getLogger(InstructorServiceImpl.class);
 
     @Override
@@ -119,6 +122,38 @@ public class InstructorServiceImpl implements InstructorService {
                 log.info("Removed student {} from squad_cadre as role changed to {}", studentId, request.getRole());
             }
         }
+        
+        // 获取导员用户信息
+        User instructorUser = userRepository.findByUserId(instructorId)
+            .orElseThrow(() -> new ResourceNotFoundException("导员用户不存在: " + instructorId));
+        
+        // 获取角色的中文显示名称
+        String roleName;
+        switch (request.getRole().toLowerCase()) {
+            case "groupmember":
+                roleName = "综测小组成员";
+                break;
+            case "groupleader":
+                roleName = "综测小组负责人";
+                break;
+            case "user":
+                roleName = "普通学生";
+                break;
+            default:
+                roleName = request.getRole();
+        }
+        
+        // 发送消息通知给学生
+        MessageEvent event = new MessageEvent(
+            this,
+            "角色任命通知",
+            "你被导员任命为" + roleName,
+            instructorUser.getName(), // 使用导员的姓名作为发送者
+            user.getId().toString(), // 收件人为被任命的学生的userId
+            "announcement" // 类型为重要公告
+        );
+        eventPublisher.publishEvent(event);
+        log.info("已发送任命通知给学生: {}", user.getUserId());
         
         log.info("Updated student {} role to {}", studentId, request.getRole());
     }

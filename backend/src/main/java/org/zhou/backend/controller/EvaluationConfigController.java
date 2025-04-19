@@ -21,6 +21,8 @@ import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.EvaluationConfigLogService;
 import org.zhou.backend.service.StudentService;
 import org.zhou.backend.service.UserService;
+import org.springframework.context.ApplicationEventPublisher;
+import org.zhou.backend.event.MessageEvent;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,7 @@ public class EvaluationConfigController {
     private final StudentService studentService;
     private final JdbcTemplate jdbcTemplate;
     private final EvaluationConfigLogService logService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @PostMapping("/publish")
     public ResponseEntity<?> publishEvaluation(
@@ -869,6 +872,58 @@ public class EvaluationConfigController {
                     .userAgent(httpRequest.getHeader("User-Agent"))
                     .build()
             );
+
+            // 获取当前中队下所有学生
+            String findStudentsSql = """
+                SELECT id 
+                FROM users 
+                WHERE department = ? AND squad = ?
+                """;
+            List<Long> studentIds = jdbcTemplate.queryForList(findStudentsSql, Long.class, department, squad);
+            
+            log.info("找到对应中队的学生数量: {}, 部门: {}, 中队: {}", studentIds.size(), department, squad);
+            
+            // 构建通知内容
+            String notificationTitle = "综测开始通知";
+            String formTypeName;
+            switch (request.getFormType()) {
+                case "MONTHLY_A":
+                    formTypeName = String.format("%s学年第%s学期%s月德育测评", 
+                        request.getAcademicYear(), request.getSemester(), request.getMonth());
+                    break;
+                case "TYPE_C":
+                    formTypeName = String.format("%s学年第%s学期科研竞赛测评", 
+                        request.getAcademicYear(), request.getSemester());
+                    break;
+                case "TYPE_D":
+                    formTypeName = String.format("%s学年第%s学期文体活动测评", 
+                        request.getAcademicYear(), request.getSemester());
+                    break;
+                default:
+                    formTypeName = String.format("%s学年第%s学期测评", 
+                        request.getAcademicYear(), request.getSemester());
+            }
+            
+            String notificationContent = String.format(
+                "%s已发布，审核时间至 %s，请在规定时间内提交材料。",
+                formTypeName,
+                reviewEndTime != null ? reviewEndTime.toString() : "未设置"
+            );
+            
+            // 向所有学生发送通知
+            for (Long studentId : studentIds) {
+                // 发送消息通知
+                MessageEvent event = new MessageEvent(
+                    this,
+                    notificationTitle,
+                    notificationContent,
+                    groupLeader.getName(), // 使用当前用户的真实姓名作为发送者
+                    studentId.toString(), // 收件人为中队下所有学生
+                    "evaluation" // 类型为公告
+                );
+                eventPublisher.publishEvent(event);
+                log.info("已发送综测开始通知给学生ID: {}", studentId);
+            }
 
             return ResponseEntity.ok(Map.of(
                 "success", true,

@@ -13,6 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.zhou.backend.model.dto.EvaluationFormDTO;
 import org.zhou.backend.repository.UserRepository;
 import org.zhou.backend.service.ReviewService;
+import org.springframework.context.ApplicationEventPublisher;
+import org.zhou.backend.event.MessageEvent;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.Authentication;
+import org.zhou.backend.entity.User;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +29,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     private final JdbcTemplate jdbcTemplate;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public List<EvaluationFormDTO> getEvaluationForms(String formType, String major, String classId) {
@@ -132,6 +138,8 @@ public class ReviewServiceImpl implements ReviewService {
     public void batchReject(String formType, String major, String classId, List<String> studentIds, String reason) {
         log.info("开始批量退回操作 - 评测表类型: {}, 专业: {}, 班级: {}, 学生IDs: {}", formType, major, classId, studentIds);
         
+        int totalUpdatedMaterials = 0;
+        
         for (String studentId : studentIds) {
             // 1. 获取指定学生的material_ids
             String getMaterialIdsSql = "SELECT material_ids FROM " + formType + " WHERE student_id = ? AND status = 1";
@@ -178,7 +186,7 @@ public class ReviewServiceImpl implements ReviewService {
             log.info("更新评测表状态完成，更新了 {} 条记录", updatedForms);
 
             // 3. 更新材料状态为待修改，同时更新分数
-            int totalUpdatedMaterials = 0;
+            int studentUpdatedMaterials = 0;
             double totalDeductedScore = 0.0;
             Set<String> rejectedMaterialIds = new HashSet<>();
             if (!materialIdsList.isEmpty()) {
@@ -216,6 +224,7 @@ public class ReviewServiceImpl implements ReviewService {
                         """.formatted(inClause);
                         log.info("执行材料更新SQL: {}", updateMaterialsSql);
                         int updatedMaterials = jdbcTemplate.update(updateMaterialsSql, reason);
+                        studentUpdatedMaterials += updatedMaterials;
                         totalUpdatedMaterials += updatedMaterials;
                         log.info("更新材料状态 - 当前批次更新了 {} 条记录", updatedMaterials);
                     }
@@ -249,7 +258,42 @@ public class ReviewServiceImpl implements ReviewService {
             }
             
             log.info("批量退回操作完成 - 评测表类型: {}, 专业: {}, 班级: {}, 学生ID: {}, 更新评测表: {} 条, 更新材料: {} 条, 扣除总分: {}, 移除材料ID: {}", 
-                    formType, major, classId, studentId, updatedForms, totalUpdatedMaterials, totalDeductedScore, rejectedMaterialIds);
+                    formType, major, classId, studentId, updatedForms, studentUpdatedMaterials, totalDeductedScore, rejectedMaterialIds);
+        }
+        
+        // 获取当前用户信息
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = authentication.getName();
+        
+        // 获取当前用户的真实姓名
+        User currentUser = userRepository.findByUserId(currentUsername)
+            .orElse(null);
+        String senderName = currentUser != null ? currentUser.getName() : currentUsername;
+        
+        // 根据班级ID查找综测小组成员的用户ID
+        if (classId != null && !classId.isEmpty()) {
+            String findGroupMembersSql = "SELECT user_id FROM class_group_members WHERE class_id = ?";
+            List<Long> groupMemberIds = jdbcTemplate.queryForList(findGroupMembersSql, Long.class, classId);
+            
+            log.info("找到对应班级的综测小组成员数量: {}", groupMemberIds.size());
+            
+            // 向所有班级综测小组成员发送通知
+            for (Long memberId : groupMemberIds) {
+                // 发送消息通知
+                MessageEvent event = new MessageEvent(
+                    this,
+                    "表格退回通知",
+                    String.format("评测表类型: %s, 专业: %s, 班级: %s 有%d条材料有误, 原因: %s", 
+                                 formType, major, classId, totalUpdatedMaterials, reason),
+                    senderName, // 使用当前用户的真实姓名作为发送者
+                    memberId.toString(), // 收件人为班级的综测小组成员
+                    "evaluation" // 类型为evaluation
+                );
+                eventPublisher.publishEvent(event);
+                log.info("已发送表格退回通知给综测小组成员ID: {}", memberId);
+            }
+        } else {
+            log.warn("未提供班级ID，无法发送通知给综测小组成员");
         }
     }
 

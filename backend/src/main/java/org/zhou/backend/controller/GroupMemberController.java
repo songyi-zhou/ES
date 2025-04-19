@@ -166,7 +166,7 @@ public class GroupMemberController {
                     "综测小组任命通知，你已被任命为综测小组成员",
                     userPrincipal.getName(), // 发送者为当前用户
                     member.getUserId().toString(), // 收件人为被任命的学生
-                    "evaluation"
+                    "announcement"
                 );
                 eventPublisher.publishEvent(event);
             }
