@@ -28,11 +28,11 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     Long countUnreadByType(@Param("receiver") String receiver, @Param("type") String type);
     
     @Modifying
-    @Query("UPDATE Message m SET m.isRead = true WHERE m.id = :messageId AND m.receiver = :receiver")
+    @Query("UPDATE Message m SET m.isRead = true, m.readTime = CURRENT_TIMESTAMP WHERE m.id = :messageId AND m.receiver = :receiver")
     int markAsRead(@Param("messageId") Long messageId, @Param("receiver") String receiver);
     
     @Modifying
-    @Query("UPDATE Message m SET m.isRead = true WHERE m.receiver = :receiver AND m.type = :type")
+    @Query("UPDATE Message m SET m.isRead = true, m.readTime = CURRENT_TIMESTAMP WHERE m.receiver = :receiver AND (:type IS NULL OR m.type = :type)")
     int markAllAsRead(@Param("receiver") String receiver, @Param("type") String type);
     
     @Modifying

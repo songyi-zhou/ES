@@ -36,6 +36,8 @@ import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.ClassGroupMemberService;
 import org.zhou.backend.service.GroupMemberService;
 import org.zhou.backend.service.UserService;
+import org.zhou.backend.event.MessageEvent;
+import org.springframework.context.ApplicationEventPublisher;
 
 import lombok.RequiredArgsConstructor;
 
@@ -54,6 +56,9 @@ public class GroupMemberController {
     
     @Autowired
     private ClassGroupMemberService classGroupMemberService;
+    
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
     
     @GetMapping
     public ResponseEntity<?> getGroupMembers(@AuthenticationPrincipal UserPrincipal userPrincipal) {
@@ -152,6 +157,19 @@ public class GroupMemberController {
                 currentUser.getDepartment(),
                 userPrincipal.getUsername()  // 作为 instructorId 传入
             );
+            
+            // 为每个被任命的成员发送消息
+            for (GroupMember member : addedMembers) {
+                MessageEvent event = new MessageEvent(
+                    this,
+                    "综测小组任命",
+                    "综测小组任命通知，你已被任命为综测小组成员",
+                    userPrincipal.getName(), // 发送者为当前用户
+                    member.getUserId().toString(), // 收件人为被任命的学生
+                    "evaluation"
+                );
+                eventPublisher.publishEvent(event);
+            }
             
             return ResponseEntity.ok(Map.of(
                 "success", true,

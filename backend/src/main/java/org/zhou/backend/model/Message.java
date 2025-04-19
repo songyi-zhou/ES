@@ -43,15 +43,15 @@ public class Message {
     @Column(name = "read_time")
     private LocalDateTime readTime;
 
-    @Column(name = "receiver_id")
-    private Long receiverId;
+//    @Column(name = "receiver_id")
+//    private Long receiverId;
 
     @PrePersist
     protected void onCreate() {
         createTime = LocalDateTime.now();
     }
 
-    public Long getReceiverId() {
-        return receiverId;
-    }
+//    public Long getReceiverId() {
+//        return receiverId;
+//    }
 } 

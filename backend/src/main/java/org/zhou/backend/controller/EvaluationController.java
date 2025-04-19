@@ -207,7 +207,9 @@ public class EvaluationController {
     }
 
     @PostMapping("/raise-question")
-    public ResponseEntity<?> raiseQuestion(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> raiseQuestion(
+            @RequestBody Map<String, Object> request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
         try {
             Long materialId = Long.parseLong(request.get("materialId").toString());
             String description = request.get("description").toString();
@@ -230,9 +232,9 @@ public class EvaluationController {
             // 发送消息通知给中队综测负责人
             MessageEvent event = new MessageEvent(
                 this,
-                "收到新的综测疑问",
+                "新的综测疑问",
                 String.format("关于%s（%s）的疑问：%s", title, evaluationType, description),
-                "综测系统",
+                userPrincipal.getName(), // 使用当前用户名作为发送者
                 counselorId.toString(), // 发送给中队综测负责人
                 "evaluation"
             );
