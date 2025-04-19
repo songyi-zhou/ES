@@ -169,6 +169,55 @@ public class QuestionMaterialService {
                 }
             }
             
+            // 如果状态为UNCORRECT（材料需要修正），向综测小组成员发送通知
+            if ("UNCORRECT".equals(request.getStatus())) {
+                log.info("Material needs correction, sending notification to group members");
+                
+                try {
+                    // 1. 从evaluation_materials表获取用户ID
+                    Long materialUserId = material.getUserId();
+                    
+                    // 2. 从users表获取对应的user_id字段
+                    String findUserIdSql = "SELECT user_id FROM users WHERE id = ?";
+                    String studentId = jdbcTemplate.queryForObject(findUserIdSql, String.class, materialUserId);
+                    
+                    // 3. 从students表获取class_id
+                    String findClassIdSql = "SELECT class_id FROM students WHERE student_id = ?";
+                    String classId = jdbcTemplate.queryForObject(findClassIdSql, String.class, studentId);
+                    
+                    // 4. 从class_group_members表获取该班级的所有综测小组成员ID
+                    String findGroupMembersSql = "SELECT user_id FROM class_group_members WHERE class_id = ?";
+                    List<Long> groupMemberIds = jdbcTemplate.queryForList(findGroupMembersSql, Long.class, classId);
+                    
+                    log.info("找到 {} 个综测小组成员需要通知", groupMemberIds.size());
+                    
+                    // 获取当前用户姓名作为发送者
+                    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                    String currentUserName = authentication.getName();
+                    
+                    // 获取材料标题和问题描述
+                    String materialTitle = material.getTitle();
+                    String problemReason = request.getComment() != null ? request.getComment() : "需要修正";
+                    
+                    // 向每个综测小组成员发送通知
+                    for (Long memberId : groupMemberIds) {
+                        MessageEvent event = new MessageEvent(
+                            this,
+                            "综测材料仍有问题",
+                            String.format("材料 %s 仍有问题，原因：%s", materialTitle, problemReason),
+                            currentUserName, // 使用当前用户名作为发送者
+                            memberId.toString(), // 发送给该材料对应的综测小组成员
+                            "evaluation"
+                        );
+                        eventPublisher.publishEvent(event);
+                        log.info("已发送材料问题通知给综测小组成员ID: {}", memberId);
+                    }
+                } catch (Exception e) {
+                    log.error("发送通知失败: {}", e.getMessage(), e);
+                    // 发送通知失败不应该影响审核流程，所以这里只记录日志，不抛出异常
+                }
+            }
+            
             questionMaterialRepository.save(material);
             log.info("Successfully reviewed material: {}", material.getId());
         } catch (Exception e) {

@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
@@ -19,20 +20,24 @@ import org.springframework.web.bind.annotation.RestController;
 import org.zhou.backend.dto.BatchFeedbackDTO;
 import org.zhou.backend.dto.PublishedFormQueryDTO;
 import org.zhou.backend.dto.ReviewQueryDTO;
+import org.zhou.backend.event.MessageEvent;
 import org.zhou.backend.model.dto.EvaluationFormDTO;
 import org.zhou.backend.model.dto.ResponseDTO;
 import org.zhou.backend.security.UserPrincipal;
 import org.zhou.backend.service.ReviewService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/api/review")
 @RequiredArgsConstructor
+@Slf4j
 public class ReviewController {
     
     private final ReviewService reviewService;
     private final JdbcTemplate jdbcTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     @PostMapping("/evaluation-forms")
     public ResponseEntity<ResponseDTO<Map<String, Object>>> getEvaluationForms(
@@ -224,6 +229,37 @@ public class ReviewController {
                 totalUpdated += updated;
             }
 
+            // 获取发布者姓名
+            String getNameSql = "SELECT name FROM users WHERE id = ?";
+            String senderName = jdbcTemplate.queryForObject(getNameSql, String.class, userId);
+            
+            // 获取中队下所有学生的ID
+            String findStudentsSql = "SELECT id FROM users WHERE department = ? AND squad = ?";
+            List<Long> studentIds = jdbcTemplate.queryForList(findStudentsSql, Long.class, department, squad);
+            
+            log.info("找到对应中队的学生数量: {}, 部门: {}, 中队: {}", studentIds.size(), department, squad);
+            
+            // 构建通知内容
+            String notificationTitle = "综测公示通知";
+            String notificationContent = String.format(
+                "您的综测表已经进入公示阶段，请查看并确认评测结果。如有异议，请及时反馈。"
+            );
+            
+            // 向所有学生发送通知
+            for (Long studentId : studentIds) {
+                // 发送消息通知
+                MessageEvent event = new MessageEvent(
+                    this,
+                    notificationTitle,
+                    notificationContent,
+                    senderName, // 使用当前用户的真实姓名作为发送者
+                    studentId.toString(), // 收件人为中队下所有学生
+                    "evaluation" // 类型为evaluation
+                );
+                eventPublisher.publishEvent(event);
+                log.info("已发送综测公示通知给学生ID: {}", studentId);
+            }
+
             Map<String, Object> result = Map.of(
                     "success", true,
                     "message", "已成功将综测表格设置为公示状态",
@@ -232,6 +268,7 @@ public class ReviewController {
 
             return ResponseEntity.ok(ResponseDTO.success(result));
         } catch (Exception e) {
+            log.error("公示失败", e);
             return ResponseEntity.ok(ResponseDTO.error("公示失败: " + e.getMessage()));
         }
     }

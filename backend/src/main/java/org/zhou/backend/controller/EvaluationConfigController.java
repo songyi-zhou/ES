@@ -919,7 +919,7 @@ public class EvaluationConfigController {
                     notificationContent,
                     groupLeader.getName(), // 使用当前用户的真实姓名作为发送者
                     studentId.toString(), // 收件人为中队下所有学生
-                    "evaluation" // 类型为公告
+                    "announcement" // 类型为公告
                 );
                 eventPublisher.publishEvent(event);
                 log.info("已发送综测开始通知给学生ID: {}", studentId);

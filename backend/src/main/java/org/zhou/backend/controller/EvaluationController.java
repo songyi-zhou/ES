@@ -224,7 +224,7 @@ public class EvaluationController {
                         "JOIN users u ON u.id = ? " +
                         "WHERE sgl.department = u.department " +
                         "AND sgl.squad = u.squad";
-            Long counselorId = jdbcTemplate.queryForObject(sql, Long.class, material.getUserId());
+            Long groupLeaderId = jdbcTemplate.queryForObject(sql, Long.class, material.getUserId());
             
             // 提交疑问
             evaluationService.raiseQuestion(materialId, description);
@@ -235,7 +235,7 @@ public class EvaluationController {
                 "新的综测疑问",
                 String.format("关于%s（%s）的疑问：%s", title, evaluationType, description),
                 userPrincipal.getName(), // 使用当前用户名作为发送者
-                counselorId.toString(), // 发送给中队综测负责人
+                groupLeaderId.toString(), // 发送给中队综测负责人
                 "evaluation"
             );
             eventPublisher.publishEvent(event);
@@ -315,14 +315,43 @@ public class EvaluationController {
 
     @PostMapping("/correct")
     @PreAuthorize("hasRole('GROUP_MEMBER')")
-    public ResponseEntity<?> correctMaterial(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> correctMaterial(
+            @RequestBody Map<String, Object> request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
         try {
             Long materialId = Long.parseLong(request.get("materialId").toString());
             String evaluationType = request.get("evaluationType").toString();
             Double score = Double.parseDouble(request.get("score").toString());
             String reviewComment = request.get("reviewComment").toString();
             
+            // 获取材料信息
+            var material = evaluationService.getMaterialById(materialId);
+            String title = material.getTitle();
+            
             evaluationService.correctMaterial(materialId, evaluationType, score, reviewComment);
+
+            // 获取中队综测负责人ID
+            String sql = "SELECT sgl.user_id FROM squad_group_leader sgl " +
+                        "JOIN users u ON u.id = ? " +
+                        "WHERE sgl.department = u.department " +
+                        "AND sgl.squad = u.squad";
+            Long groupLeaderId = jdbcTemplate.queryForObject(sql, Long.class, material.getUserId());
+
+            // 发送消息通知给中队综测负责人
+            MessageEvent event = new MessageEvent(
+                this,
+                "综测材料已改正",
+                String.format("关于%s（%s）的材料已被改正，评分: %.1f，改正说明: %s", 
+                    title, 
+                    evaluationType, 
+                    score, 
+                    reviewComment),
+                userPrincipal.getName(), // 使用当前用户名作为发送者
+                groupLeaderId.toString(), // 发送给中队综测负责人
+                "evaluation"
+            );
+            eventPublisher.publishEvent(event);
+            
             return ResponseEntity.ok(Map.of("success", true));
         } catch (Exception e) {
             log.error("材料改正失败", e);
