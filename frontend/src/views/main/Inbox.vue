@@ -18,7 +18,11 @@
                 :class="{ active: currentCategory === category.type }"
                 @click="currentCategory = category.type"
               >
-                <el-badge :value="category.unread" :hidden="!category.unread">
+                <el-badge 
+                  :value="category.unread" 
+                  :hidden="category.unread === 0"
+                  type="danger"
+                >
                   <div class="category-content">
                     <i :class="category.icon"></i>
                     <span>{{ category.name }}</span>
@@ -94,12 +98,12 @@ import TopBar from "@/components/TopBar.vue"
 import Sidebar from "@/components/Sidebar.vue"
 
 // 消息分类
-const categories = [
+const categories = ref([
   { type: 'all', name: '全部消息', icon: 'fas fa-inbox', unread: 0 },
   { type: 'system', name: '系统通知', icon: 'fas fa-bell', unread: 0 },
   { type: 'evaluation', name: '综测相关', icon: 'fas fa-tasks', unread: 0 },
   { type: 'announcement', name: '重要公告', icon: 'fas fa-bullhorn', unread: 0 }
-]
+])
 
 const currentCategory = ref('all')
 const dialogVisible = ref(false)
@@ -157,28 +161,38 @@ const fetchMessages = async () => {
 
 // 获取未读消息数
 const fetchUnreadCount = async () => {
-  console.log('开始获取未读消息数')
-  
   try {
     const response = await axios.get('/api/messages/unread/count')
-    console.log('未读消息数响应:', response.data)
+    console.log('未读消息响应:', response.data)
     
-    if (response.data.success) {
+    if (response.data.code === 200 && response.data.data) {
       const counts = response.data.data
-      console.log('未读消息统计:', counts)
       
-      categories.forEach(category => {
+      // 确保 categories.value 是数组
+      if (!Array.isArray(categories.value)) {
+        console.error('categories.value 不是数组:', categories.value)
+        return
+      }
+      
+      // 修改这里：使用 categories.value 来访问数组
+      categories.value.forEach(category => {
         if (category.type === 'all') {
-          category.unread = Object.values(counts).reduce((a, b) => a + b, 0)
+          // 计算所有分类的未读总数
+          const total = (counts.system || 0) + (counts.evaluation || 0) + (counts.announcement || 0)
+          console.log('全部未读数:', total)  // 调试日志
+          category.unread = total
         } else {
+          // 直接从counts中获取对应分类的未读数
           category.unread = counts[category.type] || 0
+          console.log(`${category.type} 未读数:`, category.unread)  // 调试日志
         }
       })
-    } else {
-      console.warn('获取未读消息数失败:', response.data.message)
+      
+      // 不需要使用 splice，因为数组中的对象属性的改变会自动触发响应式更新
+      console.log('更新后的分类数据:', categories.value)
     }
   } catch (error) {
-    console.error('获取未读消息数异常:', error)
+    console.error('获取未读消息数失败:', error)
     ElMessage.error('获取未读消息数失败')
   }
 }
@@ -290,7 +304,7 @@ const hasMessages = computed(() => {
 
 // 获取当前分类名称
 const getCurrentCategoryName = computed(() => {
-  const category = categories.find(c => c.type === currentCategory.value)
+  const category = categories.value.find(c => c.type === currentCategory.value)
   return category ? category.name : '全部消息'
 })
 
@@ -333,6 +347,11 @@ watch(currentCategory, (newCategory) => {
   console.log('分类切换:', newCategory)
   fetchMessages()
 })
+
+// 监听未读数变化
+watch(() => categories.value.map(c => c.unread), (newCounts) => {
+  console.log('分类未读数变化:', newCounts)
+}, { deep: true })
 </script>
 
 <style scoped>
