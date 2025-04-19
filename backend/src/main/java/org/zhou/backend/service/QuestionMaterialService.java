@@ -30,6 +30,11 @@ import org.zhou.backend.repository.EvaluationMaterialRepository;
 import org.zhou.backend.repository.GradeGroupLeaderRepository;
 import org.zhou.backend.repository.QuestionMaterialRepository;
 import org.zhou.backend.repository.UserRepository;
+import org.zhou.backend.event.MessageEvent;
+import org.springframework.context.ApplicationEventPublisher;
+import java.security.Principal;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.Authentication;
 
 import jakarta.persistence.criteria.Predicate;
 
@@ -62,6 +67,9 @@ public class QuestionMaterialService {
     
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
     
     public Page<EvaluationMaterial> getQuestionMaterials(
             String department,
@@ -175,21 +183,20 @@ public class QuestionMaterialService {
         List<EvaluationMaterial> materials = questionMaterialRepository.findAllById(request.getMaterialIds());
         log.info("Found {} materials to report", materials.size());
         
-        // 2. 获取这些材料对应的班级信息
-        Set<String> departments = materials.stream()
-            .map(m -> classRepository.findById(m.getClassId())
-                .map(SchoolClass::getDepartment)
-                .orElse(null))
-            .filter(dept -> dept != null)
-            .collect(Collectors.toSet());
+        // 从第一个材料中获取部门和中队信息
+        if (materials.isEmpty()) {
+            log.warn("没有找到需要上报的材料");
+            return Map.of("success", false, "message", "没有找到需要上报的材料");
+        }
         
-        Set<String> grades = materials.stream()
-            .map(m -> m.getClassId().substring(0, 4))
-            .collect(Collectors.toSet());
+        EvaluationMaterial firstMaterial = materials.get(0);
+        String department = firstMaterial.getDepartment();
+        String squad = firstMaterial.getSquad();
+        log.info("材料所属部门: {}, 中队: {}", department, squad);
         
-        // 3. 查询负责这些学院和年级的导员
-        List<User> instructors = userRepository.findInstructorsByDepartmentsAndGrades(departments, grades);
-        log.info("Found {} instructors", instructors.size());
+        // 查询负责这个部门和中队的导员
+        List<User> instructors = userRepository.findInstructorsByDepartmentAndSquad(department, squad);
+        log.info("找到 {} 个负责的导员", instructors.size());
         
         // 4. 更新材料状态
         for (EvaluationMaterial material : materials) {
@@ -214,6 +221,36 @@ public class QuestionMaterialService {
                 return map;
             })
             .collect(Collectors.toList());
+        
+        // 6. 发送消息通知给导员
+        if (!instructors.isEmpty()) {
+            User instructor = instructors.get(0);
+            
+            // 获取当前用户信息
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            log.info("authentication: {}", authentication);
+            String currentUsername = authentication.getName();
+            
+            // 获取当前用户的真实姓名
+            User currentUser = userRepository.findByUserId(currentUsername)
+                .orElse(null);
+            String senderName = currentUser != null ? currentUser.getName() : currentUsername;
+            
+            // 构建提示内容
+            String title = "综测材料上报";
+            String content = String.format("有%d个新的综测材料上报通知，请尽快审核", materials.size());
+            
+            MessageEvent event = new MessageEvent(
+                this,
+                title,
+                content,
+                senderName, // 使用当前用户的真实姓名作为发送者
+                instructor.getId().toString(), // 收件人为导员
+                "evaluation"
+            );
+            eventPublisher.publishEvent(event);
+            log.info("已发送消息通知给导员: {}", instructor.getName());
+        }
         
         return Map.of(
             "success", true,

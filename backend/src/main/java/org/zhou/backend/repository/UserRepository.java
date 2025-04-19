@@ -15,14 +15,14 @@ import org.zhou.backend.entity.User;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUserId(String userId);
 
+
     @Query("SELECT u FROM User u " +
-           "INNER JOIN InstructorSquad s ON u.id = s.instructorId " +
-           "WHERE s.department IN :departments " +
-           "AND s.grade IN :grades " +
-           "AND 'ROLE_COUNSELOR' MEMBER OF u.roles")
-    List<User> findInstructorsByDepartmentsAndGrades(
-        @Param("departments") Set<String> departments,
-        @Param("grades") Set<String> grades
+           "INNER JOIN Instructor s ON u.userId = s.instructorId " +
+           "WHERE s.department = :department " +
+           "AND s.squadList LIKE CONCAT('%', :squad, '%')")
+    List<User> findInstructorsByDepartmentAndSquad(
+        @Param("department") String department,
+        @Param("squad") String squad
     );
 
     @Query("SELECT u FROM User u WHERE u.major = :major AND u.grade = :grade AND 'ROLE_COUNSELOR' MEMBER OF u.roles")
