@@ -41,4 +41,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
         String squad, 
         String role
     );
+    
+    @Query("SELECT u FROM User u WHERE 'ROLE_ADMIN' MEMBER OF u.roles")
+    List<User> findAllAdmins();
+    
+    @Query("SELECT u FROM User u WHERE 'ROLE_ADMIN' NOT MEMBER OF u.roles")
+    List<User> findAllNonAdmins();
 } 

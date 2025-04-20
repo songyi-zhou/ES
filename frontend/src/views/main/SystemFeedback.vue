@@ -13,24 +13,35 @@
 
           <div class="form-group">
             <label for="feedbackType">反馈类型：</label>
-            <select v-model="feedbackType" class="input-box">
-              <option value="功能建议">功能建议</option>
-              <option value="界面优化">界面优化</option>
-              <option value="系统错误">系统错误</option>
-              <option value="其他">其他</option>
+            <select v-model="feedback.type" class="input-box">
+              <option value="bug">功能异常</option>
+              <option value="suggestion">功能建议</option>
+              <option value="other">其他</option>
             </select>
           </div>
 
           <div class="form-group">
             <label for="feedbackContent">您的意见或建议：</label>
             <textarea
-                v-model="feedbackContent"
+                v-model="feedback.description"
                 placeholder="请输入您的意见或建议..."
                 class="input-box textarea-box"
             ></textarea>
           </div>
 
-          <button @click="submitFeedback" class="submit-button">提交</button>
+          <div class="form-group">
+            <label for="contactEmail">联系邮箱（选填）：</label>
+            <input
+                type="email"
+                v-model="feedback.email"
+                placeholder="请输入您的联系邮箱..."
+                class="input-box"
+            />
+          </div>
+
+          <button @click="submitFeedback" class="submit-button" :disabled="isSubmitting">
+            {{ isSubmitting ? '提交中...' : '提交' }}
+          </button>
         </section>
       </main>
     </div>
@@ -45,34 +56,52 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, reactive } from "vue";
 import TopBar from "@/components/TopBar.vue";
 import Sidebar from "@/components/Sidebar.vue";
+import axios from "axios";
+import { ElMessage } from "element-plus";
 
-// 反馈类型和内容
-const feedbackType = ref("功能建议");
-const feedbackContent = ref("");
+// 反馈表单数据
+const feedback = reactive({
+  type: "功能建议",
+  description: "",
+  email: ""
+});
+
 const showSuccess = ref(false);
+const isSubmitting = ref(false);
 
 // 提交反馈
-const submitFeedback = () => {
-  if (!feedbackContent.value.trim()) {
-    alert("请填写您的意见或建议！");
+const submitFeedback = async () => {
+  if (!feedback.type || !feedback.description) {
+    ElMessage.warning('请填写所有必填项');
     return;
   }
 
-  // 模拟提交
-  console.log("反馈类型:", feedbackType.value);
-  console.log("反馈内容:", feedbackContent.value);
-
-  // 显示提交成功提示
-  showSuccess.value = true;
-  setTimeout(() => {
-    showSuccess.value = false;
-  }, 3000);
-
-  // 清空输入框
-  feedbackContent.value = "";
+  isSubmitting.value = true;
+  
+  try {
+    const response = await axios.post('/api/feedback', feedback);
+    if (response.data.code === 200) {
+      ElMessage.success('反馈提交成功！感谢您的反馈！');
+      // 显示提交成功提示
+      showSuccess.value = true;
+      setTimeout(() => {
+        showSuccess.value = false;
+      }, 3000);
+      
+      // 清空输入
+      feedback.type = "功能建议";
+      feedback.description = "";
+      feedback.email = "";
+    }
+  } catch (error) {
+    console.error('提交反馈失败:', error);
+    ElMessage.error(error.response?.data?.message || '提交反馈失败，请稍后重试');
+  } finally {
+    isSubmitting.value = false;
+  }
 };
 </script>
 
@@ -173,10 +202,15 @@ const submitFeedback = () => {
   box-shadow: 0 2px 6px rgba(64, 158, 255, 0.2);
 }
 
-.submit-button:hover {
+.submit-button:hover:not(:disabled) {
   background: #66b1ff;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(64, 158, 255, 0.3);
+}
+
+.submit-button:disabled {
+  background: #a0cfff;
+  cursor: not-allowed;
 }
 
 /* 成功提示 */

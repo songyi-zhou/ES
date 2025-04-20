@@ -7,11 +7,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.zhou.backend.common.ResponseResult;
 import org.zhou.backend.entity.Feedback;
+import org.zhou.backend.entity.User;
 import org.zhou.backend.service.FeedbackService;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.zhou.backend.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/feedback")
@@ -39,6 +47,8 @@ public class FeedbackController {
 class AdminFeedbackController {
     
     private final FeedbackService feedbackService;
+    private final UserRepository userRepository;
+    private static final Logger log = LoggerFactory.getLogger(AdminFeedbackController.class);
     
     // 管理员接口：获取反馈列表
     @GetMapping
@@ -76,10 +86,26 @@ class AdminFeedbackController {
     @PutMapping("/{id}/resolve")
     public ResponseEntity<?> resolveFeedback(
             @PathVariable Long id,
-            @RequestParam String resolvedBy,
-            @RequestParam String resolution) {
+            @RequestParam(required = false) String resolution) {
         try {
-            Feedback feedback = feedbackService.resolveFeedback(id, resolvedBy, resolution);
+            // 获取当前管理员信息
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String adminName = "系统管理员"; // 默认名称
+            
+            if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
+                UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+                String userId = userDetails.getUsername();
+                
+                // 查询用户的真实姓名
+                Optional<User> adminUser = userRepository.findByUserId(userId);
+                if (adminUser.isPresent()) {
+                    adminName = adminUser.get().getName();
+                    log.info("当前处理管理员: {}, 姓名: {}", userId, adminName);
+                }
+            }
+            
+            // 调用服务处理反馈
+            Feedback feedback = feedbackService.resolveFeedback(id, adminName, resolution);
             return ResponseEntity.ok().body(new ResponseResult<Feedback>(200, "反馈处理成功", feedback));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new ResponseResult<Void>(400, "反馈处理失败：" + e.getMessage(), null));
