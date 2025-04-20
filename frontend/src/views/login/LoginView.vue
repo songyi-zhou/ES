@@ -116,7 +116,11 @@ const handleLogin = async () => {
     router.push('/home');
   } catch (error) {
     console.error('Login error:', error.response?.data);
-    ElMessage.error(error.response?.data?.message || error.response?.data || '登录失败');
+    if (error.response?.data === 'Invalid credentials' || error.response?.data?.message === 'Invalid credentials') {
+        ElMessage.error('账号或密码错误');
+    } else {
+        ElMessage.error(error.response?.data?.message || error.response?.data || '登录失败');
+    }
   } finally {
     loading.value = false;
   }

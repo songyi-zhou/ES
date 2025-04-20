@@ -254,7 +254,7 @@ public class ReviewController {
                     notificationContent,
                     senderName, // 使用当前用户的真实姓名作为发送者
                     studentId.toString(), // 收件人为中队下所有学生
-                    "evaluation" // 类型为evaluation
+                    "announcement" // 类型为evaluation
                 );
                 eventPublisher.publishEvent(event);
                 log.info("已发送综测公示通知给学生ID: {}", studentId);
@@ -383,7 +383,7 @@ public class ReviewController {
             jdbcTemplate.update(updateRemarkSql.toString(), remarkParams.toArray());
 
             // 2. 获取第一个学生的班级信息
-            String getClassInfoSql = "SELECT major, class_id FROM " + tableName +
+            String getClassInfoSql = "SELECT major, class_id, department, squad FROM " + tableName +
                     " WHERE student_id = ?";
             Map<String, Object> classInfo = jdbcTemplate.queryForMap(
                     getClassInfoSql,
@@ -399,12 +399,45 @@ public class ReviewController {
                     classInfo.get("major"),
                     classInfo.get("class_id")
             );
+            
+            // 4. 获取学生所在的部门和中队信息
+            String department = (String) classInfo.get("department");
+            String squad = (String) classInfo.get("squad");
+            
+            // 5. 查询该部门和中队对应的综测负责人
+            String getLeaderSql = "SELECT user_id FROM squad_group_leader WHERE department = ? AND squad = ?";
+            Long groupLeaderId = jdbcTemplate.queryForObject(getLeaderSql, Long.class, department, squad);
+            
+            // 6. 获取当前用户信息
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            Long currentUserId = userPrincipal.getId();
+            
+            // 7. 获取当前用户的姓名
+            String getUserNameSql = "SELECT name FROM users WHERE id = ?";
+            String senderName = jdbcTemplate.queryForObject(getUserNameSql, String.class, currentUserId);
+            
+            // 8. 发送通知给中队综测负责人
+            MessageEvent event = new MessageEvent(
+                this,
+                "评测表反馈通知",
+                String.format("问题类型：%s，问题描述：%s，涉及班级：%s", 
+                    feedback.getProblemType(), 
+                    feedback.getDescription(),
+                    classInfo.get("class_id")),
+                senderName, // 使用当前用户名作为发送者
+                groupLeaderId.toString(), // 发送给所在中队的综测负责人
+                "evaluation"
+            );
+            eventPublisher.publishEvent(event);
+            log.info("已发送反馈通知给中队综测负责人ID: {}, 部门: {}, 中队: {}", groupLeaderId, department, squad);
 
             return ResponseEntity.ok(ResponseDTO.success(
                     String.format("成功更新备注 %d 条，更新班级状态 %d 条",
                             feedback.getStudentIds().size(), updatedCount)
             ));
         } catch (Exception e) {
+            log.error("提交反馈失败", e);
             return ResponseEntity.ok(ResponseDTO.error("提交反馈失败: " + e.getMessage()));
         }
     }

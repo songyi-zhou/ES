@@ -128,7 +128,7 @@
                         <label>申报开始时间：</label>
                         <input 
                           type="datetime-local" 
-                          :value="timeConfig.declareStartTime?.replace(' ', 'T')"
+                          :value="isoToLocalInput(timeConfig.declareStartTime)"
                           @change="e => handleTimeChange('declareStartTime', e)"
                           required
                         />
@@ -138,7 +138,7 @@
                         <label>申报结束时间：</label>
                         <input 
                           type="datetime-local" 
-                          :value="timeConfig.declareEndTime?.replace(' ', 'T')"
+                          :value="isoToLocalInput(timeConfig.declareEndTime)"
                           @change="e => handleTimeChange('declareEndTime', e)"
                           required
                         />
@@ -148,7 +148,7 @@
                         <label>审核截止时间：</label>
                         <input 
                           type="datetime-local" 
-                          :value="timeConfig.reviewEndTime?.replace(' ', 'T')"
+                          :value="isoToLocalInput(timeConfig.reviewEndTime)"
                           @change="e => handleTimeChange('reviewEndTime', e)"
                           required
                         />
@@ -160,7 +160,7 @@
                       <label>公示开始时间：</label>
                       <input 
                         type="datetime-local" 
-                        :value="timeConfig.publicityStartTime?.replace(' ', 'T')"
+                        :value="isoToLocalInput(timeConfig.publicityStartTime)"
                         @change="e => handleTimeChange('publicityStartTime', e)"
                         required
                       />
@@ -170,7 +170,7 @@
                       <label>公示截止时间：</label>
                       <input 
                         type="datetime-local" 
-                        :value="timeConfig.publicityEndTime?.replace(' ', 'T')"
+                        :value="isoToLocalInput(timeConfig.publicityEndTime)"
                         @change="e => handleTimeChange('publicityEndTime', e)"
                         required
                       />
@@ -469,14 +469,67 @@ const removeNoticeItem = (index) => {
 }
 
 // 格式化日期时间为 YYYY-MM-DD HH:mm:ss
-const formatDateTime = (date) => {
-  if (!date) return ''
-  return date.replace('T', ' ')
+const formatDateTime = (isoString) => {
+  if (!isoString) return '未设置'
+  
+  // 解析ISO字符串
+  const date = new Date(isoString)
+  
+  // 获取UTC年、月、日、时、分、秒
+  const year = date.getUTCFullYear()
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
+  const hours = String(date.getUTCHours()).padStart(2, '0')
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0')
+  const seconds = String(date.getUTCSeconds()).padStart(2, '0')
+  
+  // 返回格式化的日期时间字符串
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
+
+// 将ISO时间字符串转换为datetime-local输入框需要的格式
+const isoToLocalInput = (isoString) => {
+  if (!isoString) return ''
+  
+  // 解析ISO字符串
+  const date = new Date(isoString)
+  
+  // 获取本地年、月、日、时、分
+  const year = date.getUTCFullYear()
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
+  const hours = String(date.getUTCHours()).padStart(2, '0')
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0')
+  
+  // 返回datetime-local输入框需要的格式
+  return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
 // 处理时间变化
 const handleTimeChange = (field, event) => {
-  timeConfig.value[field] = formatDateTime(event.target.value)
+  if (!event.target.value) {
+    timeConfig.value[field] = null
+    return
+  }
+  
+  // 解析用户选择的本地时间
+  const localDate = new Date(event.target.value)
+  
+  // 计算ISO字符串，但保持用户选择的时间不变
+  // 创建一个UTC时间，其值等同于用户看到的本地时间
+  const isoString = new Date(
+    Date.UTC(
+      localDate.getFullYear(),
+      localDate.getMonth(), 
+      localDate.getDate(),
+      localDate.getHours(),
+      localDate.getMinutes()
+    )
+  ).toISOString()
+  
+  // 存储ISO格式时间
+  timeConfig.value[field] = isoString
+  console.log(`设置${field}时间为:`, isoString, '用户选择的本地时间:', localDate.toString())
 }
 
 // 验证时间
@@ -601,15 +654,15 @@ const publishEvaluation = async () => {
     // 构造请求数据
     const requestData = {
       ...basicConfig.value,
-      ...timeConfig.value,
       ...scoreConfig.value,
       ...noticeConfig.value,
       baseScore: totalBaseScore,
-      declareStartTime: timeConfig.value.declareStartTime ? new Date(timeConfig.value.declareStartTime).toISOString() : null,
-      declareEndTime: timeConfig.value.declareEndTime ? new Date(timeConfig.value.declareEndTime).toISOString() : null,
-      reviewEndTime: timeConfig.value.reviewEndTime ? new Date(timeConfig.value.reviewEndTime).toISOString() : null,
-      publicityStartTime: timeConfig.value.publicityStartTime ? new Date(timeConfig.value.publicityStartTime).toISOString() : null,
-      publicityEndTime: timeConfig.value.publicityEndTime ? new Date(timeConfig.value.publicityEndTime).toISOString() : null
+      // 直接使用已经存储的ISO格式时间字符串
+      declareStartTime: timeConfig.value.declareStartTime,
+      declareEndTime: timeConfig.value.declareEndTime,
+      reviewEndTime: timeConfig.value.reviewEndTime,
+      publicityStartTime: timeConfig.value.publicityStartTime,
+      publicityEndTime: timeConfig.value.publicityEndTime
     };
 
     // 打印最终发送的请求数据

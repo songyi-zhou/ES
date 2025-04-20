@@ -16,11 +16,13 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.zhou.backend.entity.ClassGroupMember;
 import org.zhou.backend.entity.GroupMember;
 import org.zhou.backend.entity.SchoolClass;
 import org.zhou.backend.entity.Student;
 import org.zhou.backend.entity.User;
+import org.zhou.backend.event.MessageEvent;
 import org.zhou.backend.exception.ResourceNotFoundException;
 import org.zhou.backend.model.request.RoleUpdateRequest;
 import org.zhou.backend.repository.ClassGroupMemberRepository;
@@ -32,9 +34,11 @@ import org.zhou.backend.service.GroupMemberService;
 import org.zhou.backend.service.InstructorService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class GroupMemberServiceImpl implements GroupMemberService {
 
     private final ClassGroupMemberRepository classGroupMemberRepository;
@@ -44,7 +48,7 @@ public class GroupMemberServiceImpl implements GroupMemberService {
     private final StudentRepository studentRepository;
     private final InstructorService instructorService;
     private final JdbcTemplate jdbcTemplate;
-    private static final Logger log = LoggerFactory.getLogger(GroupMemberServiceImpl.class);
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public List<Map<String, Object>> getSquadGroupMembers(Long leaderId) {
@@ -111,6 +115,39 @@ public class GroupMemberServiceImpl implements GroupMemberService {
         );
         log.info("已通过 SQL 更新 group_members 表，userId={}", userId);
         
+
+        // 获取当前操作者信息
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String senderName = "系统通知";
+        if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
+            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+            try {
+                log.info("当前操作者name: {}", userDetails.getUsername());
+                String leaderId = userDetails.getUsername();
+                log.info("当前操作者ID: {}", leaderId);
+                User currentUser = userRepository.findByUserId(leaderId).orElse(null);
+                if (currentUser != null) {
+                    senderName = currentUser.getName();
+                }
+            } catch (NumberFormatException e) {
+                log.warn("无法解析用户ID: {}", userDetails.getUsername());
+            }
+        }
+        
+        // 发送通知给被更新班级的组员
+        MessageEvent event = new MessageEvent(
+            this,
+            "班级更新通知",
+            String.format("您的班级信息已更新为 %s 专业 %s 班级，请及时关注班级综测信息。", 
+                correctMajor, 
+                className),
+            senderName,
+            userId.toString(),
+            "evaluation"
+        );
+        eventPublisher.publishEvent(event);
+        log.info("已发送班级更新通知给用户ID: {}", userId);
+        
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("id", id);
@@ -132,21 +169,21 @@ public class GroupMemberServiceImpl implements GroupMemberService {
             .orElseThrow(() -> new ResourceNotFoundException("成员不存在"));
     }
 
-    private boolean hasPermissionToModify(GroupMember member) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    // private boolean hasPermissionToModify(GroupMember member) {
+    //     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         
-        // 如果是管理员，直接返回true
-        if (authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) {
-            return true;
-        }
+    //     // 如果是管理员，直接返回true
+    //     if (authentication.getAuthorities().stream()
+    //             .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) {
+    //         return true;
+    //     }
 
-        // 如果是组长，检查是否是其负责的班级/年级
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        // TODO: 实现具体的权限检查逻辑
+    //     // 如果是组长，检查是否是其负责的班级/年级
+    //     UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+    //     // TODO: 实现具体的权限检查逻辑
         
-        return true; // 临时返回true，需要根据实际业务逻辑实现
-    }
+    //     return true; // 临时返回true，需要根据实际业务逻辑实现
+    // }
 
     @Override
     @Transactional
@@ -262,6 +299,25 @@ public class GroupMemberServiceImpl implements GroupMemberService {
         member.setClassId(className);
         groupMemberRepository.save(member);
         log.info("已更新组员信息: id={}, classId={}, major={}", member.getId(), className, correctMajor);
+        
+        // 获取当前操作者的姓名（综测负责人）
+        User leader = userRepository.findById(leaderId)
+            .orElse(null);
+        String senderName = leader != null ? leader.getName() : "系统通知";
+        
+        // 发送通知给被分配的组员
+        MessageEvent event = new MessageEvent(
+            this,
+            "班级分配通知",
+            String.format("您已被分配到 %s 专业 %s 班级作为综测小组成员，请及时关注班级综测信息。", 
+                correctMajor, 
+                className),
+            senderName,
+            member.getUserId().toString(),
+            "evaluation"
+        );
+        eventPublisher.publishEvent(event);
+        log.info("已发送班级分配通知给用户ID: {}", member.getUserId());
         
         Map<String, Object> result = new HashMap<>();
         result.put("id", member.getId());
