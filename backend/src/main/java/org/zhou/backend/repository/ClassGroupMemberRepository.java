@@ -30,7 +30,7 @@ public interface ClassGroupMemberRepository extends JpaRepository<ClassGroupMemb
            "JOIN Student s ON u.userId = s.studentId " +
            "JOIN GroupMember gm ON cgm.userId = gm.userId " +
            "WHERE s.squad IN " +
-           "(SELECT DISTINCT sgl.squad FROM SquadGroupLeader sgl WHERE sgl.userId = :leaderId)")
+           "(SELECT DISTINCT sgl.squad FROM SquadGroupLeader sgl WHERE sgl.userId = :leaderId AND sgl.department = u.department)")
     List<Map<String, Object>> findAllWithDetailsByLeaderId(@Param("leaderId") Long leaderId);
 
     List<ClassGroupMember> findByClassId(String classId);

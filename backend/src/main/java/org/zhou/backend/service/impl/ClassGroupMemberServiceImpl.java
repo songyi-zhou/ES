@@ -24,6 +24,10 @@ import org.zhou.backend.entity.Student;
 import org.zhou.backend.repository.StudentRepository;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import java.util.Collections;
 
 @Service
 @Transactional
@@ -67,8 +71,25 @@ public class ClassGroupMemberServiceImpl implements ClassGroupMemberService {
 
     @Override
     public List<Map<String, Object>> getAvailableMembers(String department, String classId) {
-        // 获取已经是小组成员且未分配到班级或刚被移除班级的用户
-        List<GroupMember> groupMembers = groupMemberRepository.findByDepartmentAndClassIdIsNullOrClassIdEmpty(department);
+        // 获取当前登录用户信息（综测负责人）
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return Collections.emptyList();
+        }
+        
+        // 获取当前用户ID
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        String userId = userDetails.getUsername();
+        
+        // 查询用户信息
+        User currentUser = userRepository.findByUserId(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
+        
+        Long leaderId = currentUser.getId();
+        log.info("当前综测负责人ID: {}, 查询部门: {}", leaderId, department);
+        
+        // 获取已经是小组成员且未分配到班级或刚被移除班级的用户，且属于该综测负责人管理的中队
+        List<GroupMember> groupMembers = groupMemberRepository.findByLeaderDepartmentAndSquad(department, leaderId);
         
         return groupMembers.stream().map(member -> {
             Map<String, Object> memberMap = new HashMap<>();
@@ -76,6 +97,7 @@ public class ClassGroupMemberServiceImpl implements ClassGroupMemberService {
             memberMap.put("userId", member.getStudentId());
             memberMap.put("name", member.getName());
             memberMap.put("className", member.getClassName());
+            memberMap.put("squad", member.getSquad());  // 添加squad信息
             return memberMap;
         }).collect(Collectors.toList());
     }

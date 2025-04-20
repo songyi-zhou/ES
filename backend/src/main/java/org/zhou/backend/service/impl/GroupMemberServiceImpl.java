@@ -72,12 +72,18 @@ public class GroupMemberServiceImpl implements GroupMemberService {
         User member = userRepository.findById(memberId)
             .orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
             
+        // 从Student表获取squad信息
+        Student student = studentRepository.findByStudentId(member.getUserId())
+            .orElseThrow(() -> new ResourceNotFoundException("学生不存在"));
+            
         GroupMember groupMember = new GroupMember();
         groupMember.setUserId(memberId);
         groupMember.setName(member.getName());
         groupMember.setDepartment(department);
         groupMember.setClassName(className);
         groupMember.setGrade("20" + member.getClassId().substring(2, 4));  // 从classId提取年级
+        groupMember.setStudentId(student.getStudentId());  // 设置学生ID
+        groupMember.setSquad(student.getSquad());  // 设置squad信息
         
         return groupMemberRepository.save(groupMember);
     }
@@ -246,6 +252,12 @@ public class GroupMemberServiceImpl implements GroupMemberService {
             // 获取更新后的成员信息
             GroupMember member = groupMemberRepository.findByStudentId(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("成员不存在: " + studentId));
+            
+            // 从Student表获取squad信息并设置
+            Student student = studentRepository.findByStudentId(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException("学生不存在: " + studentId));
+            member.setSquad(student.getSquad());
+            groupMemberRepository.save(member);
             
             addedMembers.add(member);
         }

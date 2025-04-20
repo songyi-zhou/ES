@@ -199,6 +199,7 @@ public class InstructorServiceImpl implements InstructorService {
                 member.setName(student.getName());
                 member.setDepartment(student.getDepartment());
                 member.setGrade(student.getSquad().substring(0, 4));  // 从squad提取年级
+                member.setSquad(student.getSquad());  // 设置squad字段
                 
                 groupMemberRepository.save(member);
                 break;

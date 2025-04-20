@@ -29,6 +29,9 @@ public class GroupMember {
     private String department;
     private String major;
     private String grade;
+    
+    @Column(name = "squad")
+    private String squad;
 
     @Column(name = "class_name")
     private String className;
@@ -51,5 +54,13 @@ public class GroupMember {
 
     public void setClassId(String classId) {
         this.classId = classId;
+    }
+    
+    public String getSquad() {
+        return squad;
+    }
+    
+    public void setSquad(String squad) {
+        this.squad = squad;
     }
 } 

@@ -15,6 +15,12 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     List<GroupMember> findByDepartment(String department);
     @Query("SELECT gm FROM GroupMember gm WHERE gm.department = :department AND (gm.classId IS NULL OR gm.classId = '')")
     List<GroupMember> findByDepartmentAndClassIdIsNullOrClassIdEmpty(@Param("department") String department);
+    
+    @Query("SELECT gm FROM GroupMember gm WHERE gm.department = :department AND gm.squad IN " +
+           "(SELECT DISTINCT sgl.squad FROM SquadGroupLeader sgl WHERE sgl.userId = :leaderId) " +
+           "AND (gm.classId IS NULL OR gm.classId = '')")
+    List<GroupMember> findByLeaderDepartmentAndSquad(@Param("department") String department, @Param("leaderId") Long leaderId);
+    
     Optional<GroupMember> findByStudentId(String studentId);
     Optional<GroupMember> findByUserId(Long userId);
     boolean existsByUserId(Long userId);
